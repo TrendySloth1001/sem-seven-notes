@@ -1,0 +1,118 @@
+---
+references: [pos-tagging-slp3-appA, pos-tagging-gfg-hmm, pos-tagging-wiki-viterbi, pos-tagging-iiith-hmm]
+---
+
+**In simple words:** a bigram HMM tagger has two kinds of probabilities. The **transition** probability $P(t_i \mid t_{i-1})$ says how likely a tag is after the previous tag. The **emission** probability $P(w \mid t)$ says how likely a tag is to produce a word. Both are found by counting in the tagged corpus. <Cite id="pos-tagging-slp3-appA" /> <Cite id="pos-tagging-gfg-hmm" />
+
+$$
+P(t_i \mid t_{i-1}) = \frac{C(t_{i-1}, t_i)}{C(t_{i-1})}, \qquad P(w_i \mid t_i) = \frac{C(t_i, w_i)}{C(t_i)}
+$$
+
+**Part 1: probabilities from the corpus.**
+
+<Sum>
+
+<Given>
+
+three tagged sentences, each between $\langle s\rangle$ and $\langle /s\rangle$. Tag sequences: (1) DT NN V DT NN, (2) DT NN V RB, (3) DT NN V RB. Words: a, dog, chases, a, cat / the, dog, barks, loudly / a, cat, runs, fast.
+
+</Given>
+
+<Find>
+
+all transition and emission probabilities.
+
+</Find>
+
+<Steps>
+
+1. **Tag counts.** $\langle s\rangle = 3$, DT $= 2+1+1 = 4$, NN $= 2+1+1 = 4$, V $= 3$, RB $= 2$. *Reason: count each tag over the three sentences.*
+2. **Transitions.** $\langle s\rangle \to$ DT is $3/3 = 1$. DT $\to$ NN is $4/4 = 1$. NN is followed by V in "dog chases", "dog barks" and "cat runs" (3 times) and by $\langle /s\rangle$ once (the last cat in sentence 1), so NN $\to$ V $= 3/4$ and NN $\to \langle /s\rangle = 1/4$. V is followed by DT once and RB twice, so V $\to$ DT $= 1/3$ and V $\to$ RB $= 2/3$. RB $\to \langle /s\rangle = 2/2 = 1$.
+3. **Emissions.** DT: *a* appears 3 times and *the* once, so $3/4$ and $1/4$. NN: *dog* twice and *cat* twice, so $1/2$ each. V: *chases*, *barks*, *runs* once each, so $1/3$ each. RB: *loudly* and *fast* once each, so $1/2$ each.
+
+</Steps>
+
+<Answer>
+
+| From | To | Probability |
+|---|---|---|
+| $\langle s\rangle$ | DT | 1 |
+| DT | NN | 1 |
+| NN | V | 3/4 |
+| NN | $\langle /s\rangle$ | 1/4 |
+| V | DT | 1/3 |
+| V | RB | 2/3 |
+| RB | $\langle /s\rangle$ | 1 |
+
+| Tag | Word probabilities |
+|---|---|
+| DT | a 3/4, the 1/4 |
+| NN | dog 1/2, cat 1/2 |
+| V | chases 1/3, barks 1/3, runs 1/3 |
+| RB | loudly 1/2, fast 1/2 |
+
+</Answer>
+
+<Box kind="verify">
+
+Every row must add to 1: NN row $3/4 + 1/4 = 1$; V row $1/3 + 2/3 = 1$; DT emissions $3/4 + 1/4 = 1$; V emissions $3 \times 1/3 = 1$. Also the tag counts add to $4+4+3+2 = 13$, the number of tagged words ($5+4+4$).
+
+</Box>
+
+</Sum>
+
+**Part 2: Viterbi decoding of "The cat chases the dog".** Assumptions: lowercase the words and ignore the full stop. The Viterbi value $v_t(j)$ is the best probability of any tag path that ends in tag $j$ at word $t$. <Cite id="pos-tagging-wiki-viterbi" />
+
+$$
+v_t(j) = \max_i \; v_{t-1}(i) \cdot P(j \mid i) \cdot P(w_t \mid j)
+$$
+
+<Sum>
+
+<Given>
+
+the transition and emission tables above; words: the, cat, chases, the, dog.
+
+</Given>
+
+<Find>
+
+the most probable tag sequence and its probability.
+
+</Find>
+
+<Steps>
+
+1. **Which tags are possible.** Only DT emits *the*; only NN emits *cat* and *dog*; only V emits *chases*. Every other tag has emission 0, so its Viterbi value is 0.
+2. **the:** $v_1(\text{DT}) = P(\text{DT}\mid\langle s\rangle)\,P(\text{the}\mid\text{DT}) = 1 \times 1/4 = 0.25$.
+3. **cat:** $v_2(\text{NN}) = 0.25 \times 1 \times 1/2 = 0.125$.
+4. **chases:** $v_3(\text{V}) = 0.125 \times 3/4 \times 1/3 = 0.03125$.
+5. **the:** $v_4(\text{DT}) = 0.03125 \times 1/3 \times 1/4 = 1/384 \approx 0.002604$.
+6. **dog:** $v_5(\text{NN}) = (1/384) \times 1 \times 1/2 = 1/768 \approx 0.001302$.
+7. **End:** multiply by $P(\langle /s\rangle \mid \text{NN}) = 1/4$ to get $1/3072 \approx 0.000326$. *Reason: the sentence must end after the last tag.*
+
+</Steps>
+
+<Answer>
+
+tags: The/DT cat/NN chases/V the/DT dog/NN. Probability $= 1/3072 \approx 3.26 \times 10^{-4}$ (or $1/768 \approx 1.30 \times 10^{-3}$ without the end symbol).
+
+</Answer>
+
+<Box kind="verify">
+
+Multiply all eleven factors in one line: numerators $1\cdot1\cdot1\cdot1\cdot3\cdot1\cdot1\cdot1\cdot1\cdot1\cdot1 = 3$; denominators $4\cdot2\cdot4\cdot3\cdot3\cdot4\cdot2\cdot4 = 9216$. So $3/9216 = 1/3072$, the same. Since each word has only one possible tag, there is only one path, so the maximum is that path.
+
+</Box>
+
+</Sum>
+
+| Word | DT | NN | V | RB |
+|---|---|---|---|---|
+| the | 0.25 | 0 | 0 | 0 |
+| cat | 0 | 0.125 | 0 | 0 |
+| chases | 0 | 0 | 0.03125 | 0 |
+| the | 0.002604 | 0 | 0 | 0 |
+| dog | 0 | 0.001302 | 0 | 0 |
+
+**Conclusion:** counting gives the HMM tables, and Viterbi picks the best tag path; here every word has a single possible tag, so the answer is DT NN V DT NN.

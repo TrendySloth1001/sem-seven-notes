@@ -1,0 +1,86 @@
+---
+references: [porter-stemmer-def, porter-stemmer-gfg-stemming, porter-stemmer-nltk-stem, porter-stemmer-wiki-stem]
+---
+
+**In simple words:** a **stemmer** cuts the endings off words so that *connect, connected, connecting, connection* all become one stem, *connect*. The **Porter stemmer** (M. F. Porter, 1980) does this with a fixed list of suffix-stripping rules applied in five ordered steps. It does not use a dictionary, and the stem need not be a real word (*happy* becomes *happi*). <Cite id="porter-stemmer-def" /> <Cite id="porter-stemmer-gfg-stemming" />
+
+**Why it is needed:** search engines and text classifiers want related word forms to count as one word, which shrinks the vocabulary and improves recall.
+
+**Basic idea: the measure $m$.** Write a word as `[C](VC)^m[V]`, where C is a run of consonants and V a run of vowels (in Porter's rule *y* counts as a vowel after a consonant). $m$ counts the VC pairs and says how long the stem is. A rule fires only if the stem left after cutting is long enough.
+
+| $m$ | Examples |
+|---|---|
+| 0 | tr, ee, tree, by |
+| 1 | trouble, oats, trees, ivy |
+| 2 | troubles, private, oaten, orrery |
+
+Conditions used: `*v*` (stem has a vowel), `*d` (ends in a double consonant), `*o` (ends consonant-vowel-consonant, last not w, x or y).
+
+```mermaid
+%% caption: A word passes through five ordered steps; each step applies at most one of its rules, and only when the measure condition holds.
+flowchart LR
+  A["Word"] --> B["1a: plurals"]
+  B --> C["1b, 1c: -ed, -ing, -y"]
+  C --> D["2: long suffixes to short, m>0"]
+  D --> E["3: -ical, -ful, -ness, m>0"]
+  E --> F["4: remove suffix, m>1"]
+  F --> G["5: tidy final -e and -ll"]
+  G --> H["Stem"]
+```
+
+**The steps with sample rules:**
+
+| Step | Job | Sample rules | Example |
+|---|---|---|---|
+| 1a | plurals | SSES to SS; IES to I; S removed | caresses to caress; ponies to poni |
+| 1b | -ed, -ing (stem needs a vowel) | ED, ING removed; then AT to ATE, or fix double letters | motoring to motor; hopping to hop; filing to file |
+| 1c | y to i (stem has a vowel) | Y to I | happy to happi |
+| 2 | double suffixes, $m>0$ | ATIONAL to ATE; IZATION to IZE; FULNESS to FUL | relational to relate |
+| 3 | $m>0$ | ALIZE to AL; FUL, NESS removed; ICATE to IC | hopeful to hope |
+| 4 | remove suffix, $m>1$ | AL, ANCE, ER, IC, ABLE, MENT, ION, ISM, ATE, IVE, IZE removed | general to gener |
+| 5 | final e if $m>1$ (or $m=1$ and not `*o`); -ll to -l if $m>1$ | E removed | relate to relat |
+
+<Sum>
+
+<Given>
+
+the words *generalizations* and *hopefulness*.
+
+</Given>
+
+<Find>
+
+their Porter stems, step by step.
+
+</Find>
+
+<Steps>
+
+1. ***generalizations*, step 1a:** ends in S, so remove it: *generalization*.
+2. **Step 2:** IZATION to IZE, stem *general* has $m = 3 > 0$: *generalize*.
+3. **Step 3:** ALIZE to AL, stem *gener* has $m = 2 > 0$: *general*.
+4. **Step 4:** AL removed, stem *gener* has $m = 2 > 1$: *gener*. Step 5 has nothing to do.
+5. ***hopefulness*, step 1a:** ends in SS, which stays SS. Steps 1b and 1c do not apply.
+6. **Step 2:** FULNESS to FUL, stem *hope* has $m = 1 > 0$: *hopeful*.
+7. **Step 3:** FUL removed, stem *hope* has $m = 1 > 0$: *hope*.
+8. **Step 5a:** the stem *hop* has $m = 1$ and ends consonant-vowel-consonant (`*o`), so the final E is kept: *hope*.
+
+</Steps>
+
+<Answer>
+
+*generalizations* gives *gener*; *hopefulness* gives *hope*.
+
+</Answer>
+
+<Box kind="verify">
+
+Running the original Porter algorithm in NLTK <Cite id="porter-stemmer-nltk-stem" /> gives *gener* and *hope* for these two words. Measure check: *gener* = g-e-n-e-r is C V C V C, so (VC)(VC) and $m = 2$.
+
+</Box>
+
+</Sum>
+
+**Advantages:** fast, simple, no dictionary, widely used. **Disadvantages:** over-stemming (*university* and *universe* both become *univers*), under-stemming, and non-words as stems. Lemmatization or the Snowball stemmer can be used instead.
+
+**Conclusion:** Porter's stemmer strips suffixes in five rule steps, guarded by the measure $m$, to reduce related words to one stem.

@@ -1,0 +1,122 @@
+---
+references: [pos-tagging-slp3-appA, pos-tagging-gfg-hmm, pos-tagging-wiki-viterbi, pos-tagging-iiith-hmm]
+---
+
+**In simple words:** bigram HMM tagger do tarah ke probabilities use karta hai. **Transition** probability $P(t_i \mid t_{i-1})$ batati hai ki pichle tag ke baad ye tag kitna likely hai. **Emission** probability $P(w \mid t)$ batati hai ki tag is word ko kitna produce karta hai. Dono tagged corpus mein gin ke nikalte hain. <Cite id="pos-tagging-slp3-appA" /> <Cite id="pos-tagging-gfg-hmm" />
+
+$$
+P(t_i \mid t_{i-1}) = \frac{C(t_{i-1}, t_i)}{C(t_{i-1})}, \qquad P(w_i \mid t_i) = \frac{C(t_i, w_i)}{C(t_i)}
+$$
+
+**Part 1: corpus se probabilities.**
+
+<Sum>
+
+<Given>
+
+teen tagged sentences, har ek $\langle s\rangle$ aur $\langle /s\rangle$ ke beech. Tag sequences: (1) DT NN V DT NN, (2) DT NN V P DT NN, (3) NN V NN. Words: the students pass the test / the students wait for the result / teachers test students.
+
+</Given>
+
+<Find>
+
+saare transition aur emission probabilities.
+
+</Find>
+
+<Steps>
+
+1. **Tag counts.** $\langle s\rangle = 3$; DT $= 2+2 = 4$; NN $= 2+2+2 = 6$; V $= 3$; P $= 1$. *Reason: teen sentences mein har tag gino. Total tagged words $4+6+3+1 = 14 = 5+6+3$.*
+2. **Transitions.** $\langle s\rangle \to$ DT sentence 1 aur 2 mein hota hai, to $2/3$; $\langle s\rangle \to$ NN ek baar (sentence 3), to $1/3$. DT ke baad hamesha NN (4 baar): $4/4 = 1$. NN ke baad V teen baar (students-pass, students-wait, teachers-test) aur $\langle /s\rangle$ teen baar (test, result, students): $3/6 = 1/2$ each. V ke baad DT (pass-the), P (wait-for) aur NN (test-students), ek-ek baar: $1/3$ each. P ke baad DT: $1/1 = 1$.
+3. **Emissions.** DT: *the* 4 baar, to $4/4 = 1$. NN: *students* 3, *test* 1, *result* 1, *teachers* 1, to $3/6 = 1/2$, aur baaki sab $1/6$. V: *pass*, *wait*, *test* ek-ek baar, $1/3$ each. P: *for*, $1$.
+
+</Steps>
+
+<Answer>
+
+| From | To | Probability |
+|---|---|---|
+| $\langle s\rangle$ | DT | 2/3 |
+| $\langle s\rangle$ | NN | 1/3 |
+| DT | NN | 1 |
+| NN | V | 1/2 |
+| NN | $\langle /s\rangle$ | 1/2 |
+| V | DT | 1/3 |
+| V | P | 1/3 |
+| V | NN | 1/3 |
+| P | DT | 1 |
+
+| Tag | Word probabilities |
+|---|---|
+| DT | the 1 |
+| NN | students 1/2, test 1/6, result 1/6, teachers 1/6 |
+| V | pass 1/3, wait 1/3, test 1/3 |
+| P | for 1 |
+
+</Answer>
+
+<Box kind="verify">
+
+Har row ka sum 1 hona chahiye: $\langle s\rangle$: $2/3 + 1/3$; NN: $1/2 + 1/2$; V: $3 \times 1/3$; NN emissions: $1/2 + 3 \times 1/6 = 1$; V emissions $3 \times 1/3 = 1$. Har tag ke outgoing transitions uske count ke barabar hone chahiye: DT 4, NN $3+3 = 6$, V 3, P 1.
+
+</Box>
+
+</Sum>
+
+**Part 2: "The students wait for the test" ka Viterbi decoding.** Assumption: pehla word lowercase kar diya. $v_t(j)$ word $t$ pe tag $j$ pe khatam hone wale kisi bhi tag path ki best probability hai. <Cite id="pos-tagging-wiki-viterbi" />
+
+$$
+v_t(j) = \max_i \; v_{t-1}(i) \cdot P(j \mid i) \cdot P(w_t \mid j)
+$$
+
+<Sum>
+
+<Given>
+
+upar ki tables; words: the, students, wait, for, the, test.
+
+</Given>
+
+<Find>
+
+sabse probable tag sequence aur uski probability.
+
+</Find>
+
+<Steps>
+
+1. **Kaun sa tag kaun sa word emit kar sakta hai.** *the*: sirf DT. *students*: sirf NN. *wait*: sirf V. *for*: sirf P. *test*: NN ya V. Baaki tags ka emission 0 hai, to unki value 0.
+2. **the:** $v_1(\text{DT}) = P(\text{DT}\mid\langle s\rangle)\,P(\text{the}\mid\text{DT}) = 2/3 \times 1 = 2/3$.
+3. **students:** $v_2(\text{NN}) = 2/3 \times 1 \times 1/2 = 1/3$.
+4. **wait:** $v_3(\text{V}) = 1/3 \times 1/2 \times 1/3 = 1/18$.
+5. **for:** $v_4(\text{P}) = 1/18 \times 1/3 \times 1 = 1/54$.
+6. **the:** $v_5(\text{DT}) = 1/54 \times 1 \times 1 = 1/54$.
+7. **test:** NN ke roop mein, $v_6(\text{NN}) = 1/54 \times P(\text{NN}\mid\text{DT}) \times P(\text{test}\mid\text{NN}) = 1/54 \times 1 \times 1/6 = 1/324$. V ke roop mein, $P(\text{V}\mid\text{DT}) = 0$, to $v_6(\text{V}) = 0$. NN jeetta hai.
+8. **End:** $P(\langle /s\rangle \mid \text{NN}) = 1/2$ se multiply karo, $1/648$ milta hai. *Reason: last tag ke baad sentence khatam hona chahiye.*
+
+</Steps>
+
+<Answer>
+
+The/DT students/NN wait/V for/P the/DT test/NN. Probability $= 1/648 \approx 1.54 \times 10^{-3}$ (ya end symbol ke bina $1/324 \approx 3.09 \times 10^{-3}$).
+
+</Answer>
+
+<Box kind="verify">
+
+Saare terah factors ek line mein multiply karo: $\tfrac23 \cdot 1 \cdot 1 \cdot \tfrac12 \cdot \tfrac12 \cdot \tfrac13 \cdot \tfrac13 \cdot 1 \cdot 1 \cdot 1 \cdot 1 \cdot \tfrac16 \cdot \tfrac12$. Numerator $= 2$; denominator $= 3 \cdot 2 \cdot 2 \cdot 3 \cdot 3 \cdot 6 \cdot 2 = 1296$. To $2/1296 = 1/648$, same. Last word ko chhodke har word ka sirf ek possible tag hai, aur *test* ke V option ki probability 0 hai, isliye sirf ek path non-zero hai.
+
+</Box>
+
+</Sum>
+
+| Word | DT | NN | V | P |
+|---|---|---|---|---|
+| the | 0.6667 | 0 | 0 | 0 |
+| students | 0 | 0.3333 | 0 | 0 |
+| wait | 0 | 0 | 0.05556 | 0 |
+| for | 0 | 0 | 0 | 0.01852 |
+| the | 0.01852 | 0 | 0 | 0 |
+| test | 0 | 0.003086 | 0 | 0 |
+
+**Conclusion:** counting se HMM tables milti hain, aur Viterbi best tag path chunta hai: DT NN V P DT NN.
