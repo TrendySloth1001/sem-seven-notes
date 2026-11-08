@@ -1,0 +1,74 @@
+---
+references: [gfdl-ch6, golik2013, gfg-cross-entropy, gfg-mse, pytorch-crossentropyloss]
+---
+
+**In simple words:** the loss function tells the network how wrong it was, as one number. Training changes the weights to make that number small, so the loss decides what the network learns and how fast.
+
+**Role.** It compares the true answer with the prediction. Its gradient, found by backpropagation, drives gradient descent, so it (1) measures performance, (2) produces the gradients that drive learning and (3) defines what "good" means. A badly matched loss can stall training.
+
+**MSE:** the average of squared differences, $\dfrac{1}{n}\sum_i (y_i - \hat{y}_i)^2$. Big errors count much more than small ones. It pairs with a linear output.
+
+**Cross-entropy:** minus the log of the probability given to the correct class, $-[y\ln p + (1-y)\ln(1-p)]$ for two classes ($-\sum_k y_k\ln p_k$ for many). Here $p$ comes from a sigmoid or softmax. Confident wrong answers get a very large loss.
+
+| | MSE | Cross-entropy |
+|---|---|---|
+| Usage | Regression (numbers) | Classification (classes) |
+| Output layer | Linear | Sigmoid / softmax |
+| Characteristic | Squared distance; at most 1 for probabilities | Log penalty; unbounded for confident wrong answers |
+| Gradient with sigmoid | Shrunk by the sigmoid's slope | Simply $p - y$ |
+| Impact on performance | Stalls when the sigmoid saturates | Strong correction when badly wrong; faster, steadier training |
+
+**Why the impact differs.** A very sure sigmoid is flat. With MSE the gradient is multiplied by that near-zero slope, so a badly wrong network barely changes. With cross-entropy the log cancels the sigmoid's exponential, leaving $p - y$, which is large exactly when the error is large. <Cite id="gfdl-ch6" loc="§6.2.2.2" />
+
+<Figure caption="Loss for one example with true label 1. Squared error stays below 1; cross-entropy rises steeply as the predicted probability of the correct class goes to 0.">
+  <CurvePlot curves="mse-loss,ce-loss" x="0,1" y="0,5" xLabel="predicted probability p" yLabel="loss" />
+</Figure>
+
+**When cross-entropy is more appropriate:** whenever the network outputs class probabilities through sigmoid or softmax, such as spam detection or digit recognition. MSE often does poorly with saturating outputs. <Cite id="gfdl-ch6" loc="§6.2.1.2" /> <Cite id="golik2013" />
+
+**Example: a spam filter.**
+
+<Sum>
+
+<Given>
+
+the email is spam, so $y = 1$; the sigmoid gives $p = 0.02$.
+
+</Given>
+
+<Find>
+
+both losses and the push each sends back to the score $z$ (the gradient).
+
+</Find>
+
+<Steps>
+
+1. **Cross-entropy loss:** $-\ln 0.02 = 3.91$.
+2. **MSE loss:** $(1 - 0.02)^2 = 0.96$.
+3. **Cross-entropy push:** $p - y = -0.98$ (no sigmoid slope in it).
+4. **MSE push:**
+
+   $$
+   2(p - y)\,p(1-p) = 2(-0.98)(0.0196) = -0.038
+   $$
+
+   the sigmoid slope $p(1-p) = 0.0196$ is nearly flat.
+
+</Steps>
+
+<Answer>
+
+cross-entropy gives loss 3.91 and push −0.98; MSE gives loss 0.96 and push −0.038. The cross-entropy push is about 25 times stronger.
+
+</Answer>
+
+<Box kind="verify">
+
+$e^{-3.91} \approx 0.02$, the probability we started with. Differentiating $-\ln\sigma(z)$ directly gives slope $-(1-\sigma(z)) = -0.98$, the same as $p - y$. And $0.98 / 0.038 \approx 25$.
+
+</Box>
+
+</Sum>
+
+**Conclusion.** Use MSE for numbers with a linear output, and cross-entropy for classes with sigmoid or softmax outputs.

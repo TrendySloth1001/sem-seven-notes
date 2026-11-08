@@ -1,0 +1,52 @@
+---
+references: [gfdl-ch10, pascanu2013, nptel-dl, gfg-vanishing-exploding-rnn, d2l-bptt]
+---
+
+**In simple words:** an RNN is trained with backpropagation through time (BPTT), where the gradient travels backwards through every time step. At each step back it is multiplied by a factor. If the factors are smaller than 1, the gradient shrinks towards zero (**vanishing**). If they are larger than 1, it grows huge (**exploding**).
+
+**Why it matters.** This is the main limitation of a plain ("vanilla") RNN: the learning signal for early time steps becomes almost zero or extremely large. <Cite id="gfdl-ch10" loc="§10.7" />
+
+**Why it happens, step by step**
+
+1. The RNN is unfolded into a chain, one copy per time step, all with the same recurrent weights $W$.
+2. BPTT sends the error backwards along this chain.
+3. Each step back multiplies the gradient by a factor made of the **slope of tanh** and the **weights $W$**.
+4. Going back many steps multiplies many such factors together. In short: if slope times weight stays below 1 the product shrinks towards zero; above 1 it can grow very large. <Cite id="nptel-dl" />
+
+**Example.** Factor $0.5$ for 10 steps: $0.5^{10} \approx 0.001$ (vanishes). Factor $1.5$ for 10 steps: $1.5^{10} \approx 58$ (explodes).
+
+<Box kind="verify">
+
+Check exactly: $0.5^{10} = 1/1024 \approx 0.00098$ and
+
+$$
+1.5^{10} = 3^{10}/2^{10} = 59049/1024 \approx 57.7
+$$
+
+matching the rounded values.
+
+</Box>
+
+**Why tanh makes vanishing likely.** The tanh slope is at most 1 (the sigmoid slope at most 0.25), so the slope part of each factor is never more than 1 and is often well below 1. The weights $W$ decide the rest.
+
+<Figure caption="Slopes of tanh (peak 1) and sigmoid (peak 0.25). Away from the centre both are near zero, so each factor shrinks the gradient.">
+  <CurvePlot curves="tanh-derivative,sigmoid-derivative" x="-5,5" y="0,1.1" xLabel="value inside the activation" yLabel="slope" />
+</Figure>
+
+**Effects**
+
+- **Vanishing:** early steps get almost no learning signal, so the RNN has a short memory. In "The cat, which ate all the fish, was full", it cannot link "was" to "cat". Training does not crash; it silently fails.
+- **Exploding:** huge weight updates, the loss jumps around, and values can overflow to NaN. <Cite id="pascanu2013" />
+
+**Solutions**
+
+| Problem | Solution |
+|---|---|
+| Exploding | **Gradient clipping:** if the gradient is longer than a threshold, scale it down, keeping its direction |
+| Exploding, long sequences | **Truncated BPTT:** backpropagate only through a fixed number of recent steps <Cite id="d2l-bptt" /> |
+| Vanishing | **LSTM / GRU:** gates let memory be copied forward, so the gradient is not shrunk at every step |
+| Vanishing | Good weight initialization, ReLU-type activations |
+
+Clipping cannot make a tiny gradient bigger, so it does not fix vanishing gradients. <Cite id="gfg-vanishing-exploding-rnn" />
+
+**Conclusion:** both problems come from multiplying many factors in BPTT. Clipping handles exploding gradients; gated cells such as LSTM and GRU handle vanishing gradients.
