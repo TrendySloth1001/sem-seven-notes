@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { PaperChip, TopicChip } from "@/components/chips";
+import { PaperChip, plainQuestion, TopicChip } from "@/components/chips";
+import { Doc, type DocContext } from "@/components/doc";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { SubjectTabs } from "@/components/subject-tabs";
 import { Toc, type TocItem } from "@/components/toc";
@@ -55,19 +56,18 @@ const LEVEL_STYLE: Record<
   "Not asked": "outline",
 };
 
-// Cards show the question as text, so tables become a short marker; the full table is on the paper page.
+// The asked-each-time list is one line per paper, so tables become a marker and math plain text.
 function plain(text: string) {
-  return text
-    .replace(/(\n?\|[^\n]*)+/g, " [table] ")
-    .replace(/\\([{}])/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
+  return plainQuestion(
+    text.replace(/(\n?\|[^\n]*)+/g, " [table] ").replace(/\\([{}])/g, "$1"),
+  );
 }
 
 function ClusterCard({
   c,
   subject,
   rank,
+  ctx,
   teacher = [],
   sessionName,
   topicTitle,
@@ -75,6 +75,7 @@ function ClusterCard({
   c: Cluster<Paper>;
   subject: string;
   rank: number;
+  ctx: DocContext;
   teacher?: Asked<Paper>[];
   sessionName: (slug: string) => string;
   topicTitle: (slug: string) => string;
@@ -87,9 +88,9 @@ function ClusterCard({
           {String(rank).padStart(2, "0")}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-medium leading-relaxed [overflow-wrap:anywhere]">
-            {plain(c.head.q.text)}
-          </p>
+          <div className="font-medium [&_.doc]:text-base">
+            <Doc source={c.head.q.text} ctx={ctx} />
+          </div>
           <div className="mt-2 flex flex-wrap gap-2">
             {[...new Set(teacher.map((t) => t.paper.session))].map((n) => (
               <Badge key={n}>In your {n}</Badge>
@@ -179,6 +180,13 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
     .sort((a, b) => boosted(b) - boosted(a))
     .slice(0, 10);
   const teacherOnly = matches.filter((m) => !m.cluster);
+  // Question text is MDX (math and tables), rendered like the paper page; questions cite nothing.
+  const ctx: DocContext = {
+    subject,
+    refs: {},
+    papers: listPapers(subject),
+    images: {},
+  };
   const stats = topicStats(
     papers,
     topics.map((t) => t.slug),
@@ -254,6 +262,7 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
                 c={c}
                 subject={subject}
                 rank={i + 1}
+                ctx={ctx}
                 teacher={teacherOf.get(c) ?? []}
                 sessionName={sessionName}
                 topicTitle={topicTitle}
@@ -277,9 +286,9 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
                   key={`${a.paper.slug}-${a.q.id}`}
                   className="flex flex-col gap-3 rounded-2xl border bg-card p-4"
                 >
-                  <p className="font-medium leading-relaxed [overflow-wrap:anywhere]">
-                    {plain(a.q.text)}
-                  </p>
+                  <div className="font-medium [&_.doc]:text-base">
+                    <Doc source={a.q.text} ctx={ctx} />
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       asChild
@@ -433,6 +442,7 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
                 c={c}
                 subject={subject}
                 rank={i + 1}
+                ctx={ctx}
                 teacher={teacherOf.get(c) ?? []}
                 sessionName={sessionName}
                 topicTitle={topicTitle}
