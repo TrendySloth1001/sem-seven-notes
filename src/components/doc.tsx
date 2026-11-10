@@ -26,16 +26,25 @@ export type DocContext = {
 function Img({ image, caption }: { image: ImageRef; caption: string }) {
   return (
     <figure className="my-8">
-      <div className="overflow-hidden rounded-lg border bg-paper p-3">
+      {/* Opens the full image so dense slides can be zoomed on a phone. */}
+      <a
+        href={image.src}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`Open full-size image: ${image.alt}`}
+        className="block cursor-zoom-in overflow-hidden rounded-lg border bg-paper p-2 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-3"
+      >
         <Image
           src={image.src}
           alt={image.alt}
           width={image.width}
           height={image.height}
-          sizes="(min-width: 768px) 720px, 100vw"
-          className="mx-auto h-auto max-h-[28rem] w-auto max-w-full object-contain"
+          sizes="(min-width: 1024px) 900px, 100vw"
+          // Small crops scale up to twice their size so their text reads; bigger ones fill the column.
+          style={{ maxWidth: image.width * 2 }}
+          className="mx-auto h-auto max-h-[85vh] w-full object-contain"
         />
-      </div>
+      </a>
       <figcaption className="mt-2 text-sm leading-relaxed text-muted-foreground">
         {caption}{" "}
         <span className="text-xs">
