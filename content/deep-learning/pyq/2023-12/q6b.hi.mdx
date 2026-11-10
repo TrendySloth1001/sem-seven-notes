@@ -1,56 +1,27 @@
 ---
-references: [gfdl-ch10, pascanu2013, nptel-dl, gfg-vanishing-exploding-rnn, d2l-bptt]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** RNN ko backpropagation through time (BPTT) se train karte hain, jahan gradient har time step ke through peeche jaata hai. Har step peeche jaate waqt wo ek factor se multiply hota hai. Agar factors 1 se chhote hain, to gradient zero ki taraf simatta hai (**vanishing**). Agar 1 se bade hain, to wo bahut bada ho jaata hai (**exploding**).
+**In simple words:** jab RNN seekhta hai to error kai time steps peeche jaata hai aur baar-baar multiply hota hai. Agar multiplier chhota hai to error lagbhag khatam ho jaata hai (vanishing); agar bada hai to error phat jaata hai (exploding).
 
-**Why it matters.** Ye plain ("vanilla") RNN ki sabse badi limitation hai: shuru ke time steps ka learning signal lagbhag zero ya bahut bada ho jaata hai. <Cite id="gfdl-ch10" loc="§10.7" />
+**Aisa kyun hota hai:** RNN backpropagation through time (BPTT) se train hota hai, isliye BPTT ke dauraan gradient ko kai time steps se guzarna padta hai. Guzarte hue wo bahut chhota ya bahut bada ho sakta hai. <Cite id="class-dl-chp5" loc="slide 10" />
 
-**Why it happens, step by step**
+<Img id="class-rnn-two-gradient-problems" caption="Class table: vanishing gradient (gradient bahut chhota, long-term information seekhna mushkil) aur exploding gradient (gradient bahut bada, training unstable)." />
 
-1. RNN ko chain mein unfold karte hain, har time step ki ek copy, aur sab mein same recurrent weights $W$.
-2. BPTT error ko is chain ke saath peeche bhejta hai.
-3. Har step peeche jaane par gradient ko ek factor se multiply karte hain, jo **tanh ki slope** aur **weights $W$** se bana hota hai.
-4. Bahut steps peeche jaane par bahut se factors multiply hote hain. Seedhi baat: agar slope × weight 1 se kam rahe to product zero ki taraf simatta hai; 1 se upar ho to bahut bada ho sakta hai. <Cite id="nptel-dl" />
+**Vanishing gradient:** gradient values bahut chhoti ho jaati hain, isliye model seekhna band kar deta hai ya bahut zyada time leta hai. Peeche jaate hue wo chhota hota jaata hai, isliye pehle ke time steps ko bahut kam learning signal milta hai. Example: 1, 0.1, 0.01, 0.001, 0.0001. Result: RNN ko **long-term dependencies** seekhna mushkil. <Cite id="class-dl-m5" loc="p. 14" /> <Cite id="class-dl-chp5" loc="slide 11" />
 
-<Img id="img-dl-n3-rnn-bptt" caption="Loss L ka error unrolled chain ke saath peeche jaata hai aur har step pe same recurrent weights se guzarta hai." />
+**Exploding gradient:** gradient bahut bada ho jaata hai (1, 10, 100, 1000, 10000). Result: bahut bade weight updates, unstable training, seekhna mushkil. <Cite id="class-dl-chp5" loc="slide 11" />
 
-**Example.** Factor $0.5$ 10 steps ke liye: $0.5^{10} \approx 0.001$ (vanish). Factor $1.5$ 10 steps ke liye: $1.5^{10} \approx 58$ (explode).
+```mermaid
+%% caption: Lambi sequence gradient ke saath kya karti hai. Har step par same multiplication ya to use khatam kar deti hai ya phaad deti hai.
+flowchart TD
+  A["Long sequence (for example 50 steps)"] --> B["BPTT: gradient travels back through all steps"]
+  B --> C["Factor below 1 at each step"]
+  B --> D["Factor above 1 at each step"]
+  C --> E["Vanishing gradient: earlier steps learn almost nothing"]
+  D --> F["Exploding gradient: huge updates, unstable training"]
+```
 
-<Box kind="verify">
+**Fixes:** exploding gradients ko gradients truncate ya squash (clip) karke aasani se fix kar sakte hain, aur truncated BPTT backpropagation ko fixed number of steps tak limit karta hai. Vanishing gradients mushkil the; **LSTM** (aur GRU) ne gates se ye problem solve ki. <Cite id="class-dl-m5" loc="p. 14" /> <Cite id="class-dl-chp5" loc="slide 22" />
 
-Exactly check karo: $0.5^{10} = 1/1024 \approx 0.00098$ aur
-
-$$
-1.5^{10} = 3^{10}/2^{10} = 59049/1024 \approx 57.7
-$$
-
-rounded values se match.
-
-</Box>
-
-**Why tanh makes vanishing likely.** tanh ki slope zyaada se zyaada 1 hoti hai (sigmoid ki slope 0.25 tak), to har factor ka slope wala hissa aksar 1 se chhota hota hai. Factor mein weights $W$ bhi hain, jo baaki faisla karte hain.
-
-<Figure caption="tanh ki slope (peak 1) aur sigmoid ki slope (peak 0.25). Centre se door dono lagbhag zero hain, to har factor gradient ko chhota karta hai.">
-  <CurvePlot curves="tanh-derivative,sigmoid-derivative" x="-5,5" y="0,1.1" xLabel="value inside the activation" yLabel="slope" />
-</Figure>
-
-**Effects**
-
-- **Vanishing:** shuru ke steps ko lagbhag koi learning signal nahi milta, to RNN ki memory chhoti rehti hai. "The cat, which ate all the fish, was full" mein wo "was" ko "cat" se nahi jod paata. Training crash nahi hoti; chupchaap fail hoti hai.
-- **Exploding:** bahut bade weight updates, loss uchhalta hai, aur values overflow hokar NaN ban sakti hain. <Cite id="pascanu2013" />
-
-**Solutions**
-
-| Problem | Solution |
-|---|---|
-| Exploding | **Gradient clipping:** agar gradient ek threshold se lamba hai, to use scale down karo, direction same rakhte hue |
-| Exploding, lambe sequences | **Truncated BPTT:** sirf kuch recent steps tak backpropagate karo <Cite id="d2l-bptt" /> |
-| Vanishing | **LSTM / GRU:** gates memory ko aage copy hone dete hain, to gradient har step par nahi chhota hota |
-| Vanishing | Achhi weight initialization, ReLU-type activations |
-
-Clipping chhota gradient bada nahi kar sakti, to vanishing ko fix nahi karti. <Cite id="gfg-vanishing-exploding-rnn" />
-
-**Conclusion:** dono problems BPTT mein bahut se factors multiply hone se aati hain. Clipping exploding gradients sambhalti hai; LSTM aur GRU jaise gated cells vanishing gradients sambhalte hain.
-
-Exam mein English mein likho: "Both problems come from multiplying many factors in BPTT. Clipping handles exploding gradients; gated cells such as LSTM and GRU handle vanishing gradients."
+**Conclusion:** vanishing = too small, exploding = too large; dono kai time steps mein multiply hone se aate hain, aur dono vanilla RNN ko lambi sequences mein kamzor banate hain.

@@ -1,55 +1,42 @@
 ---
-references: [krizhevsky2012, srivastava2014, cs231n-cnn, d2l-alexnet, gfg-alexnet, av-alexnet]
+references: [class-dl-chp4, class-dl-m4]
 ---
 
-**In simple words:** AlexNet (Krizhevsky, Sutskever aur Hinton, 2012) ek bada CNN hai jo ImageNet contest (ILSVRC-2012) jeet gaya, top-5 error 15.3% ke saath, jabki second-best entry ka 26.2% tha. Ye LeNet ka idea hai jise bada aur deep banaya gaya, GPUs pe train kiya gaya, aur ReLU aur dropout ke saath.
+**In simple words:** AlexNet wo CNN hai jisne 2012 ka ImageNet competition jeeta. Isne dikhaya ki bahut saare data par GPUs se train hua deep CNN image features khud seekh sakta hai.
 
-**Definition:** AlexNet ek 8-layer CNN hai (5 convolutional + 3 fully connected), lagbhag 60 million parameters aur 1000-way softmax output ke saath.
+**Definition:** AlexNet ek deep CNN architecture hai jo 2012 mein ImageNet image-classification mein outstanding performance se landmark bana aur computer vision ke liye deep learning ko popular kiya. Ise Krizhevsky, Sutskever aur Hinton ne banaya. <Cite id="class-dl-chp4" loc="slide 46" />
 
-**Why it was needed:** ImageNet mein 1000 classes ki 10 lakh se zyada badi colour photos hain, jo LeNet jaise chhote networks ke liye bahut zyada hain. Ek bahut bada network chahiye tha, aur use dheemi training aur bhari overfitting ko handle karna tha.
-
-**How it works**
-
-1. Input: 227×227×3 colour image.
-2. Conv1: 96 filters, har ek 11×11, stride 4 → 55×55×96, phir max pool.
-3. Conv2: 256 filters 5×5 ke → 27×27×256, phir max pool.
-4. Conv3, Conv4: 384 filters 3×3 ke; Conv5: 256 filters 3×3 ke, phir max pool → 6×6×256.
-5. FC6 aur FC7: har ek mein 4096 units, dropout ke saath; FC8: 1000-way softmax.
+<Img id="class-cnn-architectures-alexnet-strip" caption="AlexNet sizes ke saath: 227×227×3, 55×55×96, 27×27×96, 27×27×256, 13×13×256, 13×13×384, 13×13×384, 13×13×256, 6×6×256, flatten 9216, FC 4096, FC 4096, output 1000." />
 
 ```mermaid
-%% caption: AlexNet. Max pooling conv1, conv2 aur conv5 ke baad hai. Dropout pehli do fully connected layers mein use hota hai.
+%% caption: AlexNet: paanch convolution layers (1, 2 aur 5 ke baad max pooling) aur teen fully connected layers.
 flowchart LR
-  A["Input 227×227×3"] --> B["Conv1 96 of 11×11, stride 4: 55×55×96, pool to 27×27"]
-  B --> C["Conv2 256 of 5×5: 27×27×256, pool to 13×13"]
-  C --> D["Conv3 384 of 3×3: 13×13"]
-  D --> E["Conv4 384 of 3×3: 13×13"]
-  E --> F["Conv5 256 of 3×3, pool to 6×6×256"]
-  F --> G["FC6 4096 + dropout"]
-  G --> H["FC7 4096 + dropout"]
-  H --> I["FC8 1000 softmax"]
+  A["Input 227×227×3"] --> B["Conv1 96 filters 11×11, s4 → 55×55×96"]
+  B --> C["Pool → 27×27×96"]
+  C --> D["Conv2 256, 5×5 → 27×27×256"]
+  D --> E["Pool → 13×13×256"]
+  E --> F["Conv3, Conv4 384, Conv5 256 → 13×13×256"]
+  F --> G["Pool → 6×6×256"]
+  G --> H["FC6 4096, FC7 4096 (dropout 0.5)"]
+  H --> I["FC8 1000 + softmax"]
 ```
 
-(Paper mein 224×224 likha hai, lekin sizes sirf 227 ya extra padding ke saath sahi aate hain.)
+**Architecture ka analysis** <Cite id="class-dl-m4" loc="p. 57" /> <Cite id="class-dl-m4" loc="p. 58" /> <Cite id="class-dl-m4" loc="p. 60" />
 
-<Img id="img-dl-n1-lenet-alexnet" caption="AlexNet (right) chhote LeNet ke saath: paanch convolution layers max pooling ke saath, phir teen dense layers dropout ke saath. Is drawing mein input 224 aur conv1 ke baad 54×54 hai; upar text mein 227 aur 55×55 hai." />
+- **8 learnable layers:** 5 convolutional aur 3 fully connected. Output (softmax) ko chhod kar har layer ke baad ReLU.
+- Output size $= \lfloor (N + 2P - F)/S \rfloor + 1$, jaise $(227 - 11)/4 + 1 = 55$.
+- Filters ki sankhya depth ke saath **badhti** hai (96, 256, 384, 384, 256) aur filter size **ghatta** hai (11, 5, 3, 3, 3), isliye deeper layers complex features seekhti hain. Pooling size aadha karta hai, depth nahi.
+- Lagbhag **62 million parameters**, zyadatar fully connected layers mein.
 
-**Analysis of the design choices**
+**Key features** <Cite id="class-dl-m4" loc="p. 55" />
 
-1. **ReLU** tanh ki jagah: positive inputs ke liye saturate nahi hota, isliye gradients bade rehte hain; paper ke CIFAR-10 test mein ReLU network 25% training error tak tanh network se lagbhag chhe guna tez pahuncha.
-2. **Do GPUs:** har ek mein sirf 3 GB tha, isliye layers ko split kiya gaya; training mein paanch se chhe din lage.
-3. **Local response normalization** conv1 aur conv2 ke baad (baad mein batch normalization se replace hua).
-4. **Overlapping max pooling** (3×3, stride 2) ne error thoda kam kiya.
-5. **Dropout** (0.5) FC6 aur FC7 mein, bhari overfitting ke khilaaf.
-6. **Data augmentation:** random crops, flips aur colour changes.
+| Feature | Effect |
+|---|---|
+| tanh ki jagah ReLU | Training lagbhag 6 guna tez |
+| GPU training | Bada model, tez training |
+| Overlapping max pooling | Error 0.5% kam |
+| Dropout (0.5) aur data augmentation | 60 million parameters ka overfitting kam |
 
-**Where the parameters are:** conv layers mein sirf lagbhag 3.7 million hain; FC layers mein lagbhag 58.6 million. Yani FC layers sabse mehngi hain aur sabse zyada overfit karti hain, isliye dropout wahin lagaya gaya ek wajah se.
+**Demerits:** pehli layers mein dormant neurons aur bade pehle-layer filter se aliasing. <Cite id="class-dl-m4" loc="p. 85" />
 
-**Advantages:** accuracy mein bada jump; ReLU, dropout, augmentation aur GPU training ko standard bana diya.
-
-**Limitations:** bahut zyada memory use, zyadatar FC layers mein; bade 11×11 filters (baad mein VGG mein 3×3 ke stacks se replace hue); sirf 8 layers.
-
-**Applications:** bade paimane par image classification aur detection aur medical images ke liye transfer learning.
-
-**Conclusion:** AlexNet ne dikhaya ki GPUs pe train hua deep CNN haath se banaye features ko bahut bade margin se haraata hai, aur isne modern deep learning era shuru kiya.
-
-Exam mein English mein likho: "AlexNet has 8 layers (5 convolutional and 3 fully connected) and uses ReLU, dropout and GPU training."
+**Conclusion:** AlexNet ne saabit kiya ki deep CNNs, big data aur GPUs state-of-the-art image classification dete hain. <Cite id="class-dl-chp4" loc="slide 46" />

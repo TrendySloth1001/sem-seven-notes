@@ -1,409 +1,512 @@
 ---
-title: "LeNet, AlexNet, ResNet"
+title: "LeNet, AlexNet, VGG, GoogLeNet, ResNet and U-Net"
 module: 4
-summary: "Three famous CNN designs, each of which solved the problem of its time: LeNet-5 (1998) read handwritten digits, AlexNet (2012) won ImageNet with ReLU, dropout and GPUs, and ResNet (2015) used skip connections to train networks more than 100 layers deep. For each: why it was built, its layers, what was new, advantages, limits and uses, plus step-by-step sums on output sizes and parameter counts."
+summary: "The famous CNN designs the class teaches, each one solving the problem of its time: LeNet-5 reads handwritten digits, AlexNet wins ImageNet with ReLU, dropout and GPUs, VGG goes deep with small 3×3 filters, GoogLeNet runs filters of different sizes in parallel, ResNet adds skip connections to train very deep networks, and U-Net labels every pixel. Layer sizes are worked out and checked."
 keyIdeas:
-  - "LeNet-5: 32×32 input, two conv + subsampling pairs, then layers of 120, 84 and 10 units; about 60 thousand parameters; tanh-type activation."
-  - "AlexNet: 5 conv layers + 3 fully connected layers, about 60 million parameters; first big win for ReLU, dropout, overlapping max pooling, data augmentation and GPU training."
-  - "ResNet: adds the input of a block to its output, y = F(x) + x, so a block only has to learn the change (the residual)."
-  - "Skip connections fix the degradation problem: without them, adding more layers made even the training error worse."
-  - "The trend from 1998 to 2015: deeper networks, ReLU instead of tanh, max pooling, and less reliance on huge fully connected layers."
+  - "LeNet-5 (1998): 32×32 grayscale input, C1 6 filters 5×5, S2 pooling, C3 16 filters, S4 pooling, C5 120 filters, F6 84, output 10. Five trainable layers, about 60 thousand parameters."
+  - "AlexNet (2012): 227×227×3 input, 5 convolution + 3 fully connected layers, ReLU, max pooling, dropout 0.5, data augmentation, GPU training; about 62 million parameters."
+  - "VGG-16 (2014): only 3×3 convolutions, 13 convolution + 3 fully connected layers, size halves and channels double after each pooling; about 138 million parameters."
+  - "GoogLeNet (2014): Inception module runs 1×1, 3×3, 5×5 convolutions and 3×3 max pooling in parallel and stacks the outputs; 1×1 convolutions cut computation; global average pooling replaces fully connected layers."
+  - "ResNet (2015): a skip (shortcut) connection adds the input to the output of a few layers, y = F(x) + x, so very deep networks (50 to 152 layers) train without the degradation problem."
+  - "U-Net (2015): U-shaped encoder-decoder with skip connections for segmentation, labelling every pixel of the image."
 references:
-  - gfdl-ch9
-  - lecun1998
-  - krizhevsky2012
-  - he2015
-  - srivastava2014
-  - ioffe2015
-  - cs231n-cnn
-  - nptel-dl
-  - d2l-lenet
-  - d2l-alexnet
-  - d2l-resnet
-  - gfg-lenet
-  - gfg-alexnet
-  - gfg-resnet
-  - av-lenet
-  - av-alexnet
-  - ibm-cnn
-  - wiki-lenet
-  - wiki-alexnet
-  - wiki-resnet
-  - wiki-cnn
+  - class-dl-chp4
+  - class-dl-m4
+  - class-dl-qb2
 ---
 
-Before the new ideas, here are the old ones you need. If you already know them, skip to the next section. The note on convolutional neural networks explains all of them in detail.
+Before the new ideas, here are the old ones you need. If you already know them, skip to the next section.
 
 ## The basics first
 
-- A **convolutional layer** slides small learned **filters** over its input. Each filter gives one **feature map**.
-- **Output size.** A filter cannot hang off the edge, so the output is a little smaller than the input; padding adds a border of zeros to keep the size, and a bigger stride (step) shrinks it faster. In symbols: $O = (N - F + 2P)/S + 1$, with input size $N$, filter size $F$, padding $P$ and stride $S$. You need this only for calculation questions.
-- **Pooling** shrinks each feature map (max or average of small blocks) and has no parameters.
-- **ReLU** keeps positive values and turns negatives into 0. **tanh** and **sigmoid** are S-shaped curves that flatten out ("saturate") for large inputs, where their slope is almost zero, so learning slows down.
-- **Dropout** switches off random neurons during training to reduce overfitting. **Batch normalization** rescales each layer's values to average 0 and spread 1, which makes training faster and more stable.
-- **ImageNet (ILSVRC)** is a yearly contest (2010 to 2017) on about 1.2 million training images in 1000 classes. **Top-5 error** is the fraction of test images whose correct class is not among the network's five best guesses.
+- A **convolution layer** slides small filters over the image and gives feature maps. Output size $= \lfloor (N - F + 2P)/S \rfloor + 1$ and output depth = number of filters. Parameters of a layer $= (F \times F \times D + 1) \times K$. (See the CNN note.) <Cite id="class-dl-chp4" loc="slide 19" /> <Cite id="class-dl-chp4" loc="slide 27" />
+- A **pooling layer** reduces height and width, not depth. **Max pooling** keeps the largest value of each region, **average pooling** the average. <Cite id="class-dl-chp4" loc="slide 31" />
+- A **fully connected (FC) layer** connects every input to every neuron. The last layer uses **softmax** to give class probabilities. <Cite id="class-dl-chp4" loc="slide 28" />
+- **ReLU** keeps positive values and turns negative values into 0. **Dropout** randomly switches off neurons during training to reduce overfitting. **ImageNet** is a dataset of almost 14 million images in a thousand classes. <Cite id="class-dl-m4" loc="p. 54" />
 
-## Why learn named architectures?
+## Why learn the named architectures?
 
-An **architecture** is the full plan of a network: which layers, in which order, with what sizes. Each famous architecture is a milestone that answered "how do we go further?"
+There are various CNN architectures which have been key in building the algorithms that power AI: **LeNet, AlexNet, VGGNet, GoogLeNet, ResNet and ZFNet.** Each one introduced one new idea that all later networks use. <Cite id="class-dl-m4" loc="p. 41" />
 
-**Everyday analogy.** Think of the history of cars. An early car proved the idea works. A later car added a much bigger engine and better tyres and won every race. A modern car added a clever new part (like power steering) that made something previously impossible easy. LeNet proved CNNs work, AlexNet made them big and fast, and ResNet added the shortcut that made very deep networks trainable. This is syllabus <Syl m="4" />, the last topic of the CNN module. <Cite id="gfdl-ch9" loc="§9.11" />
+<Img id="class-cnn-architectures-timeline-table" caption="The class table of major CNN architectures with the year and the main contribution of each." />
+
+<Img id="class-cnn-architectures-quick-memory" caption="Quick memory: LeNet = birth of CNN, AlexNet = GPU + ReLU, VGG = deeper with small filters, GoogLeNet = parallel Inception modules, ResNet = skip connections, EfficientNet = better efficiency. Early to modern." />
 
 ```mermaid
-%% caption: The three architectures on a timeline. Each step made networks deeper and fixed a problem that blocked the previous design.
+%% caption: The story of CNN architectures as the class draws it, from early to modern. Each step added one idea.
 flowchart LR
-  A["1998 LeNet-5: 7 layers, about 60 thousand parameters, digits"] --> B["2012 AlexNet: 8 layers, about 60 million parameters, ImageNet winner"]
-  B --> C["2015 ResNet: up to 152 layers, skip connections, ImageNet winner"]
+  A["LeNet-5 (1998): conv + pooling + FC"] --> B["AlexNet (2012): ReLU, dropout, GPU"]
+  B --> C["VGG (2014): small 3×3 filters, deeper"]
+  C --> D["GoogLeNet (2014): Inception modules"]
+  D --> E["ResNet (2015): skip connections"]
+  E --> F["DenseNet (2017), EfficientNet (2019)"]
 ```
+
+<Img id="class-cnn-architectures-other-major" caption="Very brief pictures of VGG (many 3×3 filters stacked), GoogLeNet (parallel convolutions), ResNet (skip around convolutions), DenseNet (each layer to many later layers) and EfficientNet (scale depth, width and resolution)." />
 
 ## LeNet-5 (1998)
 
-**What it is.** LeNet-5 is one of the first successful convolutional neural networks, built by Yann LeCun and colleagues at AT&amp;T to read handwritten digits (the MNIST dataset) and bank cheques. <Cite id="lecun1998" />
+<Box kind="definition">
 
-**Why it was needed.** Earlier digit readers used hand-designed features, which broke easily when handwriting changed. LeNet learned its own features straight from the pixels, and it used weight sharing so the network stayed small enough for 1990s computers. Goodfellow notes that by the end of the 1990s a system based on such networks was reading over 10% of all cheques in the US. <Cite id="gfdl-ch9" loc="§9.11" />
-
-<Img id="img-dl-n3-mnist-digits" caption="MNIST digits: the kind of small handwritten images LeNet-5 was built to read. The same digit looks different every time, so the network has to learn the shape." />
-
-**How it works, step by step.** The paper names layers C (convolution), S (subsampling) and F (fully connected). There are seven layers with weights, not counting the input. The idea is simple: early layers find small strokes, middle layers join strokes into shapes, and the last layers decide which digit the shapes make.
-
-1. **Input:** a 32×32 grayscale image.
-2. **C1:** 6 filters of 5×5 find simple strokes and edges, giving 6 maps of 28×28.
-3. **S2:** 2×2 subsampling halves each map to 14×14.
-4. **C3:** 16 filters of 5×5 combine strokes into shapes, giving 16 maps of 10×10.
-5. **S4:** subsampling halves them to 5×5.
-6. **C5:** 120 filters of 5×5 cover the whole 5×5 map, giving 120 numbers.
-7. **F6:** a fully connected layer of 84 units.
-8. **Output:** 10 units, one per digit.
-
-```mermaid
-%% caption: LeNet-5 from left to right, with the size of the data after each layer. Convolution and subsampling alternate twice, then three layers do the classification.
-flowchart LR
-  A["Input 32×32×1"] --> B["C1 conv 5×5, 6 maps: 28×28×6"]
-  B --> C["S2 subsample 2×2: 14×14×6"]
-  C --> D["C3 conv 5×5, 16 maps: 10×10×16"]
-  D --> E["S4 subsample 2×2: 5×5×16"]
-  E --> F["C5 conv 5×5: 120"]
-  F --> G["F6 fully connected: 84"]
-  G --> H["Output: 10 digits"]
-```
-
-<Img id="img-dl-n3-lenet5" caption="LeNet-5 as stacked maps: convolution and pooling alternate twice, the maps get smaller and more numerous, then dense layers decide the digit. This drawing uses a 28×28 input; the original paper uses 32×32." />
-
-| Layer | What it does | Output | Trainable parameters (from the paper) |
-|---|---|---|---|
-| Input | Grayscale image | 32×32×1 | 0 |
-| C1 | 6 filters of 5×5, stride 1 | 28×28×6 | 156 |
-| S2 | 2×2 subsampling, stride 2 | 14×14×6 | 12 |
-| C3 | 16 filters of 5×5, each connected to only some S2 maps | 10×10×16 | 1,516 |
-| S4 | 2×2 subsampling, stride 2 | 5×5×16 | 32 |
-| C5 | 120 filters of 5×5 over all 16 maps | 1×1×120 | 48,120 |
-| F6 | Fully connected | 84 | 10,164 |
-| Output | 10 RBF units, one per digit | 10 | fixed by hand (not counted) |
-
-These add up to the paper's "about 60,000 trainable free parameters". The output layer is not counted because each unit's pattern was chosen by hand, not learned. <Cite id="lecun1998" />
-
-**Special features (in words).**
-
-- **Trainable subsampling, not today's pooling.** Each S unit adds its four inputs, multiplies by one learned coefficient, adds a learned bias and applies a sigmoid-type function. It behaves like a scaled average pooling.
-- **Partial connections in C3.** Each C3 map sees only some of the S2 maps. The paper gives two reasons: fewer connections, and different maps are forced to learn different features.
-- **Activation:** a scaled tanh (an S-shaped curve), not ReLU.
-- **Output:** 10 Euclidean RBF units, each measuring how far the 84 numbers are from a stored pattern for its digit. Modern versions use a 10-way softmax.
-- **Result:** 0.95% test error on MNIST, and 0.8% when trained with extra distorted copies of the images (data augmentation). <Cite id="lecun1998" />
-
-<Box kind="pitfall">
-
-Many tutorials draw LeNet-5 with ReLU, max pooling and softmax. Those are modern substitutions. The 1998 paper uses scaled tanh, trainable subsampling and RBF outputs. In an exam either version earns marks if you say which one you are drawing. D2L, for example, uses sigmoid and average pooling, which were the common choices then. <Cite id="d2l-lenet" />
+**LeNet-5** is a CNN architecture designed for handwritten digit recognition, which uses convolution, subsampling/pooling and fully connected layers to automatically learn features from images and classify them. <Cite id="class-dl-chp4" loc="slide 43" />
 
 </Box>
 
-**Advantages.** Small and fast (about 60 thousand parameters); learned its own features; weight sharing kept it compact; very accurate on digits.
+<Img id="class-cnn-architectures-lenet-definition" caption="LeNet-5: one of the earliest successful CNNs, developed by Yann LeCun and his collaborators, famous for recognizing handwritten digits." />
 
-**Disadvantages.** Designed for small grayscale images; too small for large colour photos with 1000 classes; tanh-type activations train slowly; in 1998 computers could not train much bigger versions.
+**Why was it needed?** Before CNNs, image recognition depended on manually designed features such as edges, curves and corners. LeNet's idea: let the network learn these features automatically. Handwritten image → CNN learns features → edges → curves → shapes → digit classification 0 to 9. <Cite id="class-dl-chp4" loc="slide 43" />
 
-**Applications.** Handwritten digit recognition, bank cheque reading, postal ZIP code reading. Today it is the standard teaching example of a CNN. <Cite id="gfg-lenet" /> <Cite id="av-lenet" />
+LeNet-5 was the first "famous" CNN architecture, developed by LeCun et al. (1998) for recognition of handwritten digits. LeCun and his fellow researchers worked on CNN models for a decade to come up with an efficient architecture. It inspired deep learning researchers to develop the efficient CNN models used today. <Cite id="class-dl-m4" loc="p. 43" />
 
-**Sum 1: LeNet-5 sizes and parameters.** A theory question ("Describe LeNet") does not need this. Use it only when a question asks you to calculate sizes or parameters.
+**Input:** a 32 × 32 grayscale image, so height = 32, width = 32 and channels = 1. <Cite id="class-dl-chp4" loc="slide 43" /> <Cite id="class-dl-m4" loc="p. 44" />
+
+### The architecture
+
+The network has **5 layers with learnable parameters**, hence the name LeNet-5. It has three sets of convolution layers combined with average pooling, then two fully connected layers, and at last a softmax classifier. <Cite id="class-dl-m4" loc="p. 44" />
+
+<Img id="class-cnn-architectures-lenet-architecture" caption="LeNet-5 from left to right: 32×32×1 input, C1 28×28×6, S2 14×14×6, C3 10×10×16, S4 5×5×16, C5 1×1×120, F6 84, output 10. C = convolution, S = subsampling." />
+
+```mermaid
+%% caption: LeNet-5 with the shape after every layer. Convolutions make more feature maps; subsampling halves the size; the last layers classify.
+flowchart LR
+  A["Input 32×32×1"] --> B["C1: 6 filters 5×5 → 28×28×6"]
+  B --> C["S2: average pool 2×2 → 14×14×6"]
+  C --> D["C3: 16 filters 5×5 → 10×10×16"]
+  D --> E["S4: average pool 2×2 → 5×5×16"]
+  E --> F["C5: 120 filters 5×5 → 1×1×120"]
+  F --> G["F6: fully connected 84"]
+  G --> H["Output: 10 (softmax)"]
+```
+
+<Img id="class-cnn-architectures-lenet-flow" caption="The Module 4 picture of LeNet-5 with a note under each layer: C1 learns low-level features such as edges, S2 reduces size, C3 learns higher-level features, C5 acts like a fully connected layer, F6 has 84 neurons, the output has 10 neurons for the digits 0 to 9." />
+
+**Layer by layer** <Cite id="class-dl-chp4" loc="slide 45" /> <Cite id="class-dl-m4" loc="p. 51" />
+
+| Layer | Operation | Input | Filters / neurons | Filter size | Output | What it learns |
+|---|---|---|---|---|---|---|
+| Input | Image | – | – | – | 32×32×1 | Raw pixel values |
+| C1 | Convolution (tanh) | 32×32×1 | 6 | 5×5 | 28×28×6 | Edges, lines, curves |
+| S2 | Subsampling (average pooling) | 28×28×6 | – | 2×2, stride 2 | 14×14×6 | Downsamples, keeps important information |
+| C3 | Convolution (tanh) | 14×14×6 | 16 | 5×5 | 10×10×16 | Combines edges into shapes and corners |
+| S4 | Subsampling | 10×10×16 | – | 2×2, stride 2 | 5×5×16 | Further downsampling |
+| C5 | Convolution (tanh) | 5×5×16 | 120 | 5×5 | 1×1×120 | High-level features (the whole digit) |
+| F6 | Fully connected (tanh) | 120 | 84 | – | 84 | Combines all features to decide |
+| Output | Fully connected + softmax | 84 | 10 | – | 10 | Scores / probability for digits 0 to 9 |
+
+<Img id="class-cnn-architectures-lenet-layer-table" caption="The class layer-by-layer table of LeNet-5." />
+
+**Check the sizes** with the formula $\lfloor (N - F + 2P)/S \rfloor + 1$ (no padding): <Cite id="class-dl-chp4" loc="slide 19" />
 
 <Sum>
 
 <Given>
 
-a 32×32×1 input; every convolution uses 5×5 filters, stride 1, no padding; every subsampling uses 2×2 windows with stride 2; C1 has 6 filters, C3 has 16, C5 has 120; F6 has 84 units. Output size rule $O = (N - F + 2P)/S + 1$.
+32×32×1 input; C1: 6 filters 5×5, stride 1; S2: 2×2 pooling, stride 2; C3: 16 filters 5×5; S4: 2×2 pooling, stride 2; C5: 120 filters 5×5. No padding.
 
 </Given>
 
 <Find>
 
-the output size of C1, S2, C3, S4 and C5, and the number of trainable parameters in C1, C5 and F6.
+the output size of every layer.
 
 </Find>
 
 <Steps>
 
-1. **C1 size.** $(32 - 5 + 0)/1 + 1 = 27 + 1 = 28$, so 28×28×6. The 5×5 filter fits in only 28 positions across 32 pixels; 6 filters give 6 maps.
-2. **S2 size.** $(28 - 2)/2 + 1 = 13 + 1 = 14$, so 14×14×6. Subsampling halves the size and keeps the number of maps.
-3. **C3 size.** $(14 - 5)/1 + 1 = 9 + 1 = 10$, so 10×10×16. Same filter rule as C1, now with 16 filters.
-4. **S4 size.** $(10 - 2)/2 + 1 = 4 + 1 = 5$, so 5×5×16. Halved again.
-5. **C5 size.** $(5 - 5)/1 + 1 = 0 + 1 = 1$, so 1×1×120. The 5×5 filter covers the whole 5×5 map, so each filter gives one number.
-6. **C1 parameters.** Each filter has $5 \times 5 \times 1 = 25$ weights plus 1 bias, so 26. Six filters: $6 \times 26 = 156$. The input has one channel, so each filter is 5×5×1.
-7. **C5 parameters.** Each filter looks at all 16 maps of S4: $5 \times 5 \times 16 = 400$ weights plus 1 bias, so 401. Then $120 \times 401 = 48{,}120$. Each filter must cover every input map.
-8. **F6 parameters.** Each of the 84 units connects to all 120 values of C5, plus 1 bias, so 121. Then $84 \times 121 = 10{,}164$. A fully connected unit has one weight per input.
+1. **C1:** $(32 - 5)/1 + 1 = 28$, depth 6, so **28×28×6**.
+2. **S2:** $(28 - 2)/2 + 1 = 14$, depth stays 6, so **14×14×6**.
+3. **C3:** $(14 - 5)/1 + 1 = 10$, depth 16, so **10×10×16**.
+4. **S4:** $(10 - 2)/2 + 1 = 5$, depth stays 16, so **5×5×16**.
+5. **C5:** $(5 - 5)/1 + 1 = 1$, depth 120, so **1×1×120** (the 5×5×16 map is covered by one filter position, so the 120 values act like a flattened vector).
 
 </Steps>
 
 <Answer>
 
-sizes 28×28×6 → 14×14×6 → 10×10×16 → 5×5×16 → 1×1×120; parameters C1 = 156, C5 = 48,120, F6 = 10,164.
+28×28×6 → 14×14×6 → 10×10×16 → 5×5×16 → 1×1×120, then 84 and 10.
 
 </Answer>
 
 <Box kind="verify">
 
-Check the sizes with a pattern: a 5×5 filter with no padding always removes 4 from the size ($32 - 4 = 28$, $14 - 4 = 10$, $5 - 4 = 1$), and a 2×2 stride-2 window always halves it ($28 / 2 = 14$, $10 / 2 = 5$). Both agree with the steps. Check the parameters against the paper's total: add every layer in the table,
-
-$$
-156 + 12 + 1{,}516 + 32 + 48{,}120 + 10{,}164
-$$
-
-In order: $156 + 12 = 168$; $168 + 1{,}516 = 1{,}684$; $1{,}684 + 32 = 1{,}716$; $1{,}716 + 48{,}120 = 49{,}836$; $49{,}836 + 10{,}164 = 60{,}000$. That is exactly the paper's "about 60,000", so the three counts fit.
+These are the sizes printed on the class sheet. Pooling halves height and width and never changes depth ($6 \to 6$, $16 \to 16$), as the class rule says.
 
 </Box>
 
 </Sum>
+
+**Check the parameters** ("around sixty thousand"). A convolution layer has $(F \times F \times D + 1) \times K$ parameters; a fully connected layer has (inputs × neurons) weights plus one bias per neuron. Pooling has none. <Cite id="class-dl-m4" loc="p. 51" /> <Cite id="class-dl-chp4" loc="slide 27" />
+
+<Sum>
+
+<Given>
+
+the LeNet-5 layers of the table above.
+
+</Given>
+
+<Find>
+
+the total number of trainable parameters.
+
+</Find>
+
+<Steps>
+
+1. **C1:** $(5 \cdot 5 \cdot 1 + 1) \times 6 = 26 \times 6 = 156$.
+2. **C3:** the input depth is 6, so $(5 \cdot 5 \cdot 6 + 1) \times 16 = 151 \times 16 = 2{,}416$.
+3. **C5:** the input depth is 16, so $(5 \cdot 5 \cdot 16 + 1) \times 120 = 401 \times 120 = 48{,}120$.
+4. **F6:** $120 \times 84 + 84 = 10{,}164$.
+5. **Output:** $84 \times 10 + 10 = 850$.
+6. **Total:** $156 + 2{,}416 + 48{,}120 + 10{,}164 + 850 = 61{,}706$.
+
+</Steps>
+
+<Answer>
+
+about 61,706, which is the "around sixty thousand" of the class notes.
+
+</Answer>
+
+<Box kind="verify">
+
+Add in a different order: $156 + 850 = 1{,}006$; $2{,}416 + 10{,}164 = 12{,}580$; $1{,}006 + 12{,}580 + 48{,}120 = 61{,}706$. (S2 and S4 add nothing.) The slide also says about 60K.
+
+</Box>
+
+</Sum>
+
+### Important ideas, and why LeNet-5 matters
+
+<Img id="class-cnn-architectures-lenet-ideas" caption="Important ideas in LeNet-5: convolution (filters detect edges, curves, shapes), subsampling / pooling (28×28 becomes 14×14, reduces computation), hierarchical feature learning (edges, curves, parts of digits, complete digit, classification)." />
+
+- **Convolution**, **subsampling / pooling**, **hierarchical feature learning** and **multiple feature maps** (more filters give more feature maps; C1 has 6, C3 has 16). <Cite id="class-dl-chp4" loc="slide 43" />
+- LeNet demonstrated that a network can **automatically learn useful visual features directly from images**. It established the basic ideas of modern CNNs: convolution, pooling, feature maps, hierarchical feature learning, weight sharing and end-to-end image classification. <Cite id="class-dl-chp4" loc="slide 43" />
+
+<Img id="class-cnn-architectures-lenet-vs-fc" caption="LeNet versus a fully connected network: the fully connected network has a huge number of parameters and ignores spatial structure; LeNet has far fewer parameters, preserves spatial information and learns features automatically." />
+
+**Why is it called LeNet-5?** Because it has five trainable layers (C1, C3, C5, F6 and Output). The pooling layers S2 and S4 are not counted as trainable layers. <Cite id="class-dl-chp4" loc="slide 43" />
+
+<Img id="class-cnn-architectures-lenet-why-five" caption="The five trainable layers and the important characteristics of LeNet-5: 32×32×1 input, 6 filters, 16 filters, 120 filters, 2×2 subsampling, 84 neurons, 10 classes, tanh." />
+
+<Img id="class-cnn-architectures-lenet-conceptual" caption="What is happening conceptually: pixels, then edges and curves (C1), then shapes (C3), then parts of the digit (C5), then the decision (F6). The example softmax output gives digit 5 the highest score, 0.82." />
+
+<Img id="class-cnn-architectures-lenet-example-eight" caption="LeNet-5 on a handwritten 8: C1 finds edges, S2 reduces size, C3 finds curves and shapes, S4 reduces size, C5 combines complex features, F6 makes the final representation, and the output for 8 has the highest score." />
+
+**Merits and demerits** (Module 4): LeNet used spatial correlation to minimize computation and parameter count, and its feature hierarchies were learned automatically. But it scaled poorly to various picture classes, used large-size filters and extracted only low-level features. <Cite id="class-dl-m4" loc="p. 85" />
+
+<Img id="class-cnn-architectures-merits" caption="The Module 4 table of merits and demerits of LeNet and AlexNet." />
+
+<Box kind="key">
+
+**Exam-ready conclusion (LeNet-5):** LeNet-5 is an early and influential CNN architecture developed for handwritten digit recognition. It takes a grayscale image, extracts features hierarchically using convolution and subsampling layers, and uses fully connected layers to classify the image into one of ten digit classes. It is considered a foundational architecture in the development of modern CNNs. <Cite id="class-dl-chp4" loc="slide 43" />
+
+</Box>
 
 ## AlexNet (2012)
 
-**What it is.** AlexNet is a deep CNN by Alex Krizhevsky, Ilya Sutskever and Geoffrey Hinton. It won ILSVRC-2012 with a top-5 test error of **15.3%**, against **26.2%** for the second-best entry. Goodfellow marks this win as the start of today's strong commercial interest in deep learning. <Cite id="krizhevsky2012" /> <Cite id="gfdl-ch9" loc="§9.11" />
+<Box kind="definition">
 
-<Img id="img-dl-n3-imagenet-error" caption="ImageNet error by year. The big drop at 2012 is AlexNet; by 2015 the best systems passed the dashed human-performance line." />
-
-**Why it was needed.** LeNet worked on small digit images, but ImageNet has over a million large colour photos in 1000 classes. That needed a much bigger network, and a bigger network brought two new problems: very slow training and heavy overfitting. AlexNet's new ideas solve exactly these two problems.
-
-**How it works (architecture).** 8 layers with weights: **5 convolutional** and **3 fully connected**, ending in a 1000-way softmax. About **60 million parameters** and 650,000 neurons. The first conv layers find edges and colour blobs, the deeper ones find textures and object parts, and the fully connected layers combine these parts into a class decision. The table uses the common single-GPU description with a 227×227×3 input.
-
-| Layer | Setting | Output |
-|---|---|---|
-| Input | Colour image | 227×227×3 |
-| Conv1 + ReLU | 96 filters, 11×11, stride 4 | 55×55×96 |
-| Normalization + max pool | 3×3, stride 2 | 27×27×96 |
-| Conv2 + ReLU | 256 filters, 5×5, pad 2 | 27×27×256 |
-| Normalization + max pool | 3×3, stride 2 | 13×13×256 |
-| Conv3 + ReLU | 384 filters, 3×3, pad 1 | 13×13×384 |
-| Conv4 + ReLU | 384 filters, 3×3, pad 1 | 13×13×384 |
-| Conv5 + ReLU | 256 filters, 3×3, pad 1 | 13×13×256 |
-| Max pool | 3×3, stride 2 | 6×6×256 = 9216 values |
-| FC6 + ReLU + dropout | 4096 units | 4096 |
-| FC7 + ReLU + dropout | 4096 units | 4096 |
-| FC8 + softmax | 1000 classes | 1000 |
-
-```mermaid
-%% caption: AlexNet. Five convolution layers find features, with max pooling after the 1st, 2nd and 5th. Three fully connected layers, two with dropout, make the decision.
-flowchart LR
-  A["Input 227×227×3"] --> B["Conv1 11×11 stride 4, 96 + pool"]
-  B --> C["Conv2 5×5, 256 + pool"]
-  C --> D["Conv3 3×3, 384"]
-  D --> E["Conv4 3×3, 384"]
-  E --> F["Conv5 3×3, 256 + pool"]
-  F --> G["FC6 4096 + dropout"]
-  G --> H["FC7 4096 + dropout"]
-  H --> I["FC8 1000 softmax"]
-```
-
-<Img id="img-dl-n3-lenet-vs-alexnet" caption="LeNet (left) next to AlexNet (right). AlexNet is deeper, uses ReLU and max pooling instead of sigmoid and average pooling, and ends in dropout. This figure shows a 224×224 input; the note's table uses the common 227×227 version." />
-
-<Box kind="pitfall">
-
-The paper says the input is 224×224×3, but with an 11×11 filter and stride 4 the sizes only work out with 227×227: 224 gives a non-whole number whatever the padding. CS231n points out this mismatch. Use 227 when you show the size calculation and mention it. <Cite id="cs231n-cnn" />
+**AlexNet** is a deep CNN architecture that became a landmark in 2012 by achieving outstanding ImageNet image-classification performance and popularizing deep learning for computer vision. <Cite id="class-dl-chp4" loc="slide 46" />
 
 </Box>
 
-**What was new, and why each idea helped.** <Cite id="krizhevsky2012" />
+<Img id="class-cnn-architectures-alexnet-what" caption="AlexNet was developed by Alex Krizhevsky, Ilya Sutskever and Geoffrey Hinton in 2012. It showed that a deep CNN trained with GPUs and large amounts of data can learn useful image features and perform much better." />
 
-1. **ReLU instead of tanh.** ReLU does not saturate for positive inputs, so gradients stay large and learning is fast. The paper reports that a ReLU network reached 25% training error on CIFAR-10 about six times faster than the same network with tanh.
-2. **Training on two GPUs.** Each GTX 580 GPU had only 3 GB of memory, so the network was split across two GPUs. Training took five to six days.
-3. **Local response normalization** after the first two conv layers, which helped neighbouring feature maps compete. It is rarely used today (batch normalization replaced it).
-4. **Overlapping max pooling:** windows of 3×3 with stride 2, so neighbouring windows overlap. It slightly reduced the error compared with non-overlapping 2×2 windows.
-5. **Dropout** with probability 0.5 in the first two fully connected layers. Without it the network overfitted badly. <Cite id="srivastava2014" />
-6. **Data augmentation:** random 224×224 crops of the 256×256 images, horizontal flips, and changes to colour intensity, so the network sees many more varied training images.
+**Why was it needed?** Before AlexNet, CNNs were strong and easy to train, but they were expensive for large, high-resolution images, exactly the problem when ImageNet arrived. The traditional approach was image → manually designed features → classifier → prediction. AlexNet's approach is image → convolution → edges → shapes → textures → object parts → objects → classification. <Cite id="class-dl-m4" loc="p. 53" /> <Cite id="class-dl-chp4" loc="slide 46" />
 
-**Where the parameters are (analysis).** The five conv layers hold only about 3.7 million parameters; the three fully connected layers hold about 58.6 million (FC6 alone about 37.8 million). So **most of AlexNet's parameters sit in the fully connected layers**, which is why dropout was placed there. Conv layers are cheap because one small filter is reused at every position (weight sharing); a fully connected layer needs a separate weight for every input-output pair. (This single-GPU version totals about 62.4 million; the paper's "60 million" is a little lower because some layers were split across the two GPUs.) Sum 3 below shows the count.
+### Key features of AlexNet
 
-**Everyday analogy.** LeNet was a bicycle. AlexNet was the same basic design turned into a motorbike: a far bigger engine (60 million parameters), a better fuel (ReLU), a powerful workshop (GPUs) and good brakes against overfitting (dropout and augmentation).
+<Img id="class-cnn-architectures-alexnet-features" caption="Key features: deep CNN, ReLU instead of sigmoid or tanh, max pooling, GPU training, dropout, a large dataset (ImageNet) and automatic feature learning." />
 
-**Advantages.** Huge jump in accuracy on real photos; showed that deep CNNs trained on GPUs beat hand-designed features; introduced ReLU, dropout and augmentation as standard tools.
+- **Eight layers** with learnable parameters: **five convolutional layers and three fully connected layers**. ReLU is used in every layer except the output layer. <Cite id="class-dl-m4" loc="p. 54" /> <Cite id="class-dl-m4" loc="p. 55" />
+- **ReLU** in place of tanh: training became almost **six times faster** (error 25% on CIFAR-10 in the Module example). <Cite id="class-dl-m4" loc="p. 54" /> <Cite id="class-dl-m4" loc="p. 55" />
+- **GPU training**: the neurons were split across multiple GPUs, which gave faster training and a bigger model. <Cite id="class-dl-m4" loc="p. 55" />
+- **Overlapping pooling** (neighbouring pooling regions overlap) reduced the error by 0.5%. <Cite id="class-dl-m4" loc="p. 55" />
+- **Overfitting** grew with the 60 million parameters, so **dropout** (dropping neurons with a fixed probability, here 50%) and **data augmentation** (image transformations to increase data variety) were used. <Cite id="class-dl-m4" loc="p. 55" /> <Cite id="class-dl-chp4" loc="slide 43" />
+- It **won the 2012 ImageNet competition** with a large margin over the runner-up, and it is trained on the ImageNet dataset (about 14 million images, 1000 classes). Removing any convolutional layer drastically degrades its performance. <Cite id="class-dl-m4" loc="p. 55" />
 
-**Disadvantages.** Very large and memory-hungry, mostly because of the FC layers; large 11×11 first-layer filters (later replaced by stacks of small 3×3 filters in networks such as VGG); local response normalization turned out to be of little use; only 8 layers, so still fairly shallow.
+### The architecture
 
-**Applications.** Large-scale image classification, and as a pretrained feature extractor (transfer learning) for tasks such as object detection and medical images. <Cite id="d2l-alexnet" /> <Cite id="gfg-alexnet" /> <Cite id="av-alexnet" />
+<Img id="class-cnn-architectures-alexnet-column" caption="The basic AlexNet in a list: input 227×227×3, convolution 1 with ReLU and max pooling, convolution 2 with ReLU and max pooling, convolutions 3, 4, 5 with ReLU and a max pooling, then FC6, FC7 and the output." />
 
-**Sum 2: AlexNet output sizes.** Only for questions that ask you to calculate the sizes.
+<Img id="class-cnn-architectures-alexnet-strip" caption="AlexNet left to right with sizes: 227×227×3, 55×55×96, 27×27×96, 27×27×256, 13×13×256, 13×13×384, 13×13×384, 13×13×256, 6×6×256, flatten 9216, FC6 4096, FC7 4096, output 1000 (softmax)." />
+
+```mermaid
+%% caption: AlexNet with the shape after every layer. ReLU follows every convolution; dropout 0.5 sits on the two big fully connected layers.
+flowchart LR
+  A["Input 227×227×3"] --> B["Conv1: 96 filters 11×11, stride 4 → 55×55×96"]
+  B --> C["Max pool 3×3, stride 2 → 27×27×96"]
+  C --> D["Conv2: 256 filters 5×5, pad 2 → 27×27×256"]
+  D --> E["Max pool 3×3, stride 2 → 13×13×256"]
+  E --> F["Conv3: 384 filters 3×3, pad 1 → 13×13×384"]
+  F --> G["Conv4: 384 filters 3×3, pad 1 → 13×13×384"]
+  G --> H["Conv5: 256 filters 3×3, pad 1 → 13×13×256"]
+  H --> I["Max pool 3×3, stride 2 → 6×6×256"]
+  I --> J["Flatten 9216 → FC6 4096 → FC7 4096 (dropout 0.5)"]
+  J --> K["FC8: 1000 (softmax)"]
+```
+
+**Layer by layer** (output $= \lfloor (N + 2P - F)/S \rfloor + 1$): <Cite id="class-dl-m4" loc="p. 57" /> <Cite id="class-dl-m4" loc="p. 58" /> <Cite id="class-dl-m4" loc="p. 60" />
+
+| Layer | Filters / units | Filter | Stride | Padding | Output |
+|---|---|---|---|---|---|
+| Input | – | – | – | – | 227×227×3 |
+| Conv1 + ReLU | 96 | 11×11 | 4 | 0 | 55×55×96 |
+| Max pool 1 | – | 3×3 | 2 | 0 | 27×27×96 |
+| Conv2 + ReLU | 256 | 5×5 | 1 | 2 | 27×27×256 |
+| Max pool 2 | – | 3×3 | 2 | 0 | 13×13×256 |
+| Conv3 + ReLU | 384 | 3×3 | 1 | 1 | 13×13×384 |
+| Conv4 + ReLU | 384 | 3×3 | 1 | 1 | 13×13×384 |
+| Conv5 + ReLU | 256 | 3×3 | 1 | 1 | 13×13×256 |
+| Max pool 3 | – | 3×3 | 2 | 0 | 6×6×256 |
+| Dropout 1 (0.5) + FC6 + ReLU | 4096 | – | – | – | 4096 |
+| Dropout 2 (0.5) + FC7 + ReLU | 4096 | – | – | – | 4096 |
+| FC8 + softmax | 1000 | – | – | – | 1000 |
+
+The number of filters **increases** with depth (96, 256, 384, 384, 256) and the filter size **decreases** (11, 5, 3, 3, 3), so deeper layers extract more features from smaller windows. <Cite id="class-dl-m4" loc="p. 58" />
+
+**Sum: check the AlexNet sizes.** <Cite id="class-dl-m4" loc="p. 57" />
 
 <Sum>
 
 <Given>
 
-a 227×227×3 input and the layer settings in the table above. Output size rule $O = (N - F + 2P)/S + 1$.
+input 227×227×3 and the layer settings of the table above.
 
 </Given>
 
 <Find>
 
-the output size after every layer up to the last pooling, and the number of values passed to FC6.
+the size after each convolution and pooling layer, and the input of FC6.
 
 </Find>
 
 <Steps>
 
-1. **Conv1.**
-
-   $$
-   \begin{aligned}
-   (227 - 11 + 0)/4 + 1 &= 216/4 + 1 \\
-   &= 54 + 1 \\
-   &= 55
-   \end{aligned}
-   $$
-
-   so 55×55×96. The large 11×11 filter with stride 4 shrinks the image fast; 96 filters give 96 maps.
-2. **Pool1.** $(55 - 3)/2 + 1 = 52/2 + 1 = 26 + 1 = 27$, so 27×27×96. Pooling keeps the number of maps.
-3. **Conv2.**
-
-   $$
-   (27 - 5 + 2 \times 2)/1 + 1 = 26 + 1 = 27
-   $$
-
-   so 27×27×256. Padding 2 exactly makes up for the 5×5 filter, so the size stays.
-4. **Pool2.** $(27 - 3)/2 + 1 = 12 + 1 = 13$, so 13×13×256.
-5. **Conv3, Conv4, Conv5.**
-
-   $$
-   (13 - 3 + 2 \times 1)/1 + 1 = 12 + 1 = 13
-   $$
-
-   each time, giving 13×13×384, 13×13×384 and 13×13×256. Padding 1 makes up for the 3×3 filter.
-6. **Pool3.** $(13 - 3)/2 + 1 = 5 + 1 = 6$, so 6×6×256.
-7. **Flatten for FC6.**
-
-   $$
-   \begin{aligned}
-   6 \times 6 \times 256 &= 36 \times 256 \\
-   &= 9{,}216
-   \end{aligned}
-   $$
-
-   FC6 needs one long list of numbers.
+1. **Conv1:** $(227 + 0 - 11)/4 + 1 = 54 + 1 = 55$, depth 96, so 55×55×96.
+2. **Pool 1:** $(55 - 3)/2 + 1 = 26 + 1 = 27$, so 27×27×96.
+3. **Conv2:** $(27 + 4 - 5)/1 + 1 = 27$, depth 256, so 27×27×256.
+4. **Pool 2:** $(27 - 3)/2 + 1 = 13$, so 13×13×256.
+5. **Conv3, Conv4, Conv5:** $(13 + 2 - 3)/1 + 1 = 13$ each, depths 384, 384, 256.
+6. **Pool 3:** $(13 - 3)/2 + 1 = 6$, so 6×6×256.
+7. **Flatten:** $6 \times 6 \times 256 = 9216$ values go into FC6.
 
 </Steps>
 
 <Answer>
 
-55×55×96 → 27×27×96 → 27×27×256 → 13×13×256 → 13×13×384 → 13×13×384 → 13×13×256 → 6×6×256, so FC6 receives 9,216 values.
+55×55×96 → 27×27×96 → 27×27×256 → 13×13×256 → 13×13×384 → 13×13×384 → 13×13×256 → 6×6×256 → 9216.
 
 </Answer>
 
 <Box kind="verify">
 
-Work backwards: the input size that gives output $O$ is $(O - 1) \times S + F - 2P$. Conv1: $(55 - 1) \times 4 + 11 = 216 + 11 = 227$, the given input. Pool1: $(27 - 1) \times 2 + 3 = 55$. Pool2: $(13 - 1) \times 2 + 3 = 27$. Pool3: $(6 - 1) \times 2 + 3 = 13$. Every layer maps back to the size before it, so the forward sizes are right. If you try 224 instead, Conv1 gives $(224 - 11)/4 + 1 = 54.25$, not a whole number, which is the mismatch in the pitfall above.
+Padding 1 with a 3×3 filter and stride 1 is "same" padding ($P = (F-1)/2 = 1$), so Conv3, Conv4 and Conv5 must keep 13×13. Padding 2 with a 5×5 filter is also "same", so Conv2 keeps 27×27. Both match.
 
 </Box>
 
 </Sum>
 
-**Sum 3: where AlexNet's parameters are.** Only for questions that ask you to count parameters.
+**Sum: how many parameters?** <Cite id="class-dl-m4" loc="p. 60" />
 
 <Sum>
 
 <Given>
 
-the single-GPU AlexNet in the table. A conv layer has (filter height × filter width × input channels + 1 bias) parameters per filter. A fully connected layer has (number of inputs + 1 bias) parameters per unit.
+the AlexNet layers above; parameters of a convolution layer $= (F \cdot F \cdot D + 1) \times K$; of a fully connected layer $=$ inputs $\times$ neurons $+$ neurons.
 
 </Given>
 
 <Find>
 
-the parameters in the conv layers, in the FC layers, and in total.
+the total number of learnable parameters.
 
 </Find>
 
 <Steps>
 
-1. **Conv1.** $11 \times 11 \times 3 = 363$ weights + 1 = 364 per filter; $96 \times 364 = 34{,}944$. The input has 3 colour channels.
-2. **Conv2.** $5 \times 5 \times 96 = 2{,}400$ + 1 = 2,401; $256 \times 2{,}401 = 614{,}656$. Its input has 96 maps.
-3. **Conv3.** $3 \times 3 \times 256 = 2{,}304$ + 1 = 2,305; $384 \times 2{,}305 = 885{,}120$.
-4. **Conv4.** $3 \times 3 \times 384 = 3{,}456$ + 1 = 3,457; $384 \times 3{,}457 = 1{,}327{,}488$.
-5. **Conv5.** 3,457 per filter again (input is 384 maps); $256 \times 3{,}457 = 884{,}992$.
-6. **All conv layers.** Add the five layer totals:
-
-   $$
-   34{,}944 + 614{,}656 + 885{,}120 + 1{,}327{,}488 + 884{,}992 = 3{,}747{,}200
-   $$
-
-   (about 3.7 million).
-7. **FC6.**
-
-   $$
-   \begin{aligned}
-   4{,}096 \times (9{,}216 + 1) &= 4{,}096 \times 9{,}217 \\
-   &= 37{,}752{,}832
-   \end{aligned}
-   $$
-
-   Every unit sees all 9,216 values from Sum 2.
-8. **FC7.**
-
-   $$
-   4{,}096 \times (4{,}096 + 1) = 16{,}781{,}312
-   $$
-
-   Each of the 4,096 units has 4,096 inputs plus a bias.
-9. **FC8.**
-
-   $$
-   1{,}000 \times (4{,}096 + 1) = 4{,}097{,}000
-   $$
-
-   Each of the 1,000 output units has 4,096 inputs plus a bias.
-10. **All FC layers.** Add the three FC totals:
-
-    $$
-    37{,}752{,}832 + 16{,}781{,}312 + 4{,}097{,}000 = 58{,}631{,}144
-    $$
-
-    (about 58.6 million).
-11. **Total.** Add the conv and FC parts to get the whole network:
-
-    $$
-    3{,}747{,}200 + 58{,}631{,}144 = 62{,}378{,}344
-    $$
-
-    (about 62.4 million).
+1. **Conv1:** $(11 \cdot 11 \cdot 3 + 1) \times 96 = 364 \times 96 = 34{,}944$.
+2. **Conv2:** $(5 \cdot 5 \cdot 96 + 1) \times 256 = 2401 \times 256 = 614{,}656$.
+3. **Conv3:** $(3 \cdot 3 \cdot 256 + 1) \times 384 = 2305 \times 384 = 885{,}120$.
+4. **Conv4:** $(3 \cdot 3 \cdot 384 + 1) \times 384 = 3457 \times 384 = 1{,}327{,}488$.
+5. **Conv5:** $(3 \cdot 3 \cdot 384 + 1) \times 256 = 3457 \times 256 = 884{,}992$.
+6. **FC6:** $9216 \times 4096 + 4096 = 37{,}752{,}832$.
+7. **FC7:** $4096 \times 4096 + 4096 = 16{,}781{,}312$.
+8. **FC8:** $4096 \times 1000 + 1000 = 4{,}097{,}000$.
+9. **Total:** $34{,}944 + 614{,}656 + 885{,}120 + 1{,}327{,}488 + 884{,}992 = 3{,}747{,}200$ for the convolutions, and $37{,}752{,}832 + 16{,}781{,}312 + 4{,}097{,}000 = 58{,}631{,}144$ for the FC layers, so about **62.4 million**.
 
 </Steps>
 
 <Answer>
 
-conv layers about 3.7 million, FC layers about 58.6 million, total about 62.4 million parameters, so about 94% ($58.6 / 62.4$) sit in the fully connected layers.
+about 62.4 million parameters (the Module 4 notes quote "62.3 million learnable parameters"). Most of them sit in the fully connected layers, which is why dropout is used there.
 
 </Answer>
 
 <Box kind="verify">
 
-Count weights and biases separately, then add. Conv weights:
+$3{,}747{,}200 + 58{,}631{,}144 = 62{,}378{,}344 \approx 62.4$ million, which agrees with the class figure of about 60 million to 62.3 million. The first-layer value 34,944 matches the class sum in the CNN note.
 
-$$
-34{,}848 + 614{,}400 + 884{,}736 + 1{,}327{,}104 + 884{,}736 = 3{,}745{,}824
-$$
+</Box>
 
-conv biases (one per filter): $96 + 256 + 384 + 384 + 256 = 1{,}376$; together $3{,}747{,}200$, same as step 6. FC weights:
+</Sum>
 
-$$
-\begin{aligned}
-9{,}216 \times 4{,}096 + 4{,}096 \times 4{,}096 + 4{,}096 \times 1{,}000 &= 37{,}748{,}736 + 16{,}777{,}216 + 4{,}096{,}000 \\
-&= 58{,}621{,}952
-\end{aligned}
-$$
+<Img id="class-cnn-architectures-alexnet-learns" caption="How AlexNet learns features: image, edges, shapes, textures, object parts, objects. Early layers learn simple patterns, deeper layers learn complex patterns and objects." />
 
-FC biases: $4{,}096 + 4{,}096 + 1{,}000 = 9{,}192$; together $58{,}631{,}144$, same as step 10. The total is also close to the paper's "60 million", as expected for the single-GPU version.
+### AlexNet versus LeNet
+
+<Img id="class-cnn-architectures-lenet-vs-alexnet" caption="The class table comparing LeNet-5 and AlexNet." />
+
+| Feature | LeNet-5 | AlexNet |
+|---|---|---|
+| Year | 1998 | 2012 |
+| Application | Handwritten digits | ImageNet classification |
+| Input | Small grayscale image (32×32) | Large RGB images (227×227×3) |
+| Depth | Relatively shallow | Much deeper |
+| Activation | Tanh / sigmoid | ReLU |
+| Pooling | Subsampling (average) | Max pooling |
+| GPU | Not central | Yes (GPU based) |
+| Dropout | No | Yes |
+| Data augmentation | Limited | Yes |
+| Importance | Early successful CNN | Major deep-learning breakthrough |
+
+<Cite id="class-dl-chp4" loc="slide 41" />
+
+**Demerits of AlexNet** (Module 4): neurons in the first and second layers can be dormant, and aliasing artefacts appear in the trained feature maps because of the excessive filter size. <Cite id="class-dl-m4" loc="p. 85" />
+
+## VGG-16 (2014)
+
+**VGG-16** was the next big breakthrough: it marked the beginning of very deep CNNs. Earlier models such as AlexNet used large filters in the first layers; VGG changed this and used **3×3 filters** instead. Developed by Simonyan and Zisserman, it was the best performing model at that time. <Cite id="class-dl-m4" loc="p. 69" />
+
+<Img id="class-cnn-architectures-vgg-strip" caption="VGG-16: five blocks of 3×3 convolutions (2, 2, 3, 3, 3 convolutions with 64, 128, 256, 512, 512 filters), each block ending with a 2×2 max pool that halves the size, then FC 4096, FC 4096 and FC 1000 with softmax." />
+
+- **Very systematic architecture:** only 3×3 convolutions with stride 1; five 2×2 max-pooling layers with stride 2; as we go deeper the **image size halves while the number of channels (filters) doubles**: 64, 128, 256, 512, 512. <Cite id="class-dl-m4" loc="p. 70" /> <Cite id="class-dl-m4" loc="p. 73" />
+- **Fully connected layers** are always the same: 4096, 4096, then 1000 for the 1000-way ImageNet classification, then softmax. All hidden layers use ReLU. Dropout 0.5 is used on the first two fully connected layers. <Cite id="class-dl-m4" loc="p. 71" /> <Cite id="class-dl-m4" loc="p. 74" />
+- **Depth:** configurations differ only in depth, from 11 weight layers (network A) to 19 (network E). VGG-16 has 13 convolutional and 3 fully connected layers. <Cite id="class-dl-m4" loc="p. 73" />
+- **Input:** a 224 × 224 RGB image; the mean RGB value is subtracted from each pixel in pre-processing. <Cite id="class-dl-m4" loc="p. 71" />
+- **Result:** the best single-net result in ILSVRC (7.0% test error) at that time. <Cite id="class-dl-m4" loc="p. 75" />
+- **Drawbacks:** about **138 million parameters** (more than twice the parameters of other models of the time), weeks to train, and a trained model of over 500 MB, so it is slow and less practical for real-time use. <Cite id="class-dl-m4" loc="p. 70" /> <Cite id="class-dl-m4" loc="p. 75" />
+
+<Img id="class-cnn-architectures-vgg-table" caption="VGG-16 detailed configuration: Block 1 224×224 (64 filters), Block 2 112×112 (128), Block 3 56×56 (256), Block 4 28×28 (512), Block 5 14×14 (512), each followed by max pool; then FC6 4096, FC7 4096, FC8 1000." />
+
+<Img id="class-cnn-architectures-vgg-configs" caption="The Module 4 table of VGG configurations A to E. VGG-16 is column D: 13 convolution layers and 3 fully connected layers." />
+
+**Sum: why the VGG-16 sizes work.** <Cite id="class-dl-m4" loc="p. 73" />
+
+<Sum>
+
+<Given>
+
+input 224×224×3. Five blocks of 3×3 convolutions (stride 1, "same" padding so the size does not shrink) with 64, 128, 256, 512, 512 filters, each followed by a 2×2 max pool with stride 2.
+
+</Given>
+
+<Find>
+
+the size after every block and the input of the first fully connected layer. Count the layers.
+
+</Find>
+
+<Steps>
+
+1. **Block 1:** convolutions keep 224×224, pool gives $(224 - 2)/2 + 1 = 112$, so 112×112×64.
+2. **Block 2:** pool gives 56, so 56×56×128.
+3. **Block 3:** pool gives 28, so 28×28×256.
+4. **Block 4:** pool gives 14, so 14×14×512.
+5. **Block 5:** pool gives 7, so 7×7×512.
+6. **FC6 input:** $7 \times 7 \times 512 = 25{,}088$. Then 4096, 4096, 1000.
+7. **Layers:** convolutions $2 + 2 + 3 + 3 + 3 = 13$, plus 3 fully connected $= 16$.
+
+</Steps>
+
+<Answer>
+
+224 → 112 → 56 → 28 → 14 → 7 with channels 64, 128, 256, 512, 512; 25,088 values go into FC6; 16 weight layers, hence "VGG-16".
+
+</Answer>
+
+<Box kind="verify">
+
+Size halves five times: $224 / 2^5 = 7$. Channels double from 64 up to 512 and then stay at 512, as the class says. Parameter check: the 13 convolution layers have about 14.7 million parameters and the 3 FC layers about 123.6 million ($25{,}088 \times 4096$ alone is about 102.8 million), total about 138.4 million, the class figure of 138 million.
+
+</Box>
+
+</Sum>
+
+## GoogLeNet (Inception v1, 2014)
+
+**GoogLeNet** was proposed by Szegedy et al. as the initial version of the Inception; it gave state-of-the-art image classification and detection in the ImageNet challenge ILSVRC14 and **secured the first place**. Instead of fully connected layers it uses **global average pooling**, with **1×1 convolution** in the middle of the network. <Cite id="class-dl-m4" loc="p. 62" />
+
+<Img id="class-cnn-architectures-googlenet-strip" caption="GoogLeNet: 224×224×3 input, Conv1 7×7, max pool, Conv2 1×1, Conv3 3×3, max pool, Inception modules giving 28×28×256, 14×14×480 and 7×7×1024, average pool 7×7, dropout, FC 1000 and softmax." />
+
+The overall network is **22 layers deep**. It was designed with computational efficiency in mind, so that it can run on individual devices even with low computational resources. It takes a 224 × 224 RGB image and every convolution uses ReLU. It also has two auxiliary classifiers attached to the outputs of Inception (4a) and Inception (4d). <Cite id="class-dl-m4" loc="p. 66" />
+
+### The Inception module
+
+In older networks such as AlexNet there is a fixed filter size in each layer. In the Inception module, **1×1, 3×3, 5×5 convolutions and a 3×3 max pooling are performed in parallel on the same input, and their outputs are stacked together** (concatenated along the depth) to make the output. The idea: filters of different sizes handle objects at multiple scales better. <Cite id="class-dl-m4" loc="p. 64" /> <Cite id="class-dl-m4" loc="p. 63" />
+
+<Img id="class-cnn-architectures-inception-naive" caption="The naive Inception module: the previous layer feeds 1×1, 3×3 and 5×5 convolutions and a 3×3 max pooling in parallel, and the results are joined by filter concatenation." />
+
+Neural networks are time-consuming and expensive to train, so the authors **limit the input channels by adding an extra 1×1 convolution before the 3×3 and 5×5 convolutions** (and after the max pooling) to reduce the dimensions and compute faster. <Cite id="class-dl-m4" loc="p. 63" />
+
+<Img id="class-cnn-architectures-inception-reduced" caption="The Inception module with dimension reduction: 1×1 convolutions before the 3×3 and 5×5 convolutions and after the max pooling." />
+
+```mermaid
+%% caption: The Inception module. Four branches look at the same input at the same time; the results are stacked along the depth.
+flowchart TD
+  A["Previous layer"] --> B["1×1 conv"]
+  A --> C["1×1 conv (reduce)"] --> D["3×3 conv"]
+  A --> E["1×1 conv (reduce)"] --> F["5×5 conv"]
+  A --> G["3×3 max pool"] --> H["1×1 conv"]
+  B --> I["Filter concatenation"]
+  D --> I
+  F --> I
+  H --> I
+```
+
+<Img id="class-cnn-architectures-googlenet-module" caption="An example Inception module with filter counts, and why it is used: multi-scale features in parallel, 1×1 convolutions reduce dimensions (bottleneck), the max pooling branch adds invariance to small shifts, and outputs are concatenated along the depth." />
+
+### Other features of GoogLeNet
+
+- **1×1 convolution:** decreases the number of parameters (and operations), which also lets the architecture be deeper. <Cite id="class-dl-m4" loc="p. 67" />
+- **Global average pooling:** the fully connected layers at the end of AlexNet-like networks hold most of the parameters. GoogLeNet takes a 7×7 feature map and averages it to 1×1, so this layer has **0 trainable parameters**, and top-1 accuracy improved by 0.6%. <Cite id="class-dl-m4" loc="p. 64" />
+- **Auxiliary classifiers (training only):** intermediate classifier branches (5×5 average pooling with stride 3, a 1×1 convolution with 128 filters, two fully connected layers, softmax). Their loss is added to the total loss with a weight of 0.3. They help against the vanishing gradient and act as regularization. <Cite id="class-dl-m4" loc="p. 65" />
+
+**Sum: why the 1×1 convolution saves work (the class example).** Perform a 5×5 convolution with 48 filters on a 14×14×480 input. <Cite id="class-dl-m4" loc="p. 67" />
+
+<Sum>
+
+<Given>
+
+14×14 positions, input depth 480. Without the 1×1 layer: 48 filters of 5×5×480. With the 1×1 layer: first 16 filters of 1×1×480, then 48 filters of 5×5×16.
+
+</Given>
+
+<Find>
+
+the number of operations (multiplications) in each case.
+
+</Find>
+
+<Steps>
+
+1. **Without 1×1:** $(14 \times 14 \times 48) \times (5 \times 5 \times 480) = 9408 \times 12000 = 112{,}896{,}000 \approx 112.9$ million.
+2. **With 1×1, first layer:** $(14 \times 14 \times 16) \times (1 \times 1 \times 480) = 3136 \times 480 = 1{,}505{,}280 \approx 1.5$ million.
+3. **With 1×1, second layer:** $(14 \times 14 \times 48) \times (5 \times 5 \times 16) = 9408 \times 400 = 3{,}763{,}200 \approx 3.8$ million.
+4. **Total with 1×1:** $1.5 + 3.8 = 5.3$ million.
+
+</Steps>
+
+<Answer>
+
+112.9 million operations without the 1×1 layer, only about 5.3 million with it.
+
+</Answer>
+
+<Box kind="verify">
+
+The saving factor is $112.9 / 5.3 \approx 21$. Exact: $1{,}505{,}280 + 3{,}763{,}200 = 5{,}268{,}480 \approx 5.3$ million, the figures printed in the Module.
 
 </Box>
 
@@ -411,195 +514,265 @@ FC biases: $4{,}096 + 4{,}096 + 1{,}000 = 9{,}192$; together $58{,}631{,}144$, s
 
 ## ResNet (2015)
 
-**What it is.** ResNet (residual network), by Kaiming He and colleagues at Microsoft Research, is a very deep CNN built from **residual blocks**: small groups of layers with a **skip connection** that carries the input around the layers and adds it to their output. <Cite id="he2015" />
+<Box kind="definition">
 
-**Why it was needed: the degradation problem.** After AlexNet, deeper networks kept getting better; the best ImageNet entries of 2014 (VGG and GoogLeNet) had about 16 to 22 layers. Then He and colleagues showed that when a plain network is made deeper (for example from 18 to 34 layers), accuracy first saturates and then gets **worse**, and not because of overfitting: the **training** error itself goes up. They called this the **degradation problem**.
+**ResNet** is a deep CNN architecture that uses skip connections (shortcut connections) to allow information and gradients to flow more easily through very deep networks. <Cite id="class-dl-chp4" loc="slide 49" />
 
-Why is this strange? Take a good shallow network and add extra layers that simply copy their input (an **identity mapping**). This deeper network gives exactly the same answers, so a deeper network should never be worse. The fact that training could not find such a solution means that plain stacked layers find it hard to learn even "do nothing".
+</Box>
 
-**How it works: learn only the change.** Instead of asking a few layers to learn the whole desired output, ResNet asks them to learn only the **residual** (the correction that must be added to the input), and then adds the input back through a shortcut. In words: output = what the layers learned + the original input. As a formula (named in every textbook, so write it in the exam):
+ResNet was put forward by He et al. (Microsoft Research) in 2015: a model that could employ hundreds to thousands of layers while giving compelling performance. With 152 layers (the deepest then) it won the ILSVRC 2015 classification competition with a top-5 error of 3.57%. <Cite id="class-dl-m4" loc="p. 77" />
 
-$$
-y = F(x) + x
-$$
+### Why was ResNet needed? The degradation problem
 
-$x$ is the input to the block, $F(x)$ is the output of the block's layers (usually two 3×3 convolutions with batch normalization and ReLU), and $y$ is the block's output. If doing nothing is best, the layers only have to push $F(x)$ to zero, which is easy. An identity shortcut adds **no extra parameters**. <Cite id="he2015" />
+We expect deeper to give better accuracy. But after a certain depth, more layers make training difficult, accuracy stops improving or even decreases. This is called the **degradation problem**. It is not simply overfitting: a deeper network may have higher training error. As layers increase, information and gradients have to pass through many layers (vanishing gradients, harder learning). The question: how can we make a network very deep without making training worse? ResNet's answer: **skip some layers using a shortcut connection.** <Cite id="class-dl-chp4" loc="slide 49" /> <Cite id="class-dl-m4" loc="p. 77" />
 
-**Why gradients flow better (in words).** During backpropagation the gradient can travel straight back through the shortcut, without passing through the layers, so even if the gradient through the layers becomes tiny, part of the signal still reaches the early layers. This eases the vanishing-gradient problem. <Cite id="d2l-resnet" />
+<Img id="class-cnn-architectures-resnet-problem" caption="Making CNNs deeper from 10 to 100 layers: training becomes difficult, accuracy stops improving or even decreases (the degradation problem). ResNet's solution is a shortcut connection." />
 
-**Everyday analogy.** An editor improving an essay does not rewrite it from a blank page. They take the essay as it is and mark only the corrections. If the essay is already perfect, they mark nothing. Each residual block is such an editor.
+### The residual idea
 
-<Img id="img-dl-n3-residual-block" caption="Left, an ordinary block must learn the whole output f(x). Right, a residual block adds the input x back through the skip connection, so its layers only learn the change g(x)." />
+Let the desired output be $H(x)$. Instead of learning $H(x)$ directly, ResNet learns $F(x) = H(x) - x$, so $H(x) = F(x) + x$. Here $x$ is the input, $F(x)$ the **residual** learned by the convolution layers and $H(x)$ the final output. The next layers only need to learn what additional information should be added. <Cite id="class-dl-chp4" loc="slide 49" />
+
+<Img id="class-cnn-architectures-resnet-residual" caption="What is a residual: F(x) = H(x) minus x, so H(x) = F(x) + x. Original information x plus newly learned information F(x) gives the final representation x + F(x)." />
+
+**Everyday analogy.** You already have a rough drawing of an apple. ResNet learns only the corrections to add to the drawing, instead of redrawing the whole apple. <Cite id="class-dl-chp4" loc="slide 49" />
+
+### The residual block
+
+<Img id="class-cnn-architectures-resnet-block" caption="The residual block: input x goes through Conv (W1), ReLU, Conv (W2) and also travels along the shortcut; the two are added, F(x) + x, then activation. Output y = F(x) + x." />
+
+1. The input $x$ enters the block.
+2. The convolution layers learn new features $F(x)$.
+3. The input $x$ travels through the shortcut.
+4. Add them: $F(x) + x$.
+5. Apply the activation (ReLU). Output $y = F(x) + x$. <Cite id="class-dl-chp4" loc="slide 49" />
 
 ```mermaid
-%% caption: One residual block. The input x goes through two weight layers to give F(x), and also jumps straight across on the shortcut. The two are added, then passed through ReLU.
+%% caption: A residual block. The skip connection carries x around the two convolutions and adds it back, so the block only has to learn what to change.
 flowchart TD
-  X["Input x"] --> A["3×3 conv + batch norm"]
-  A --> B["ReLU"]
-  B --> C["3×3 conv + batch norm"]
-  C --> D["Add: F(x) + x"]
-  X -- "shortcut, identity" --> D
-  D --> E["ReLU, output y"]
+  X["Input x"] --> C1["Conv (W1)"]
+  C1 --> R1["ReLU"]
+  R1 --> C2["Conv (W2)"]
+  C2 --> ADD["Add: F(x) + x"]
+  X -->|"skip connection (shortcut)"| ADD
+  ADD --> R2["ReLU"]
+  R2 --> Y["Output y = F(x) + x"]
 ```
 
-<Img id="img-dl-n3-resnet-block" caption="A real ResNet block with its convolutions, batch norm and ReLU. When the size changes, the shortcut gets a 1×1 convolution (right) so the two paths can still be added." />
+**When input and output sizes are different.** If the convolution layers change the height, width or channels, the shortcut cannot be added directly. Use a **projection shortcut** (a 1×1 convolution) to make the dimensions compatible. <Cite id="class-dl-chp4" loc="slide 49" />
 
-**When the sizes do not match.** If a block changes the number of channels or halves the height and width, $x$ and $F(x)$ cannot be added directly. Then the shortcut uses a **projection**: a 1×1 convolution (with stride 2 when the size halves) that reshapes $x$ to match. <Cite id="he2015" />
+<Img id="class-cnn-architectures-resnet-projection" caption="A projection shortcut: a 1×1 convolution on the shortcut makes the dimensions compatible so the addition is possible." />
 
-**The full network (ResNet-34), step by step.**
+**Why skip connections are important.** The shortcut gives information and gradients a more direct path through the network, so the gradient can reach early layers without being multiplied down the whole stack. <Cite id="class-dl-chp4" loc="slide 49" /> <Cite id="class-dl-m4" loc="p. 77" />
 
-1. 7×7 convolution, 64 filters, stride 2 (224 → 112).
-2. 3×3 max pool, stride 2 (112 → 56).
-3. Stage 1: 3 residual blocks with 64 filters (56×56).
-4. Stage 2: 4 blocks with 128 filters (28×28). The first block uses stride 2 to halve the size.
-5. Stage 3: 6 blocks with 256 filters (14×14).
-6. Stage 4: 3 blocks with 512 filters (7×7).
-7. Global average pooling, then one fully connected layer with 1000 outputs and softmax.
+<Img id="class-cnn-architectures-resnet-skip" caption="Without a skip connection the signal passes through layers 1 to 100 one by one; with skip connections it also has a direct path." />
 
-Counting layers: $3 + 4 + 6 + 3 = 16$ blocks with 2 convolutions each gives 32, plus the first conv and the final FC: $32 + 1 + 1 = 34$. A simple rule: whenever the size halves, the number of filters doubles. Batch normalization is used right after every convolution, before the activation. <Cite id="he2015" /> <Cite id="ioffe2015" />
-
-**Types (variants).** **ResNet-18 and ResNet-34** use the basic two-layer block shown above. **ResNet-50, 101 and 152** use a **bottleneck block**: a 1×1 convolution shrinks the channels, a 3×3 convolution works on the smaller block, and another 1×1 convolution expands the channels back. This needs about 17 times fewer weights than two full 3×3 convolutions at 256 channels (Sum 4), so very deep networks stay affordable.
-
-**Results.** Networks up to 152 layers deep, 8 times deeper than VGG but with lower complexity. An ensemble reached **3.57% top-5 error** and won **ILSVRC 2015**. <Cite id="he2015" /> <Cite id="gfg-resnet" />
-
-**Advantages.** Very deep networks (100+ layers) become trainable; solves degradation and eases vanishing gradients; shortcuts add no parameters; global average pooling avoids huge FC layers; the residual idea is reused in almost every later architecture.
-
-**Disadvantages.** Many layers mean long training and slow inference on small devices; some layers in very deep versions contribute little (they learn near-zero residuals); projection shortcuts add some parameters when shapes change.
-
-**Applications.** Image classification, object detection and segmentation backbones (for example in Faster R-CNN and Mask R-CNN), face recognition, medical imaging, and transfer learning. <Cite id="wiki-resnet" />
-
-**Sum 4: why the bottleneck block is cheaper.** Only for questions that ask you to compare the cost of blocks.
+**Sum: a residual block on numbers.**
 
 <Sum>
 
 <Given>
 
-a block whose input and output have 256 channels. Basic version: two 3×3 convolutions, 256 → 256 → 256. Bottleneck version: 1×1 (256 → 64), 3×3 (64 → 64), 1×1 (64 → 256). Weights in one conv layer = filter height × filter width × input channels × output channels. Biases are left out because ResNet puts batch normalization after each convolution instead.
+input $x = [2,\ 3]$. The two convolution layers give $F(x) = [0.5,\ -1]$.
 
 </Given>
 
 <Find>
 
-the number of weights in each version and how many times fewer the bottleneck needs.
+the block output $y = \text{ReLU}(F(x) + x)$.
 
 </Find>
 
 <Steps>
 
-1. **One basic 3×3 layer.**
-
-   $$
-   \begin{aligned}
-   3 \times 3 \times 256 \times 256 &= 9 \times 65{,}536 \\
-   &= 589{,}824
-   \end{aligned}
-   $$
-
-   Every one of 256 filters is 3×3×256.
-2. **Basic block (two layers).** The block has two such layers, so double one: $2 \times 589{,}824 = 1{,}179{,}648$.
-3. **Bottleneck 1×1 shrink.**
-
-   $$
-   1 \times 1 \times 256 \times 64 = 16{,}384
-   $$
-
-   A 1×1 filter only mixes channels, so it is cheap.
-4. **Bottleneck 3×3 middle.**
-
-   $$
-   \begin{aligned}
-   3 \times 3 \times 64 \times 64 &= 9 \times 4{,}096 \\
-   &= 36{,}864
-   \end{aligned}
-   $$
-
-   The costly 3×3 now works on only 64 channels.
-5. **Bottleneck 1×1 expand.**
-
-   $$
-   1 \times 1 \times 64 \times 256 = 16{,}384
-   $$
-
-   It returns to 256 channels so the shortcut can add it.
-6. **Bottleneck block total.** Add the three layers:
-
-   $$
-   16{,}384 + 36{,}864 + 16{,}384 = 69{,}632
-   $$
-7. **Ratio.** Divide the basic total by the bottleneck total: $1{,}179{,}648 / 69{,}632 \approx 16.9$.
+1. **Add the skip connection:** $F(x) + x = [0.5 + 2,\ -1 + 3] = [2.5,\ 2]$.
+2. **Apply ReLU** (negatives become 0, positives stay): $[2.5,\ 2]$.
 
 </Steps>
 
 <Answer>
 
-basic block 1,179,648 weights, bottleneck block 69,632 weights, so the bottleneck needs about 17 times fewer.
+$y = [2.5,\ 2]$
 
 </Answer>
 
 <Box kind="verify">
 
-Take out the common factor $64 \times 64 = 4{,}096$. Basic:
-
-$$
-\begin{aligned}
-2 \times 9 \times 256 \times 256 &= 4{,}096 \times (2 \times 9 \times 4 \times 4) \\
-&= 4{,}096 \times 288
-\end{aligned}
-$$
-
-Bottleneck:
-
-$$
-4{,}096 \times (4 + 9 + 4) = 4{,}096 \times 17
-$$
-
-The ratio is $288 / 17 \approx 16.9$, the same as step 7. Also $4{,}096 \times 17 = 69{,}632$ and $4{,}096 \times 288 = 1{,}179{,}648$, matching steps 6 and 2.
+If the block had nothing to add ($F(x) = [0, 0]$), the output would be exactly $x = [2, 3]$. That is the easy "do nothing" case the shortcut makes possible, so extra layers cannot easily make things worse.
 
 </Box>
 
 </Sum>
 
-## Comparing the three
+### ResNet architecture and versions
 
-| | LeNet-5 (1998) | AlexNet (2012) | ResNet (2015) |
-|---|---|---|---|
-| Task | Handwritten digits, 32×32 grayscale | ImageNet, 1000 classes, colour | ImageNet, 1000 classes, colour |
-| Depth (weighted layers) | 7 | 8 (5 conv + 3 FC) | 18 to 152 (34 in the basic example) |
-| Size | About 60 thousand parameters | About 60 million parameters | Paper reports cost, not parameters: 3.6 billion FLOPs for ResNet-34, 18% of VGG-19 |
-| Activation | Scaled tanh | ReLU | ReLU |
-| Pooling | Trainable average-like subsampling | Overlapping max pooling 3×3, stride 2 | One max pool at the start, global average pool at the end |
-| Key new idea | Convolution + weight sharing + backprop | ReLU, dropout, GPUs, augmentation | Skip connections, batch norm, very deep |
-| End of the network | FC layers (120, 84) and 10 outputs | Three large FC layers | Global average pool + one FC |
-| Main limit | Too small for real photos | Huge FC layers, memory-hungry | Long training, many layers |
+<Img id="class-cnn-architectures-resnet18-sizes" caption="The class sheet for ResNet-18: 224×224×3 input, 7×7 convolution with 64 filters (112×112×64), 3×3 max pool (56×56×64), four residual block groups of 64, 128, 256, 512 channels (56, 28, 14, 7), global average pooling 1×1×512, FC 1000, softmax." />
 
-<Box kind="pitfall">
+Basic flow: input image → initial convolution → residual blocks (repeated, several groups) → global average pooling → fully connected layer → softmax → prediction. ResNet comes in different depths: **ResNet-18, 34, 50, 101, 152.** The number indicates approximately the number of layers. <Cite id="class-dl-chp4" loc="slide 49" /> <Cite id="class-dl-chp4" loc="slide 51" />
 
-"Deeper" does not mean "more parameters". ResNet-152 is 8 times deeper than VGG but has lower complexity, because it uses small filters, bottleneck blocks and global average pooling instead of huge fully connected layers. The ResNet paper reports complexity in FLOPs (multiply-adds), not in parameters, so do not quote a parameter count for ResNet unless the question gives one.
+<Img id="class-cnn-architectures-resnet50-strip" caption="ResNet-50 (Module 4): 7×7 convolution, max pool, four stages with 3, 4, 6 and 3 residual blocks giving 56×56×256, 28×28×512, 14×14×1024 and 7×7×2048, global average pooling and FC 1000." />
+
+<Img id="class-cnn-architectures-resnet50-table" caption="The ResNet-50 summary table: output size, layers and number of blocks of each stage." />
+
+**Sum: why it is called ResNet-50.** <Cite id="class-dl-m4" loc="p. 76" />
+
+<Sum>
+
+<Given>
+
+ResNet-50: one 7×7 convolution at the start, then four stages with 3, 4, 6 and 3 residual blocks. Each block has 3 convolutions (1×1, 3×3, 1×1). One fully connected layer at the end.
+
+</Given>
+
+<Find>
+
+the number of weight layers.
+
+</Find>
+
+<Steps>
+
+1. **Convolutions in the blocks:** $(3 + 4 + 6 + 3) \times 3 = 16 \times 3 = 48$.
+2. **Add the first convolution:** $48 + 1 = 49$.
+3. **Add the fully connected layer:** $49 + 1 = 50$.
+
+</Steps>
+
+<Answer>
+
+50 layers (49 convolutional + 1 FC), as the Module says.
+
+</Answer>
+
+<Box kind="verify">
+
+The block counts match the Module's ResNet-101 note too: $[3, 4, 23, 3]$ gives $(3 + 4 + 23 + 3) \times 3 + 2 = 33 \times 3 + 2 = 101$.
 
 </Box>
 
-<Box kind="exam">
+</Sum>
 
-For "draw and explain any two modern architectures", AlexNet and ResNet are the safest pair. For each: why it was built, a block diagram, a short list of layers, what was new and why it helped, advantages and limits. For ResNet, always write $y = F(x) + x$ and draw the residual block. Size and parameter sums are needed only when the question asks for them.
+**Advantages of ResNet:** allows very deep networks (tens to hundreds of layers); helps gradient flow through shortcut connections; reduces the degradation problem; better feature learning. Used in image classification, object detection, image segmentation, face recognition, medical image analysis and transfer learning. <Cite id="class-dl-chp4" loc="slide 49" />
+
+<Img id="class-cnn-architectures-resnet-advantages" caption="Advantages of ResNet and where it is used." />
+
+**ResNeXt (variant).** Xie et al. proposed ResNeXt. It looks like the Inception module (both do split-transform-merge), but the outputs of different paths are **added** together while Inception **concatenates** them by depth, and every path has the same structure (topology) while Inception uses different structures (1×1, 3×3, 5×5). It adds a hyperparameter called **cardinality**, the number of paths. <Cite id="class-dl-m4" loc="p. 78" />
+
+<Box kind="key">
+
+**Exam-ready definition (ResNet):** ResNet is a deep CNN architecture that uses residual blocks and skip connections to learn residual mappings and enable efficient training of very deep neural networks. <Cite id="class-dl-chp4" loc="slide 51" />
 
 </Box>
 
-Other well-known architectures you can name in one line each: **VGG** (ILSVRC 2014 runner-up, a very regular design that uses only 3×3 convolutions and 2×2 pooling, 16 layers in its best version) and **GoogLeNet** (ILSVRC 2014 winner, built from "Inception modules" and only about 4 million parameters). <Cite id="cs231n-cnn" /> <Cite id="ibm-cnn" /> <Cite id="wiki-cnn" />
+## U-Net (2015)
 
-**Conclusion.** LeNet showed that a CNN can learn its own features, AlexNet showed that a big CNN on GPUs with ReLU and dropout beats hand-made features on real photos, and ResNet's skip connections made networks of 100+ layers trainable; many modern vision models build on these ideas. <Cite id="nptel-dl" />
+U-Net is an architecture developed by Olaf Ronneberger et al. for **biomedical image segmentation** in 2015 at the University of Freiburg, Germany. It is one of the most popular approaches for semantic segmentation today. It is a **fully convolutional neural network** designed to learn from **fewer training samples**, and it is an improvement over the earlier FCN (fully convolutional networks) of Long et al. <Cite id="class-dl-m4" loc="p. 80" />
+
+**What is segmentation?** **Image segmentation** is a computer vision task in which we label specific regions of an image. The goal of **semantic image segmentation** is to label **each pixel** of an image with a corresponding class of what is being represented. Uses: autonomous vehicles and medical image diagnostics. <Cite id="class-dl-m4" loc="p. 81" />
+
+<Img id="class-cnn-architectures-unet" caption="The U-Net figure of the Module. Left: the contracting path (blocks of two 3×3 convolutions with ReLU, then 2×2 max pooling; channels 64, 128, 256, 512, then 1024 at the bottom). Right: the expansive path (2×2 up-convolution, copy and crop from the left, two 3×3 convolutions; channels 512, 256, 128, 64) and a final 1×1 convolution to the segmentation map." />
+
+### The architecture: a U-shaped encoder-decoder
+
+U-Net is a U-shaped **encoder-decoder** network, with four encoder blocks and four decoder blocks connected by a bridge. The encoder (contracting path) **halves the spatial dimensions and doubles the number of filters** at each encoder block; the decoder **doubles the spatial dimensions and halves the number of feature channels.** <Cite id="class-dl-m4" loc="p. 83" />
+
+```mermaid
+%% caption: U-Net drawn as the letter U. The left side shrinks the picture and learns what is in it; the right side grows it back and says where it is. The dotted skip connections carry detail across.
+flowchart TD
+  I["Input image"] --> E1["Encoder 1: 2× conv 3×3 + ReLU, max pool 2×2"]
+  E1 --> E2["Encoder 2"] --> E3["Encoder 3"] --> E4["Encoder 4"] --> B["Bridge: 2× conv 3×3 + ReLU"]
+  B --> D4["Decoder 4: up-conv 2×2, concatenate, 2× conv"]
+  D4 --> D3["Decoder 3"] --> D2["Decoder 2"] --> D1["Decoder 1"]
+  D1 --> O["1×1 conv + sigmoid: segmentation mask"]
+  E1 -.->|"skip"| D1
+  E2 -.->|"skip"| D2
+  E3 -.->|"skip"| D3
+  E4 -.->|"skip"| D4
+```
+
+- **Encoder network** (contracting path): the feature extractor; it learns an abstract representation of the input. Each encoder block has **two 3×3 convolutions**, each followed by ReLU, then a **2×2 max pooling** that halves the height and width and reduces the cost. The output of the ReLU is kept as the **skip connection** for the matching decoder block. <Cite id="class-dl-m4" loc="p. 83" />
+- **Bridge:** connects the encoder and the decoder; two 3×3 convolutions, each followed by ReLU. <Cite id="class-dl-m4" loc="p. 84" />
+- **Decoder network:** takes the abstract representation and generates a semantic segmentation mask. Each decoder block starts with a **2×2 transpose convolution**, is **concatenated with the matching skip connection** from the encoder, and then has two 3×3 convolutions with ReLU. The last decoder output goes through a **1×1 convolution with sigmoid**, which gives the pixel-wise classification mask. <Cite id="class-dl-m4" loc="p. 84" />
+- **Skip connections:** give the decoder extra information (features from earlier layers that may be lost because of depth), so it can generate better semantic features. They also act as a shortcut that helps the flow of gradients to the earlier layers during backpropagation. <Cite id="class-dl-m4" loc="p. 84" />
+
+**Sum: check the sizes in the U-Net figure.** The figure uses 3×3 convolutions without padding, so each convolution takes 2 off the height and width. <Cite id="class-dl-m4" loc="p. 82" />
+
+<Sum>
+
+<Given>
+
+input tile 572×572. Each encoder block: two 3×3 convolutions (each $-2$), then a 2×2 max pool (÷2). The bridge has two convolutions. Each decoder block: a 2×2 up-convolution (×2), a crop and copy of the encoder map, then two 3×3 convolutions.
+
+</Given>
+
+<Find>
+
+the sizes along the left path and the bottom of the U, and the output size.
+
+</Find>
+
+<Steps>
+
+1. **Level 1:** $572 \to 570 \to 568$, pool: $568 / 2 = 284$.
+2. **Level 2:** $284 \to 282 \to 280$, pool: $140$.
+3. **Level 3:** $140 \to 138 \to 136$, pool: $68$.
+4. **Level 4:** $68 \to 66 \to 64$, pool: $32$.
+5. **Bridge:** $32 \to 30 \to 28$.
+6. **Decoder 4:** up-convolution $28 \times 2 = 56$, then $56 \to 54 \to 52$ (the encoder map 64 is cropped to 56 to fit).
+7. **Decoder 3:** $52 \times 2 = 104 \to 102 \to 100$.
+8. **Decoder 2:** $100 \times 2 = 200 \to 198 \to 196$.
+9. **Decoder 1:** $196 \times 2 = 392 \to 390 \to 388$.
+
+</Steps>
+
+<Answer>
+
+left: 572 → 568 → 284 → 280 → 140 → 136 → 68 → 64 → 32 → 28 (bottom); right: 56 → 52 → 104 → 100 → 200 → 196 → 392 → 388. The output segmentation map is 388×388.
+
+</Answer>
+
+<Box kind="verify">
+
+These are exactly the numbers printed in the figure (572, 570, 568, 284, 282, 280, 140, 138, 136, 68, 66, 64, 32, 30, 28 and on the way up 56, 54, 52, 104, 102, 100, 200, 198, 196, 392, 390, 388). The channels go $1 \to 64 \to 128 \to 256 \to 512 \to 1024$ down and $512 \to 256 \to 128 \to 64 \to 2$ up.
+
+</Box>
+
+</Sum>
+
+## Comparing the architectures
+
+<Img id="class-cnn-architectures-compare-left" caption="The Module 4 comparison of LeNet-5, AlexNet and VGGNet-16: building block, depth, parameters, input, design philosophy, strengths and limitations." />
+
+<Img id="class-cnn-architectures-compare-right" caption="The same comparison for GoogLeNet, ResNet-50 and U-Net, with their typical applications." />
+
+| | LeNet-5 | AlexNet | VGG-16 | GoogLeNet | ResNet-50 | U-Net |
+|---|---|---|---|---|---|---|
+| Year | 1998 | 2012 | 2014 | 2014 | 2015 | 2015 |
+| Key building block | Convolution + pooling + FC | Large convolutions, ReLU, dropout | Small 3×3 convolutions | Inception module | Residual block | Encoder-decoder with skip connections |
+| Depth | 5 trainable layers | 8 | 16 | 22 | 50 | about 23 |
+| Parameters (approx.) | 60 thousand | 60 million | 138 million | 6.8 million | 25.6 million | 7 to 30 million |
+| Input | 32×32×1 | 227×227×3 | 224×224×3 | 224×224×3 | 224×224×3 | variable |
+| Strength | Simple, fast on small data | First to show the power of deep CNNs | High accuracy, simple and uniform | Efficient, good accuracy with fewer parameters | Trains extremely deep networks | Segmentation with limited data |
+| Limitation | Low capacity | Many parameters, large memory | Very large model, slow | Complex modules | Heavy at very high resolutions | Not for plain classification |
+| Typical use | Digit recognition | ImageNet classification | Classification, transfer learning | Classification, feature extraction | Classification, detection, recognition | Medical, satellite segmentation |
+
+<Cite id="class-dl-m4" loc="p. 86" />
+
+**Evolution summary:** LeNet's simplicity → AlexNet's deep learning breakthrough → VGG's depth with small filters → GoogLeNet's efficient multi-scale design → ResNet's ability to train very deep models → U-Net's specialization for segmentation. <Cite id="class-dl-m4" loc="p. 86" />
 
 ## Where this was asked
 
 | If the question says | What to write | Seen as |
 |---|---|---|
-| "Describe LeNET architecture" | Purpose, step-by-step layers with sizes, diagram, subsampling and tanh, about 60k parameters, result on MNIST, advantages and limits | <PYQ id="2023-12/q6a" /> |
-| "Explain and analyze the architecture of AlexNet" | Why it was needed, layer table, diagram, the six new ideas and why each helped, where the parameters are, advantages and limits | <PYQ id="2024-12/q2b" /> |
-| "Draw and explain any two modern deep learning architectures" | AlexNet and ResNet: diagram, layers, key ideas, $y = F(x) + x$, comparison | <PYQ id="2025-05/q3a" /> |
+| "Describe LeNet architecture" | Definition, 32×32×1 input, the eight rows of layers with sizes, ideas, why "5", conclusion | <PYQ id="2023-12/q6a" /> |
+| "Explain and analyze AlexNet" | Definition, why important, key features, layer-by-layer sizes, dropout and augmentation, comparison with LeNet | <PYQ id="2024-12/q2b" /> |
+| "Draw and explain any two modern architectures" | Pick two (for example ResNet and GoogLeNet or AlexNet): diagram, key idea, features, one comparison line | <PYQ id="2025-05/q3a" /> |
+| "Discuss and analyse LeNet / AlexNet / GoogLeNet / ResNet and U-Net" | One short block each: diagram, key idea, sizes or features, strength and limit | <PYQ id="assignment-2/q4c" /> |
 
 ## Quick revision
 
-- LeNet-5: 32×32 → C1 (6@28×28) → S2 (6@14×14) → C3 (16@10×10) → S4 (16@5×5) → C5 (120) → F6 (84) → 10. About 60k trainable parameters, scaled tanh. <Cite id="wiki-lenet" />
-- AlexNet: 227×227×3 → 5 conv (96 of 11×11 stride 4, 256 of 5×5, 384, 384, 256 of 3×3) → FC 4096, 4096, 1000. About 60M parameters, mostly in FC. <Cite id="wiki-alexnet" />
-- AlexNet's new ideas: ReLU, two GPUs, local response normalization, overlapping max pooling, dropout, data augmentation. Top-5 error 15.3% vs 26.2%.
-- ResNet: degradation problem → residual block $y = F(x) + x$; 1×1 projection when shapes differ; bottleneck blocks for 50+ layers; up to 152 layers; 3.57% top-5 error, ILSVRC 2015.
-- A skip connection gives the gradient a direct path back, so it is less likely to vanish.
+- LeNet-5 (1998): 32×32×1 → C1 28×28×6 → S2 14×14×6 → C3 10×10×16 → S4 5×5×16 → C5 1×1×120 → F6 84 → 10. Five trainable layers, tanh, average pooling, about 60 thousand parameters.
+- AlexNet (2012): 227×227×3 → 55×55×96 → 27×27×96 → 27×27×256 → 13×13×256 → 13×13×384 → 13×13×384 → 13×13×256 → 6×6×256 → 9216 → 4096 → 4096 → 1000. ReLU, max pooling, dropout 0.5, augmentation, GPU; about 60 million parameters.
+- VGG-16 (2014): only 3×3 convolutions; size halves and channels double (64 to 512); 13 convolution + 3 FC; 138 million parameters; slow.
+- GoogLeNet (2014): Inception module (1×1, 3×3, 5×5, pooling in parallel, concatenated); 1×1 convolution reduces work (112.9 million to 5.3 million); global average pooling; auxiliary classifiers; 22 layers.
+- ResNet (2015): $y = F(x) + x$; skip connection; fixes degradation; 18, 34, 50, 101, 152 layers; projection shortcut = 1×1 convolution.
+- U-Net (2015): U-shaped encoder-decoder, skip connections, 1×1 convolution with sigmoid; for segmentation (label every pixel).

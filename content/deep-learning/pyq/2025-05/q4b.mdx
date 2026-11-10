@@ -1,51 +1,33 @@
 ---
-references: [gfdl-ch10, hochreiter1997, sutskever2014, d2l-lstm, gfg-lstm, ibm-lstm]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** an RNN suits sequences because it reads them one step at a time and carries a memory forward. But a plain RNN's memory fades quickly during training, so it struggles to connect things far apart. An LSTM adds a protected long-term memory with gates, so it can keep information for hundreds of steps.
+**In simple words:** an RNN suits sequences because it remembers earlier items, but its memory fades over long sequences. An LSTM keeps its memory much longer, so it is better when something far back decides the answer.
 
-**1. Why RNNs suit sequential data**
+**How an RNN suits sequential data:** in a sequence the order matters and previous information affects the current prediction. A feedforward network has no memory of previous inputs; an RNN carries a **hidden state** from step to step and uses the **same weights** at every step, so it handles sequences of any length with fewer parameters. <Cite id="class-dl-chp5" loc="slide 5" /> <Cite id="class-dl-m5" loc="p. 8" />
 
-- **Memory:** the hidden state mixes the new input with the previous memory at every step, so each output can depend on earlier inputs.
-- **Any length:** the same cell is applied once per step, so sequences of 5 or 500 items work.
-- **Parameter sharing:** the same weights at every step, so a pattern learned at one position works everywhere.
-- **Flexible shapes:** one-to-many (captioning), many-to-one (sentiment), many-to-many (translation). <Cite id="gfdl-ch10" loc="§10.2" />
+**Long-term dependencies:** a basic RNN struggles to carry important information across many time steps, because the gradient vanishes during BPTT. An LSTM has a **cell state** (long-term memory) and gates, so it is designed to handle long-term dependencies. <Cite id="class-dl-chp5" loc="slide 11" /> <Cite id="class-dl-chp5" loc="slide 17" />
 
-**2. RNN versus LSTM on long-term dependencies**
+<Img id="class-lstm-gru-rnn-vs-lstm" caption="RNN versus LSTM: memory, memory mechanism, long-term dependencies, gates, structure and vanishing gradient." />
 
-**Plain RNN.** It squashes and rewrites its whole memory every step. In training (backpropagation through time) the gradient is multiplied at every step back by a factor usually below 1, so after many steps it **vanishes** and long links are never learned.
+| Aspect | Standard RNN | LSTM |
+|---|---|---|
+| Memory | Hidden state | Hidden state + cell state |
+| Long-term dependencies | Can struggle | Designed to handle better |
+| Gates | No gates | Forget, input, output gates |
+| Structure | Simpler | More complex |
+| Vanishing gradient | Can be a problem | Gates help preserve useful information |
 
-**LSTM.** It keeps a separate **cell state** controlled by three gates: forget (what to keep), input (what to add) and output (what to show). The memory is kept by multiplying with the forget gate and adding new information <Cite id="d2l-lstm" />:
+**Real-world application: speech recognition.** The audio arrives as a sequence of sounds, and the meaning of a word or sentence can depend on sounds heard much earlier. LSTM is a popular algorithm for sequence models and is behind applications such as Apple's Siri and Google's voice search. <Cite id="class-dl-m5" loc="p. 31" /> <Cite id="class-dl-chp5" loc="slide 19" />
 
-$$
-c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
-$$
-
-Along this path the gradient is multiplied only by the forget gate, which the network can keep near 1, so it survives many steps. <Cite id="hochreiter1997" />
-
-<Img id="img-dl-n1-lstm-cell" caption="The cell state c runs along the top with only a gate and an addition on it, so the gradient can pass through many steps." />
+**Why LSTM is better here:** an RNN would lose the early sounds over a long utterance; the LSTM's forget, input and output gates keep the useful earlier information in the cell state and use it when it is needed.
 
 ```mermaid
-%% caption: Memory over time. In a plain RNN the state is squashed and rewritten at every step. In an LSTM the cell state is only scaled by the forget gate and added to.
+%% caption: Speech recognition as a long sequence. The LSTM keeps useful earlier sounds in its cell state until they are needed.
 flowchart LR
-  subgraph R["Plain RNN"]
-    R1["h1"] -- "tanh(W·h + U·x)" --> R2["h2"] -- "tanh(W·h + U·x)" --> R3["h3"]
-  end
-  subgraph L["LSTM cell state"]
-    L1["c1"] -- "× f + i × c̃" --> L2["c2"] -- "× f + i × c̃" --> L3["c3"]
-  end
+  A["Sound 1 ... Sound n (long sequence)"] --> B["LSTM: gates + cell state"]
+  B --> C["Earlier sounds kept in memory"]
+  C --> D["Words / sentence"]
 ```
 
-| Point | Plain RNN | LSTM |
-|---|---|---|
-| Memory | One state, rewritten every step | Cell state, kept and added to |
-| Gradient over many steps | Usually vanishes or explodes | Survives along the cell path when the forget gate is near 1 |
-| Practical memory span | Short in practice, because gradients fade | Long; the 1997 paper bridged lags of over 1000 steps on test tasks |
-| Control | None | Learned gates decide what to forget, add, output |
-| Cost | Fewer parameters, faster | About 4 times the parameters, slower |
-
-**3. Real-world application: machine translation**
-
-In "The book that my friend from college gave me last year is on the table", the verb "is" depends on "book", many words earlier. A plain RNN loses the early words (vanishing gradient), so agreement or meaning goes wrong. An LSTM's forget gate can stay near 1 to keep "book, singular" in its cell state until needed. Sutskever and others built an English-to-French translator from deep LSTMs and reported that it handled long sentences well. <Cite id="sutskever2014" /> Speech recognition benefits for the same reason. <Cite id="gfg-lstm" /> <Cite id="ibm-lstm" />
-
-**Conclusion:** RNNs fit sequences through memory and weight sharing, but their memory fades over long gaps. The LSTM's gated memory captures long-term dependencies much better, which is why neural translation systems (before Transformers) used LSTMs instead of plain RNNs.
+**Conclusion:** RNN suits sequences; for long sequences with important earlier information, LSTM is more suitable. <Cite id="class-dl-chp5" loc="slide 19" />

@@ -1,53 +1,72 @@
 ---
-references: [gfdl-ch9, cs231n-cnn, gfg-cnn, d2l-cnn-padding]
+references: [class-dl-chp4, class-dl-m4]
 ---
 
-**In simple words:** a convolutional neural network (CNN) looks at an image one small patch at a time. Small learned filters slide over the image to find patterns such as edges, pooling shrinks the result, and fully connected layers make the final decision.
+**In simple words:** a CNN is a deep learning model that learns features from images with sliding filters. Convolution and pooling layers find the features; flatten and fully connected layers decide the class.
 
-**Why it is needed.** A fully connected layer on even a 32×32×3 image needs 3072 weights per neuron, ignores which pixels are neighbours and must relearn a pattern at every position. A CNN fixes all three.
+**Definition:** a CNN is a type of deep neural network specially designed to work with images and other grid-like data. <Cite id="class-dl-chp4" loc="slide 5" />
 
-**Architecture, layer by layer**
+**Why needed:** a fully connected network gives too many parameters (28×28 pixels with 100 neurons need 78,400 weights) and loses spatial information. A CNN uses local connectivity, weight sharing and pooling. <Cite id="class-dl-chp4" loc="slide 5" />
 
-1. **Input layer:** the image as height × width × channels, for example $32 \times 32 \times 3$.
-2. **Convolutional layer:** filters slide over the input with a chosen stride and padding. At each position a filter multiplies and adds over all input channels, giving one number; one filter gives one feature map. The same filter is reused everywhere (**weight sharing**) and each output sees only a small patch (**local connectivity**).
-3. **ReLU:** turns negative values into 0, adding non-linearity.
-4. **Pooling layer:** max or average of small blocks (usually 2×2, stride 2); halves height and width, keeps channels, has no parameters.
-5. **Repeat** conv → ReLU → pool: early layers find edges, deeper layers find shapes and object parts.
-6. **Flatten and fully connected layers**, then a **softmax output layer** with one probability per class.
+<Img id="class-cnn-arch-digits" caption="CNN architecture: input, convolution + ReLU, max pooling, flatten, fully connected layer, softmax." />
 
 ```mermaid
-%% caption: CNN architecture. Convolution, ReLU and pooling extract features; flatten, fully connected and softmax classify.
+%% caption: The architecture of a CNN. The left part extracts features, the right part classifies.
 flowchart LR
-  A["Input 32×32×3"] --> B["Conv + ReLU"]
-  B --> C["Pool"]
-  C --> D["Conv + ReLU"]
-  D --> E["Pool"]
-  E --> F["Flatten"]
-  F --> G["Fully connected"]
-  G --> H["Softmax output"]
+  A["Input image"] --> B["Convolution + ReLU"]
+  B --> C["Pooling"]
+  C --> D["More convolution + pooling"]
+  D --> E["Flatten"]
+  E --> F["Fully connected layer"]
+  F --> G["Softmax: class"]
 ```
 
-<Img id="img-dl-n2-cnn-typical" caption="Convolution and subsampling layers shrink the maps while finding features; a fully connected layer at the end gives the class." />
+**Layers** <Cite id="class-dl-chp4" loc="slide 28" />
 
-**Advantages:** few parameters, learns its own features, finds a pattern anywhere in the image. **Limitation:** needs much labelled data and GPU time. <Cite id="gfdl-ch9" /> <Cite id="gfg-cnn" />
+1. **Convolution + ReLU:** filters slide over the input, multiply and add, giving one feature map per filter. Output size $\lfloor (N - F + 2P)/S \rfloor + 1$, depth = number of filters.
+2. **Pooling:** reduces height and width, not depth.
+3. **Flatten + fully connected + softmax:** features become a vector and are turned into class probabilities.
 
-**Numerical: parameters in this convolutional layer.**
+**Parameters of a convolution layer** $= (F \times F \times D + 1) \times K$. <Cite id="class-dl-chp4" loc="slide 27" />
 
-Given: input $32 \times 32 \times 3$, ten $5 \times 5$ filters, stride $S = 1$, padding $P = 2$.
+<Img id="class-cnn-architectures-sum-ten-filters" caption="The class drawing of this very sum: 32×32×3 input, 10 filters of 5×5×3, stride 1, padding 2, output 32×32×10, 76 parameters per filter, 760 in all." />
 
-To find: the number of parameters in this layer.
+<Sum>
 
-1. **Weights in one filter:** $5 \times 5 \times 3 = 75$, because each filter spans all 3 input channels.
-2. **Add one bias:** $75 + 1 = 76$.
-3. **Multiply by the ten filters:** $76 \times 10 = 760$. The same numbers are reused at all positions, so positions add no parameters.
-4. **Output size:** $(32 - 5 + 2 \times 2)/1 + 1 = 32$, so the output is $32 \times 32 \times 10$. Padding keeps the size and adds no parameters.
+<Given>
 
-**Answer: 760 parameters** (750 weights + 10 biases).
+input volume 32×32×3, ten 5×5 filters, stride 1, padding 2.
+
+</Given>
+
+<Find>
+
+the number of parameters (and the output size).
+
+</Find>
+
+<Steps>
+
+1. **Each filter is 5×5×3,** because its depth must equal the input depth (3).
+2. **Weights per filter:** $5 \times 5 \times 3 = 75$.
+3. **Add one bias per filter:** $75 + 1 = 76$.
+4. **All ten filters:** $76 \times 10 = 760$.
+5. **Output size:** $(32 - 5 + 2 \cdot 2)/1 + 1 = 32$, depth 10, so 32×32×10. Stride and padding do not change the parameter count.
+
+</Steps>
+
+<Answer>
+
+760 parameters (output 32×32×10).
+
+</Answer>
 
 <Box kind="verify">
 
-Count another way: 10 filters × 75 weights = 750, plus 10 biases = 760. For scale, a fully connected layer with the same 32×32×10 output needs $3072 \times 10240 = 31{,}457{,}280$ weights (about 31.5 million), so weight sharing saves a huge number.
+Formula: $(5 \cdot 5 \cdot 3 + 1) \times 10 = 76 \times 10 = 760$. Padding 2 with a 5×5 filter is "same" padding ($P = (F-1)/2 = 2$), so 32×32 stays 32×32.
 
 </Box>
 
-**Conclusion:** local connections and weight sharing let a CNN learn image features with very few parameters (here only 760).
+</Sum>
+
+**Conclusion:** a CNN learns features with shared filters, so this layer needs only 760 parameters however big the image is.

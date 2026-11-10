@@ -1,66 +1,36 @@
 ---
-references: [gfdl-ch10, hochreiter1997, cho2014, chung2014, gfg-rnn-lstm-gru, d2l-gru]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** LSTM aur GRU dono RNN cells hain jo gates (0 aur 1 ke beech ke numbers) se memory control karte hain, taaki lambe time tak information yaad rahe. LSTM mein ek alag memory line aur teen gates hote hain. GRU ek simple design hai jismein ek memory aur do gates hote hain.
+**In simple words:** LSTM aur GRU dono gates wale RNN cells hain jo long-term information yaad rakhne mein madad karte hain. LSTM mein teen gates aur do memories hain; GRU simpler hai, do gates aur ek memory.
 
-**Why both exist.** Ek plain RNN lambe pehle ke inputs bhool jaata hai kyunki gradients vanish ho jaate hain. Dono cells gates ke zariye purani memory ko rakhkar ye problem theek karte hain, use dobara likhne ke bajaye. LSTM pehle aaya (1997); GRU (2014) ek halka version bana kar design kiya gaya. <Cite id="hochreiter1997" /> <Cite id="cho2014" />
+**LSTM architecture:** hidden state (short-term memory) aur cell state (long-term memory), aur **3 gates**: forget gate (bekaar purani information hatao), input gate (useful nayi information jodo) aur output gate (output mein kya dikhana hai chuno). $C_t = f_t C_{t-1} + i_t N_t$, $H_t = o_t \tanh(C_t)$. <Cite id="class-dl-m5" loc="p. 20" /> <Cite id="class-dl-m5" loc="p. 24" />
 
-**LSTM architecture**
+**GRU architecture:** **alag cell state nahi**; hidden state hi memory hai. **2 gates**: reset gate (past ka kitna use karna) aur update gate (kitni purani aur nayi information rakhni). $h_t = z_t h_{t-1} + (1 - z_t)\tilde{h}_t$. <Cite id="class-dl-chp5" loc="slide 20" /> <Cite id="class-dl-m5" loc="p. 28" />
 
-1. Do state lines: **cell state** $c_t$ (lambi memory) aur **hidden state** $h_t$ (output).
-2. **Forget gate:** purani memory mein se kitna rakhna hai.
-3. **Input gate** tanh **candidate** ke saath: naye information mein se kitna add karna hai.
-4. **Output gate:** kitni memory $h_t$ ke roop mein dikhani hai.
-
-$$
-c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t, \qquad h_t = o_t \odot \tanh(c_t)
-$$
-
-<Img id="img-dl-n1-lstm-cell" caption="LSTM unit: cell state c upar se chalti hai aur forget, input aur output gates (sigma aur tanh boxes) ise control karte hain." />
-
-**GRU architecture** <Cite id="d2l-gru" />
-
-1. Ek state line: sirf **hidden state** $h_t$.
-2. **Reset gate** $r_t$: candidate $\tilde{h}_t$ banate waqt purani memory mein se kitna use karna hai.
-3. **Update gate** $z_t$: purane state ka $z_t$ hissa rakho aur candidate ka $1 - z_t$ hissa lo.
-
-$$
-h_t = z_t \odot h_{t-1} + (1 - z_t) \odot \tilde{h}_t
-$$
-
-<Img id="img-dl-n1-gru-cell" caption="GRU unit mein alag cell state nahi hoti: sirf reset gate R aur update gate Z hidden state h par kaam karte hain." />
-
-Har gate, pichhle hidden state aur current input ka sigmoid hai; $\odot$ element-wise product hai. <Cite id="gfdl-ch10" loc="§10.10" />
+<Img id="class-lstm-gru-vs-table" caption="LSTM versus GRU ki class table: memory, gates ki sankhya, har ek ke gates, structure aur parameters." />
 
 ```mermaid
-%% caption: Left, LSTM: do state lines aur teen gates. Right, GRU: ek state line aur do gates; ek update gate purani memory (z) bhi rakhta hai aur nayi memory (1 − z) bhi add karta hai.
+%% caption: Dono architectures side by side. LSTM do memories aur teen gates rakhta hai; GRU ek memory aur do gates.
 flowchart LR
-  subgraph LSTM["LSTM"]
-    LC0["c(t-1)"] --> LF["× forget f"] --> LA["+ i × c̃"] --> LC1["c(t)"]
-    LC1 --> LO["× output o after tanh"] --> LH["h(t)"]
+  subgraph L["LSTM"]
+    L1["Cell state + hidden state"] --> L2["3 gates: forget, input, output"] --> L3["More complex, more parameters"]
   end
-  subgraph GRU["GRU"]
-    G0["h(t-1)"] --> GZ["× update z"] --> GA["+ (1 − z) × h̃"] --> G1["h(t)"]
-    G0 --> GR["× reset r, h̃ banane ke liye"] --> GA
+  subgraph G["GRU"]
+    G1["Hidden state only"] --> G2["2 gates: reset, update"] --> G3["Simpler, fewer parameters"]
   end
 ```
 
-**Differences**
-
-| Point | LSTM | GRU |
+| Feature | LSTM | GRU |
 |---|---|---|
-| Gates | 3: forget, input, output | 2: update, reset |
-| Memory | Alag cell state aur hidden state | Sirf hidden state |
-| Keep vs add | Alag forget aur input gates | Ek update gate: $z$ rakho, $1 - z$ add karo |
-| Output gate | Haan, dikhai jaane wali memory control karta hai | Nahi, poora state output hota hai |
-| Weight sets | 4 | 3, lagbhag 25% kam parameters |
-| Speed | Dheema | Fast, kam memory |
-| Proposed | 1997 (forget gate 2000) | 2014 |
-| Best suited to | Bahut lambe sequences, bada data | Kam data, limited compute |
+| Main memory | Cell state + hidden state | Hidden state |
+| Gates | 3 main gates | 2 main gates |
+| Forget / input / output gate | Haan | Nahi |
+| Reset / update gate | Nahi | Haan |
+| Structure | Zyada complex | Simpler |
+| Parameters | Zyada | Kam |
+| Power | Zyada powerful (3 gates) | Simpler, isliye bade models ban sakte hain |
 
-**Similarity.** Dono purani memory ko naye state mein blend karte hain, use dobara likhne ke bajaye, isliye gradients kai steps tak peeche jaate hain. Studies mein dono ki accuracy lagbhag same mili, koi hamesha better nahi. <Cite id="chung2014" /> <Cite id="gfg-rnn-lstm-gru" />
+<Cite id="class-dl-chp5" loc="slide 21" /> <Cite id="class-dl-m5" loc="p. 31" />
 
-**Conclusion:** GRU ek halka LSTM hai: kam gates, cell state nahi, fast training; LSTM memory par zyada fine control deta hai.
-
-Exam mein English mein likho: "The GRU has two gates (update and reset) and no separate cell state, while the LSTM has three gates and a cell state."
+**Conclusion:** dono basic RNN ki long-term dependencies handle karne ki ability badhate hain, lekin information control karne ke tareeke alag hain. Power ke liye LSTM, simplicity ke liye GRU.

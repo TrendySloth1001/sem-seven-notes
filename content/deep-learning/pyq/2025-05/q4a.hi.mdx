@@ -1,60 +1,35 @@
 ---
-references: [gfdl-ch10, d2l-rnn, gfg-rnn, ibm-rnn, karpathy-rnn]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** RNN (recurrent neural network) kaam karta hai waise hi jaise koi insaan kahani ek-ek word karke padhta hai aur apne dimaag mein ek running summary rakhta hai. Ye summary, jise hidden state kehte hain, har step par naye input aur purane summary se update hoti hai, aur us step ka output isi se banta hai.
+**In simple words:** RNN wo data padhta hai jo order mein aata hai, ek-ek step mein. Har step par wo naye input ko past ki memory (hidden state) ke saath mix karta hai aur updated memory aage pass karta hai.
 
-**Why it is needed.** Ek feedforward network har input ko alag se dekhta hai aur fixed input size chahiye, isliye woh pehle ke words use nahi kar sakta. RNN mein ek loop hota hai jo memory ko ek step se agle step tak le jaata hai.
+**Definition:** RNN ek type ka neural network hai jisme hidden states hote hain aur jo pichhle outputs ko inputs ki tarah use karne deta hai. Ye sequential data ke liye bana hai: "I will process the current input, but I will also carry some information from previous steps." <Cite id="class-dl-m5" loc="p. 9" /> <Cite id="class-dl-chp5" loc="slide 3" />
 
-**Kaam kaise hota hai, step by step**
-
-1. Empty memory se shuru karo: $h_0 = 0$.
-2. Step $t$ par input $x_t$ aur pichli memory $h_{t-1}$ lo.
-3. Dono ko weights se combine karo, bias add karo aur tanh lagao: yeh nayi memory hai.
-4. Is step ka output nayi memory se banao.
-5. Agle step par jao aur **same** weights se repeat karo jab tak sequence khatam na ho.
-
-Formulas mein <Cite id="gfdl-ch10" loc="§10.2" />:
-
-$$
-h_t = \tanh(W h_{t-1} + U x_t + b), \qquad \hat{y}_t = \text{softmax}(V h_t + c)
-$$
-
-Yahan $U$ input-to-hidden weight matrix hai, $W$ hidden-to-hidden (recurrent) matrix hai jo memory aage le jaata hai, $V$ hidden-to-output matrix hai, aur $b$, $c$ biases hain.
-
-**Diagram**
+<Img id="class-rnn-cell-flow" caption="Left: RNN cell ke andar, current input x t aur previous hidden state h t minus 1 se new hidden state h t aur output y t. Right: wahi cell I, love, AI, learning ke liye repeat hokar h1 se h4 deta hai." />
 
 ```mermaid
-%% caption: Folded RNN (left) aur same network ka teen steps mein unfolded roop (right). W arrows memory ko aage bhejte hain.
+%% caption: Sentence par RNN kaise kaam karta hai. Har step par same cell use hota hai aur hidden state aage pass hoti hai.
 flowchart LR
-  subgraph F["Folded"]
-    X["x(t)"] -- "U" --> H(("h(t)"))
-    H -- "W" --> H
-    H -- "V" --> Y["y(t)"]
-  end
-  subgraph UN["Unfolded"]
-    H0(("h0")) -- "W" --> H1(("h1")) -- "W" --> H2(("h2")) -- "W" --> H3(("h3"))
-    X1["x1"] -- "U" --> H1
-    X2["x2"] -- "U" --> H2
-    X3["x3"] -- "U" --> H3
-    H1 -- "V" --> Y1["y1"]
-    H2 -- "V" --> Y2["y2"]
-    H3 -- "V" --> Y3["y3"]
-  end
+  A["I"] --> R1["RNN"]
+  R1 -->|"h1"| R2["RNN"]
+  B["love"] --> R2
+  R2 -->|"h2"| R3["RNN"]
+  C["AI"] --> R3
+  R3 -->|"h3"| R4["RNN"]
+  D["learning"] --> R4
+  R4 --> E["h4 / output"]
 ```
 
-**Diagram ko kaise padhein.** Folded roop mein W loop hidden state ko khud par wapas bhejta hai. Unfolding mein har time step ki ek copy banti hai: $h_1$ $x_1$ par depend karta hai, $h_2$ $x_2$ aur $h_1$ par, aur aise hi. Isliye aakhri state pehle ke har input ki information leti hai.
+**Working, step by step** <Cite id="class-dl-chp5" loc="slide 7" />
 
-<Img id="img-dl-n1-rnn-unfold" caption="Hamare diagram jaisa hi idea, par alag letters: is figure mein input weights U, recurrent loop V aur output weights W hain, jabki hamare text mein loop W aur output V hai." />
+1. Pehle word aur khali memory se shuru karo.
+2. Har time step par cell **current input** aur **previous hidden state** leta hai aur **new hidden state** aur ek **output** banata hai.
+3. New hidden state agle step ko pass hoti hai. "Recurrent" matlab repeated: har element ke liye same cell aur same weights.
+4. Equations mein: $h_t = \tanh(U x_t + W h_{t-1} + b)$, $\hat{y}_t = \text{softmax}(V h_t + c)$.
 
-**Types.** Ek-se-bahut (image captioning), bahut-se-ek (sentiment), bahut-se-bahut (translation, tagging). <Cite id="karpathy-rnn" />
+**Learning:** forward pass ke baad prediction ko target se compare karke loss nikalte hain; **BPTT** error ko time steps mein peeche bhejta hai, aur weights update hote hain. <Cite id="class-dl-chp5" loc="slide 10" />
 
-**Training.** Backpropagation through time: network ko unfold karo, sab steps ke losses jodo, chain ke through backpropagate karo, aur shared weights ke gradients ko add karo. <Cite id="d2l-rnn" />
+**Use:** sentiment analysis (many to one), image captioning (one to many), translation (many to many), speech recognition, next-word prediction. <Cite id="class-dl-chp5" loc="slide 8" /> <Cite id="class-dl-chp5" loc="slide 13" />
 
-**Advantages:** koi bhi sequence length chalti hai, kam parameters kyunki weights shared hain, past ki memory rakhta hai. **Disadvantages:** lambe sequence par gradients vanish ya explode ho jaate hain, isliye door ke inputs bhool jaata hai; steps ek ke baad ek chalte hain, isliye slow hai. Lambi-range memory ke liye LSTM aur GRU use hote hain.
-
-**Applications:** text generation, speech recognition, machine translation, time-series forecasting. <Cite id="gfg-rnn" /> <Cite id="ibm-rnn" />
-
-Exam mein English mein likho: "At each time step, the RNN combines the current input with the previous hidden state."
-
-**Conclusion:** RNN ek sequence ko step by step, shared weights aur hidden state ke saath process karta hai, jo memory ko ek step se agle step tak le jaata hai.
+**Conclusion:** RNN = sequential data + previous information + hidden state.

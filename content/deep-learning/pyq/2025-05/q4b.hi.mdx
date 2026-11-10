@@ -1,53 +1,33 @@
 ---
-references: [gfdl-ch10, hochreiter1997, sutskever2014, d2l-lstm, gfg-lstm, ibm-lstm]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** RNN sequences ke liye suitable hai kyunki woh unhe ek step ek step padhta hai aur memory aage le jaata hai. Lekin plain RNN ki memory training ke dauraan jaldi fade ho jaati hai, isliye door ki baatein jodna mushkil hota hai. LSTM ek protected long-term memory jodta hai jisme gates hote hain, isliye woh information sau steps tak rakh sakta hai.
+**In simple words:** RNN sequences ke liye suit karta hai kyunki wo pehle ke items yaad rakhta hai, lekin lambi sequences mein uski memory phiki pad jaati hai. LSTM apni memory bahut der tak rakhta hai, isliye jab bahut peeche ki baat answer tay kare tab behtar hai.
 
-**1. Sequential data ke liye RNN kyun suitable hai**
+**RNN sequential data ke liye kaise suit karta hai:** sequence mein order matter karta hai aur pichhli information current prediction ko affect karti hai. Feedforward network ke paas pichhle inputs ki memory nahi hoti; RNN step se step **hidden state** carry karta hai aur har step par **same weights** use karta hai, isliye wo kam parameters mein kisi bhi length ki sequence handle karta hai. <Cite id="class-dl-chp5" loc="slide 5" /> <Cite id="class-dl-m5" loc="p. 8" />
 
-- **Memory:** hidden state har step par naye input ko purani memory ke saath mix karta hai, isliye har output pehle ke inputs par depend kar sakta hai.
-- **Koi bhi length:** same cell har step par lagti hai, isliye 5 ya 500 items wale sequence dono chalte hain.
-- **Parameter sharing:** har step par same weights, isliye ek position par seekha pattern har jagah kaam karta hai.
-- **Flexible shapes:** ek-se-bahut (captioning), bahut-se-ek (sentiment), bahut-se-bahut (translation). <Cite id="gfdl-ch10" loc="§10.2" />
+**Long-term dependencies:** basic RNN ko important information kai time steps tak le jaana mushkil lagta hai, kyunki BPTT mein gradient vanish ho jaata hai. LSTM mein **cell state** (long-term memory) aur gates hain, isliye wo long-term dependencies handle karne ke liye designed hai. <Cite id="class-dl-chp5" loc="slide 11" /> <Cite id="class-dl-chp5" loc="slide 17" />
 
-**2. Long-term dependencies par RNN aur LSTM ka farak**
+<Img id="class-lstm-gru-rnn-vs-lstm" caption="RNN versus LSTM: memory, memory mechanism, long-term dependencies, gates, structure aur vanishing gradient." />
 
-**Plain RNN.** Woh har step par poori memory ko squash karke dobara likhta hai. Training (backpropagation through time) mein gradient har step peeche jaate hue ek aise factor se multiply hota hai jo aam taur par 1 se kam hota hai, isliye kai steps ke baad woh **vanish** ho jaata hai aur lambi link kabhi seekhi nahi jaati.
+| Aspect | Standard RNN | LSTM |
+|---|---|---|
+| Memory | Hidden state | Hidden state + cell state |
+| Long-term dependencies | Struggle kar sakta hai | Behtar handle karne ke liye designed |
+| Gates | Gates nahi | Forget, input, output gates |
+| Structure | Simpler | Zyada complex |
+| Vanishing gradient | Problem ho sakti hai | Gates useful information bachate hain |
 
-**LSTM.** Iske paas ek alag **cell state** hoti hai jo teen gates se control hoti hai: forget (kya rakhna hai), input (kya jodna hai) aur output (kya dikhana hai). Memory forget gate se multiply karke aur naya information jodkar rakhi jaati hai <Cite id="d2l-lstm" />:
+**Real-world application: speech recognition.** Audio sounds ki sequence ki tarah aata hai, aur kisi word ya sentence ka meaning bahut pehle sune sounds par depend kar sakta hai. LSTM sequence models ke liye popular algorithm hai aur Apple ke Siri aur Google ke voice search jaisi applications ke peeche hai. <Cite id="class-dl-m5" loc="p. 31" /> <Cite id="class-dl-chp5" loc="slide 19" />
 
-$$
-c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
-$$
-
-Is path par gradient sirf forget gate se multiply hota hai, jise network 1 ke paas rakh sakta hai, isliye woh kai steps tak bachta hai. <Cite id="hochreiter1997" />
-
-<Img id="img-dl-n1-lstm-cell" caption="Cell state c upar se chalti hai jis par sirf ek gate aur ek addition hai, isliye gradient kai steps tak guzar sakta hai." />
+**Yahan LSTM kyun behtar:** lambi utterance mein RNN shuruaati sounds kho deta; LSTM ke forget, input aur output gates useful pehli information ko cell state mein rakhte hain aur jab chahiye tab use karte hain.
 
 ```mermaid
-%% caption: Time ke saath memory. Plain RNN mein state har step par squash aur dobara likhi jaati hai. LSTM mein cell state sirf forget gate se scale hoti hai aur usme naya information jodta hai.
+%% caption: Speech recognition lambi sequence ki tarah. LSTM useful pehle ke sounds ko cell state mein tab tak rakhta hai jab tak unki zaroorat na pade.
 flowchart LR
-  subgraph R["Plain RNN"]
-    R1["h1"] -- "tanh(W·h + U·x)" --> R2["h2"] -- "tanh(W·h + U·x)" --> R3["h3"]
-  end
-  subgraph L["LSTM cell state"]
-    L1["c1"] -- "× f + i × c̃" --> L2["c2"] -- "× f + i × c̃" --> L3["c3"]
-  end
+  A["Sound 1 ... Sound n (long sequence)"] --> B["LSTM: gates + cell state"]
+  B --> C["Earlier sounds kept in memory"]
+  C --> D["Words / sentence"]
 ```
 
-| Point | Plain RNN | LSTM |
-|---|---|---|
-| Memory | Ek state, har step par dobara likhi | Cell state, rakhi aur usme jodi jaati hai |
-| Gradient over many steps | Aam taur par vanish ya explode | Cell path par bachta hai jab forget gate 1 ke paas ho |
-| Practical memory span | Practice mein chhoti, kyunki gradients fade ho jaate hain | Lambi; 1997 ke paper ne test tasks par 1000 se zyada steps ka lag paar kiya |
-| Control | Koi nahi | Seekhe gates decide karte hain kya bhoolna, jodna, dikhana |
-| Cost | Kam parameters, tez | Lagbhag 4 guna parameters, slow |
-
-**3. Real-world application: machine translation**
-
-"The book that my friend from college gave me last year is on the table" mein verb "is" ka sambandh "book" se hai, jo kaafi pehle aaya tha. Plain RNN shuru ke words bhool jaata hai (vanishing gradient), isliye agreement ya meaning galat ho jaati hai. LSTM ka forget gate 1 ke paas rakh sakta hai taaki "book, singular" uski cell state mein tab tak rahe jab tak zaroorat ho. Sutskever aur saathiyon ne deep LSTMs se English-to-French translator banaya aur bataya ki woh lambe sentences achhe se sambhalta hai. <Cite id="sutskever2014" /> Speech recognition ko bhi isi wajah se fayda hota hai. <Cite id="gfg-lstm" /> <Cite id="ibm-lstm" />
-
-Exam mein English mein likho: "An LSTM keeps a separate cell state controlled by forget, input and output gates, so it captures long-term dependencies."
-
-**Conclusion:** RNN memory aur weight sharing se sequences fit karta hai, lekin lambe gap mein uski memory fade ho jaati hai. LSTM ki gated memory long-term dependencies ko kahin behtar pakadti hai, isliye Transformers se pehle neural translation systems plain RNN ki jagah LSTM use karte the.
+**Conclusion:** RNN sequences ke liye suit karta hai; important pehli information wali lambi sequences ke liye LSTM zyada suitable hai. <Cite id="class-dl-chp5" loc="slide 19" />

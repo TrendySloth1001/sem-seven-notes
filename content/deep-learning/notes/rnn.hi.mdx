@@ -1,692 +1,478 @@
 ---
 title: "Recurrent neural networks"
 module: 5
-summary: "Network us data ko kaise padhe jo order mein aata hai, jaise sentence ke words ya time ke saath readings: ek step se agle step tak ek memory carry karke. Isme sequence learning problems, unfolding, bidirectional RNNs, backpropagation through time se training, aur gradients vanish ya explode kyun hote hain, sab cover hai."
+summary: "Network us data ko kaise padhta hai jo order mein aata hai, jaise sentence ke words ya time ke saath readings, waise jaise class mein padhaya gaya: hidden state ek memory ek step se doosre step tak le jaata hai, unfolding har time step par wahi cell dikhati hai, backpropagation through time se training hoti hai, aur vanishing ya exploding gradients iski badi kamzori hain. Saath mein bidirectional RNN, encoder-decoder, recursive networks aur applications."
 keyIdeas:
-  - "Sequence woh data hai jisme order matter karta hai. RNN use ek step at a time padhta hai aur ek running memory rakhta hai jise hidden state kehte hain."
-  - "Har time step pe same weights use hote hain, isliye ek chhota network kisi bhi length ka sequence handle kar leta hai."
-  - "Unfolding loop ko ek chain ki tarah draw karta hai, har time step ki ek copy. Us chain pe training ko backpropagation through time (BPTT) kehte hain."
-  - "Bidirectional RNN sequence ko aage se aur peeche se dono taraf padhta hai, isliye har output past aur future dono context use kar sakta hai."
-  - "BPTT mein har step peeche jaane pe gradient ek factor se multiply hota hai. Factor 1 se chhota ho to vanish hota hai; 1 se bada ho to explode hota hai."
-  - "Fixes: exploding gradients ke liye gradient clipping aur truncated BPTT, vanishing gradients ke liye gated cells (LSTM, GRU)."
+  - "A sequence is data where the order of the elements matters. Sequence learning problem: how can a neural network learn from data when the order and previous information matter?"
+  - "RNNs are a type of neural network that has hidden states and allows past outputs to be used as inputs. Hidden state = information carried from previous time steps."
+  - "Current input + previous hidden state → new hidden state. Har time step par wahi RNN cell aur wahi weights use hote hain (recurrent = repeated)."
+  - "Unfolding means showing the same RNN cell separately at each time step. BPTT is backpropagation applied across the different time steps of an RNN."
+  - "Vanishing gradient: gradient bahut chhota ho jaata hai, isliye pehle ke steps kuch nahi seekhte. Exploding gradient: gradient bahut bada ho jaata hai, isliye training unstable ho jaati hai. Isliye vanilla RNN long-term dependencies mein struggle karta hai."
+  - "Bidirectional RNN sequence ko forward aur backward dono padhta hai; encoder-decoder input sequence ko alag length ki output sequence mein map karta hai."
 references:
-  - gfdl-ch10
-  - nptel-dl
-  - pascanu2013
-  - hochreiter1997
-  - sutskever2014
-  - karpathy-rnn
-  - d2l-sequence
-  - d2l-rnn
-  - d2l-bptt
-  - d2l-deep-rnn
-  - d2l-birnn
-  - gfg-rnn
-  - gfg-rnn-explained
-  - gfg-bptt
-  - gfg-vanishing-exploding-rnn
-  - gfg-birnn
-  - keras-simplernn
-  - keras-bidirectional
-  - pytorch-rnn
-  - pytorch-clip-grad-norm
-  - wiki-rnn
-  - wiki-bptt
-  - wiki-birnn
-  - wiki-vanishing-gradient-rnn
-  - ibm-rnn
-  - mlm-rnn
-  - mlm-bptt
-  - av-rnn
-  - tp-rnn
-  - jtp-rnn
+  - class-dl-chp5
+  - class-dl-m5
+  - class-dl-qb2
 ---
 
-Naye ideas se pehle, purane ideas jo tumhe chahiye. Agar pata hain to agle section pe chale jao.
+Naye ideas se pehle wo purani baatein jo chahiye. Agar aapko pata hai to seedha agle section par jao.
 
-## Pehle basics
+## Basics pehle
 
-- Ek **neuron** kuch numbers leta hai, har ek ko ek **weight** se multiply karta hai, sabko ek **bias** ke saath add karta hai, aur total ko ek **activation function** se pass karta hai. Do common ones: **tanh** kisi bhi number ko $-1$ se $1$ ki range mein squash karta hai, aur **sigmoid** $0$ se $1$ mein.
-- Ek **feedforward network** (MLP) numbers ko sirf ek direction mein bhejta hai: input layer, hidden layers, output layer. Iske paas **koi memory nahi** hoti. Har input alag se handle hota hai, aur input ka size hamesha same hona chahiye.
-- **Training** ka matlab hai weights ko adjust karna taaki **loss** (ek number jo batata hai network kitna galat hai) kam ho.
-- **Gradient** har weight ke liye batata hai ki use kis direction mein aur kitna change karna hai. **Backpropagation** network mein peeche jaate hue gradients nikalta hai, aur raste mein har layer ke effects **multiply** hote hain (chain rule). Ye multiplication yaad rakhna; aage gradients vanish ya explode kyun hote hain, uski poori wajah yahi hai.
+- Neural network numbers leta hai, unhe **weights** se multiply karta hai, **bias** add karta hai aur numbers bahar deta hai. Weights aur biases hi **parameters** hain jo network seekhta hai.
+- **Loss** batata hai ki prediction kitna galat hai. **Backpropagation** error ko network mein peeche bhejta hai taaki pata chale har weight kaise badalna hai. Phir weights update hote hain.
+- **Gradient** ek partial derivative hai. Ye batata hai ki input thoda badalne par function ka output kitna badalta hai. Gradient se error ke change ke hisaab se saare weights ka change naapa jaata hai. Agar slope zero hai to model seekhna band kar deta hai. <Cite id="class-dl-m5" loc="p. 14" />
+- Aapne images ke liye CNN dekha. Ab data alag hai: words, sounds aur readings jo ek ke baad ek aate hain. <Cite id="class-dl-chp5" loc="slide 4" />
 
-## Problem: data jo order mein aata hai
-
-Ye sentence ek word at a time padho: "I grew up in France, so I speak fluent ...". Last word guess karne ke liye tumhe kuch words pehle ka "France" yaad rakhna padega. Feedforward network sirf fixed-size input dekhta hai aur inputs ke beech sab bhool jaata hai, isliye ye kaam achhe se nahi kar paata.
-
-Jis data mein **order matter karta hai** aur har item pichhle items pe depend karta hai, use **sequence** kehte hain. Examples: sentence ke words, ek word ke characters, share ka daily price, speech recording ke samples, video ke frames. Ye topic syllabus <Syl m="5" /> hai.
-
-## Sequence learning problems
+## Sequence models aur sequence learning problem
 
 <Box kind="definition">
 
-**Sequence learning problem** woh task hai jisme input, output, ya dono sequences hote hain, isliye model ko **dependent** inputs ki ek series dekhni padti hai, har **time step** pe ek, aur ek output ya outputs ki series deni padti hai.
+**Sequence:** wo data jisme elements ka **order** **matter** karta hai. <Cite id="class-dl-chp5" loc="slide 3" />
+
+**Sequence models** wo machine learning models hain jo data ki sequences input ya output karte hain. Sequential data mein text streams, audio clips, video clips, time-series data wagairah aate hain. Recurrent Neural Networks (RNNs) sequence models mein use hone wala popular algorithm hai. <Cite id="class-dl-m5" loc="p. 3" />
 
 </Box>
 
-Exam mein English mein likho: "A sequence learning problem is a task where the input, the output, or both are sequences of dependent items, one per time step."
+<Img id="class-rnn-sequence-def" caption="Same words alag order mein ho to meaning badal jaata hai. 'I am eating an apple' mein order hi sentence ko meaning deta hai." />
 
-**Inhe special model kyun chahiye.** Khapra ke NPTEL lectures teen cheezein batate hain jo in problems ko ordinary problems se alag banati hain, aur isliye model se teen wishes <Cite id="nptel-dl" />:
+**Ye normal data se alag kyun hai?** Sentence mein current word ko samajhne ke liye aas-paas ke words important ho sakte hain. "Bank" ka matlab "I went to the bank to deposit money" mein financial institution hai aur "We sat on the bank of the river" mein river side. Current word samajhne ke liye surrounding sequence ki information kaam aa sakti hai. <Cite id="class-dl-chp5" loc="slide 3" />
 
-1. **Inputs ek doosre pe depend karte hain.** "d", "e" ke baad next letter predict karne ke liye tumhe pehle wale letters chahiye, sirf current wala nahi.
-2. **Length fixed nahi hai.** "deep" mein 4 letters hain aur "learning" mein 8. Sentences mein kitne bhi words ho sakte hain.
-3. **Har step pe same kaam hota hai.** Har position pe task same hai (ek letter padho, next letter predict karo), isliye har step pe same function use hona chahiye.
+<Box kind="definition">
 
-Feedforward network teeno mein fail hota hai: memory nahi, fixed input size, aur har input position ke liye alag weights. RNN teeno wishes poori karta hai: memory carry karta hai (dependence), input mein jitne steps hain utne steps chalta hai (koi bhi length), aur har step pe same weights reuse karta hai (same function).
+**Sequence learning problem:** "How can a neural network learn from data when the order and previous information matter?" <Cite id="class-dl-chp5" loc="slide 3" />
 
-**Sequence problems ke types.** Karpathy ki famous picture inhe input aur output ke shape se sort karti hai <Cite id="karpathy-rnn" />:
+</Box>
 
-| Kind | Input | Output | Example |
-|---|---|---|---|
-| One to one | Ek item | Ek item | Normal image classification (koi sequence nahi) |
-| One to many | Ek item | Ek sequence | Image captioning: ek picture in, ek sentence out |
-| Many to one | Ek sequence | Ek item | Movie review ka sentiment: bahut words in, positive ya negative out |
-| Many to many (alag lengths) | Ek sequence | Ek sequence | Machine translation: English sentence in, Hindi sentence out |
-| Many to many (har input ka ek output) | Ek sequence | Same length ka sequence | Part-of-speech tagging: har word ka tag; har video frame ko label karna |
+<Img id="class-rnn-sequence-problem" caption="Sentence, speech, stock prices, weather readings aur music notes sab sequences hain. Common baat: input step-by-step aata hai, aur pichhli information current prediction ko affect kar sakti hai." />
+
+**Sequence data ke examples aur hum kya predict karna chahte hain:** <Cite id="class-dl-chp5" loc="slide 3" />
+
+| Sequence data | What we want to predict |
+|---|---|
+| Sentence | Sentiment / next word |
+| Speech | Recognized words |
+| Stock prices | Future price |
+| Weather readings | Future temperature |
+| Music notes | Next note |
+
+**Sequence models ki applications** (Module 5): <Cite id="class-dl-m5" loc="p. 4" /> <Cite id="class-dl-m5" loc="p. 5" />
+
+1. **Speech recognition:** audio clip input hai aur model uska text banata hai. Input aur output dono sequences hain.
+2. **Sentiment classification:** text mein jo opinion hai use classify kiya jaata hai. Input words ki sequence hai.
+3. **Video activity recognition:** model video clip mein activity pehchanta hai. Video clip frames ki sequence hai, isliye input sequence hai.
+
+### Normal neural network kyun nahi use kar sakte?
+
+<Img id="class-rnn-why-need" caption="Normal network I, love aur apples ko alag-alag handle karta hai. 'apples' padhte waqt use 'I love' yaad nahi rehta." />
+
+Basic feedforward network ke paas **pichhle inputs ki built-in memory nahi** hoti. Deep feedforward model ko sequence ke har element ke liye alag parameters bhi chahiye ho sakte hain, aur wo alag-alag length ki sequences par generalize na kar paaye. <Cite id="class-dl-chp5" loc="slide 5" /> <Cite id="class-dl-m5" loc="p. 7" />
+
+<Img id="class-rnn-normal-nn-problem" caption="'I did not like this movie': word-by-word padhne par network 'not' aur 'like' ka relation use na kar paaye. Hamein aisi mechanism chahiye jo pehle ke steps ki information baad ke steps tak le jaaye. Wahi RNN hai." />
+
+## Recurrent neural network (RNN)
+
+<Box kind="definition">
+
+**RNN:** ek type ka neural network jisme hidden states hote hain aur jo pichhle outputs ko inputs ki tarah use karne deta hai. <Cite id="class-dl-m5" loc="p. 9" />
+
+**Easy idea (exam mein ye likho):** "I will process the current input, but I will also carry some information from previous steps." RNN is designed to work with sequential data. <Cite id="class-dl-chp5" loc="slide 3" />
+
+</Box>
+
+Recurrent Neural Networks sequence ke **har element ke liye same weights** use karte hain. Isse parameters kam hote hain aur model alag-alag length ki sequences par generalize kar paata hai. Attention models se pehle sequential data ke liye RNN hi standard suggestion tha. <Cite id="class-dl-m5" loc="p. 7" /> <Cite id="class-dl-m5" loc="p. 8" />
+
+**Roz ki analogy.** Kahani padhte waqt aap pichhla page nahi bhoolte. Aap ab tak ki ek chhoti summary saath rakhte ho aur page-by-page use update karte ho. RNN apni memory ke saath wahi karta hai. <Cite id="class-dl-chp5" loc="slide 6" />
+
+### Memory hi hidden state hai
+
+<Img id="class-rnn-previous-info" caption="Current input aur previous information RNN mein jaakar new information dete hain. 'I', phir 'love + memory', phir 'apples + memory': har step par memory update hoti hai." />
+
+<Box kind="definition">
+
+**Hidden state:** RNN jo memory carry karta hai. Hidden state = information carried from previous time steps. <Cite id="class-dl-chp5" loc="slide 6" />
+
+</Box>
+
+<Img id="class-rnn-hidden-state" caption="Current input aur previous hidden state RNN mein jaakar new hidden state dete hain." />
+
+<Img id="class-rnn-one-step" caption="I love AI: step 1 h1 deta hai ('I' ke baad ki information), step 2 'love' aur h1 se h2 banata hai, step 3 'AI' aur h2 se h3. Hidden state har time step par update hoti hai." />
+
+### "Recurrent" kyun?
+
+**Recurrent = Repeated.** Network baar-baar naye inputs process karta hai aur pichhla hidden state aage le jaata hai. RNN ka core working principle: **current input + previous hidden state → new hidden state.** <Cite id="class-dl-chp5" loc="slide 7" />
+
+<Img id="class-rnn-why-recurrent" caption="Inputs 1 se 4 ek ke baad ek same RNN mein jaate hain, aur har baar hidden state aage pass hoti hai." />
+
+Har time step par RNN cell **current input** aur **previous hidden state** leta hai aur **new hidden state** aur ek **output** banata hai. Ye process sequence ke har element ke liye repeat hota hai. <Cite id="class-dl-chp5" loc="slide 7" />
+
+<Img id="class-rnn-cell-flow" caption="Left: RNN cell ke andar kya hota hai. Right: complete basic flow, 'I', 'love', 'AI', 'learning' ke liye repeat hoke h1 se h4 deta hai." />
 
 ```mermaid
-%% caption: Chaar sequence shapes. Har row left se right padho: kitne items andar jaate hain aur kitne bahar aate hain.
+%% caption: Ek RNN cell baar-baar use hota hai. Left ka loop aur right ki chain ek hi cheez hain (loop ko time mein khol diya gaya hai).
 flowchart LR
-  A1["Ek image"] --> A2["RNN"] --> A3["Words ka sentence"]
-  B1["Review ke bahut words"] --> B2["RNN"] --> B3["Ek label: positive ya negative"]
-  C1["English sentence"] --> C2["Encoder RNN"] --> C3["Decoder RNN"] --> C4["Hindi sentence"]
-  D1["Har word"] --> D2["RNN"] --> D3["Har word ka tag"]
+  X1["x1 (I)"] --> C1["RNN cell"]
+  C1 -->|"h1"| C2["RNN cell"]
+  X2["x2 (love)"] --> C2
+  C2 -->|"h2"| C3["RNN cell"]
+  X3["x3 (AI)"] --> C3
+  C3 --> H3["h3 (output)"]
+  C1 -.-> Y1["y1"]
+  C2 -.-> Y2["y2"]
 ```
 
-Do RNNs se translation, ek jo input padhta hai (**encoder**) aur ek jo output likhta hai (**decoder**), ise **sequence-to-sequence** model kehte hain. <Cite id="sutskever2014" /> <Cite id="gfdl-ch10" loc="§10.4" />
+### RNN equations
 
-**Sequence learning ke real-world applications:** speech-to-text, machine translation, chatbots, phone keyboard pe next-word suggestion, stock aur weather forecasting, music generation, video activity recognition.
-
-## Recurrent neural network: memory wala network
-
-**Ye kya hai.** **Recurrent neural network (RNN)** ek neural network hai jisme ek loop hai: ek time step pe hidden layer ka output agle time step pe extra input ki tarah wapas feed hota hai. Yahi wapas feed hui value network ki memory hai.
-
-**Analogy.** Ek story padhne ka socho. Har sentence ke baad tum zero se start nahi karte; tum ab tak ki story ka summary dimaag mein rakhte ho, aur har naye sentence ke saath use update karte ho. RNN bilkul yahi karta hai. Iska running summary numbers ka ek vector hai jise **hidden state** kehte hain, time step $t$ ke liye $h_t$ likhte hain.
-
-**Kaise kaam karta hai, step by step.**
-
-1. Khali memory se start karo, $h_0 = 0$.
-2. Step $t$ pe do cheezein lo: naya input $x_t$ aur pichhli memory $h_{t-1}$.
-3. Dono ko mix karo, har ek apne weights ke set se, bias add karo, aur result ko tanh se squash karo. Yahi nayi memory $h_t$ hai.
-4. Nayi memory se is step ka output banao (jaise har possible next word ki probability).
-5. Agle step pe jao aur **same weights ke saath** repeat karo, jab tak sequence khatam na ho.
-
-**Do equations.** Words mein: nayi memory = tanh of (recurrent weights times purani memory, plus input weights times naya input, plus bias); output = softmax of (output weights times memory, plus bias). Ye Goodfellow ki book ki equations hain, same letters ke saath. <Cite id="gfdl-ch10" loc="§10.2" />
+Har time step $t$ ke liye hidden state aur output do equations se milte hain. Module notes hidden state ke liye $a^{\langle t \rangle}$ likhte hain: <Cite id="class-dl-m5" loc="p. 9" />
 
 $$
-h_t = \tanh\left(W h_{t-1} + U x_t + b\right)
+a^{\langle t \rangle} = g_1(W_{aa}\, a^{\langle t-1 \rangle} + W_{ax}\, x^{\langle t \rangle} + b_a), \qquad y^{\langle t \rangle} = g_2(W_{ya}\, a^{\langle t \rangle} + b_y)
 $$
 
-$$
-\hat{y}_t = \text{softmax}\left(V h_t + c\right)
-$$
+<Img id="class-rnn-equations" caption="Module notes ki do RNN equations. W ax, W aa, W ya, b a aur b y saare time steps mein shared hain." />
 
-- $x_t$: step $t$ pe input (jaise ek word numbers mein badla hua); $h_t$: step $t$ ke baad hidden state (memory).
-- $U$: input-to-hidden weights; $W$: hidden-to-hidden (**recurrent**) weights, woh loop jo memory deta hai; $V$: hidden-to-output weights; $b$, $c$: biases.
-- $\hat{y}_t$: step $t$ pe output. **Softmax** scores ko probabilities mein badalta hai jinka total 1 hota hai; number output ke liye ise skip karte hain.
-
-<Box kind="intuition">
-
-**Same** $U$, $W$, $V$, $b$, $c$ har time step pe use hote hain. Ise **parameter sharing** kehte hain. Isi wajah se ek RNN 3 words ka sentence bhi padh sakta hai aur 300 ka bhi, weights ki ginti length ke saath nahi badhti, aur position 2 pe seekhi cheez (jaise "not" kya karta hai) position 20 pe bhi kaam karti hai.
-
-</Box>
-
-Exam mein English mein likho: "The same weights U, W and V are shared across all time steps."
-
-**Worked sum: haath se RNN ka forward pass.**
-
-<Sum>
-
-<Given>
-
-sab kuch ek number, taaki haath se calculate kar sakein: input weight $U = 0.5$, recurrent weight $W = 1.0$, bias $b = 0$, output weight $V = 2$ bina softmax ke, starting memory $h_0 = 0$, inputs $x = [1, 2, -1]$. Hum $\tanh(z) = \dfrac{e^{2z} - 1}{e^{2z} + 1}$ use karenge.
-
-</Given>
-
-<Find>
-
-hidden states $h_1, h_2, h_3$ aur outputs $\hat{y}_1, \hat{y}_2, \hat{y}_3$.
-
-</Find>
-
-<Steps>
-
-1. Step 1, andar ki value:
-
-   $$
-   \begin{aligned}
-   W h_0 + U x_1 &= 1.0 \times 0 + 0.5 \times 1 \\
-   &= 0.5
-   \end{aligned}
-   $$
-
-   *(Purani memory khali hai, isliye sirf naya input count hota hai.)*
-2. Step 1, memory: $e^{1} = 2.7183$, toh $h_1 = \dfrac{1.7183}{3.7183} = 0.4621$. *(tanh sum ko −1 se 1 mein squash karta hai.)*
-3. Step 1, output: $\hat{y}_1 = 2 \times 0.4621 = 0.9242$. *(Output memory se padha jaata hai.)*
-4. Step 2, andar ki value:
-
-   $$
-   \begin{aligned}
-   1.0 \times 0.4621 + 0.5 \times 2 &= 0.4621 + 1 \\
-   &= 1.4621
-   \end{aligned}
-   $$
-
-   *(Ab purani memory naye input mein add hoti hai.)*
-5. Step 2, memory: $e^{2.9242} = 18.62$, toh $h_2 = \dfrac{17.62}{19.62} = 0.8981$. *(Same tanh, same weights, naya step.)*
-6. Step 2, output: $\hat{y}_2 = 2 \times 0.8981 = 1.7962$. *(Output weight times memory, pehle jaisa.)*
-7. Step 3, andar ki value:
-
-   $$
-   \begin{aligned}
-   1.0 \times 0.8981 + 0.5 \times (-1) &= 0.8981 - 0.5 \\
-   &= 0.3981
-   \end{aligned}
-   $$
-
-   *(Negative input sum ko neeche kheenchta hai, par memory use positive rakhti hai.)*
-8. Step 3, memory: $e^{0.7962} = 2.2171$, toh $h_3 = \dfrac{1.2171}{3.2171} = 0.3783$. *(Phir se tanh se squash.)*
-9. Step 3, output: $\hat{y}_3 = 2 \times 0.3783 = 0.7566$. *(Output weight times memory.)*
-
-</Steps>
-
-<Answer>
-
-$h = [0.4621, 0.8981, 0.3783]$ aur outputs $\hat{y} = [0.9242, 1.7962, 0.7566]$.
-
-</Answer>
-
-<Box kind="verify">
-
-**Check 1, chhoti values ka shortcut.** Chhote $z$ ke liye $\tanh(z) \approx z - \dfrac{z^3}{3}$. Step 1 ke liye:
+Class slides mein wahi cheez parameters $W, U, b, V, c$ ke saath likhi hai: <Cite id="class-dl-chp5" loc="slide 14" />
 
 $$
-0.5 - \frac{0.125}{3} = 0.5 - 0.0417 = 0.4583
+h_t = \tanh(U x_t + W h_{t-1} + b), \qquad \hat{y}_t = \text{softmax}(V h_t + c)
 $$
 
-jo 0.4621 ke kareeb hai (shortcut thoda kam deta hai). Step 3 ke liye:
+Yahan $x_t$ time $t$ ka input hai, $h_{t-1}$ pichhla hidden state, $h_t$ naya hidden state aur $\hat{y}_t$ output. $g_1, g_2$ activation functions hain jaise tanh aur softmax. Weights **time ke across shared** hain.
 
-$$
-\begin{aligned}
-0.3981 - \frac{0.0631}{3} &= 0.3981 - 0.0210 \\
-&= 0.3771
-\end{aligned}
-$$
+<Img id="class-rnn-cell-weights" caption="Ek RNN cell ke andar: pichhli activation ko W aa se, input ko W ax se multiply kiya jaata hai, dono bias b a ke saath add hokar g1 se guzarte hain aur nayi activation milti hai. Use W ya se multiply karke g2 se guzaro to output milta hai." />
 
-jo 0.3783 ke kareeb hai. Dono match karte hain.
+<Img id="class-rnn-weights-shared" caption="Left ka loop aur right ki unrolled chain har time step par wahi weight matrices A, B aur C use karte hain." />
 
-**Check 2, range aur sign.** Har $h$ −1 aur 1 ke beech hai, jaisa tanh mein hona chahiye. Har $h$ ka sign uski andar wali value jaisa hai aur size thoda chhota hai, jo tanh hamesha deta hai. Har output apne $h$ ka exactly double hai.
+### RNN kaam karne ke alag tareeke (types of RNN)
 
-</Box>
+Architecture problem ke hisaab se badal sakta hai, ek input-output se lekar bahut saare inputs-outputs tak. <Cite id="class-dl-m5" loc="p. 11" /> <Cite id="class-dl-chp5" loc="slide 8" />
 
-</Sum>
+<Img id="class-rnn-types-overview" caption="Many to one, one to many aur many to many." />
 
-Step 3 pe input negative hai, phir bhi hidden state positive rehta hai, kyunki woh $W h_{t-1}$ ke through pehle ke inputs abhi bhi yaad rakhta hai. Yahi carry hua part memory hai.
-
-<Img id="img-dl-n3-rnn-cell" caption="Ek RNN cell: purani memory aur naya input alag-alag weight hote hain, add hote hain aur tanh se squash hote hain. Result output bhi hai aur agle cell ko jaane wali memory bhi." />
-
-## Computational graph ko unfold karna
-
-**Ye kya hai.** RNN usually ek loop wale box ki tarah draw hota hai. Loop ke baare mein sochna mushkil hai, isliye hum use **unfold** (ya unroll) karte hain: har time step ke liye box ki ek copy draw karo aur loop ki jagah har copy se agli copy tak ek arrow lagao. <Cite id="gfdl-ch10" loc="§10.1" />
-
-**Ye kyun zaroori hai.** Backpropagation sirf bina loop wale graph pe kaam karna jaanta hai. Unfolding loop ko ek ordinary feedforward chain bana deta hai, jitna sequence lamba utna deep, jisme har copy ke same weights hain. Ab ordinary backpropagation us pe chal sakta hai.
-
-```mermaid
-%% caption: Left, RNN apne loop ke saath. Right, wahi RNN teen time steps pe unfold kiya hua. Har copy same U, W aur V use karti hai; W wale arrows memory ko aage le jaate hain.
-flowchart LR
-  subgraph Folded["Folded"]
-    X["Input x"] -- "U" --> H(("Hidden h"))
-    H -- "W (loop)" --> H
-    H -- "V" --> Y["Output y"]
-  end
-  subgraph Unfolded["3 steps pe unfolded"]
-    X1["x1"] -- "U" --> H1(("h1"))
-    X2["x2"] -- "U" --> H2(("h2"))
-    X3["x3"] -- "U" --> H3(("h3"))
-    H0(("h0 = 0")) -- "W" --> H1
-    H1 -- "W" --> H2
-    H2 -- "W" --> H3
-    H1 -- "V" --> Y1["y1"]
-    H2 -- "V" --> Y2["y2"]
-    H3 -- "V" --> Y3["y3"]
-  end
-```
-
-<Img id="img-dl-n3-rnn-unfold" caption="Left ka loop right mein copies ki chain ban jaata hai, har time step ke liye ek; copies ke beech ke arrows memory le jaate hain. Letters hamare note se alag hain: yahan U input weights, V recurrent weights aur W output weights hain." />
-
-**Unfolding ke advantages.**
-
-- Saaf dikhata hai kaun si value kis pe depend karti hai, isliye chain pe ordinary backpropagation laga sakte hain (yahi BPTT hai, neeche).
-- Dikhata hai ki model ka har step pe input size same hai, sequence length chahe jo ho.
-- Sharing dikhata hai: weights ka ek set, baar baar use hota hua.
-
-**Disadvantage.** Unfolded chain sequence jitni lambi hoti hai, isliye lamba sequence ek bahut deep network ban jaata hai: training ko har step ke liye memory chahiye aur vanishing aur exploding gradients ki problem aati hai.
-
-## RNN ke key components
-
-Jab question components puchhe, ye list karo:
-
-| Component | What it is | Job |
+| Type | What it means | Examples |
 |---|---|---|
-| Input layer $x_t$ | Har time step pe sequence ka ek element | Data ko order mein andar feed karta hai |
-| Hidden state $h_t$ | Numbers ka ek vector | Memory: ab tak dekhi har cheez ka summary |
-| Input weights $U$ | Matrix | Decide karte hain naya input memory ko kaise affect kare |
-| Recurrent weights $W$ | Matrix | Decide karte hain purani memory nayi mein kaise carry ho |
-| Output weights $V$ | Matrix | Memory ko output mein badalte hain |
-| Biases $b$, $c$ | Vectors | Sums ko shift karte hain, kisi bhi neuron ki tarah |
-| Activation | Hidden state mein usually tanh; output pe softmax ya kuch nahi | Non-linearity add karta hai aur hidden values ko bounded rakhta hai |
-| Output $\hat{y}_t$ | Ek step pe prediction | Har step pe (tagging) ya sirf last step pe (sentiment) |
-| Loss | Har output step ka ek loss, sab add | Batata hai outputs ka poora sequence kitna galat hai |
+| **One to one** | Sirf ek pair. Traditional neural networks mein use hota hai. | Ordinary classifier |
+| **One to many** | Ek input se kai outputs. | Music generation, image captioning |
+| **Many to one** | Alag time steps ke kai inputs se ek output. | Sentiment analysis, emotion identification, spam detection, text classification |
+| **Many to many** | Kai inputs se kai outputs (lengths alag ho sakti hain). | Machine translation (English to French), sequence labelling |
 
-Weights shared hain, isliye parameters ki ginti sequence length pe depend nahi karti. <Cite id="keras-simplernn" /> <Cite id="pytorch-rnn" />
+<Img id="class-rnn-many-to-one" caption="Bahut saare words, ek decision: 'This movie is very good' ka result Positive." />
 
-**Worked sum: ek RNN layer ke parameters ginna.**
+<Img id="class-rnn-one-to-many" caption="Football khelte ladke ki ek image se 'boy', 'playing', 'football' words ek ke baad ek aate hain." />
 
-<Sum>
+<Img id="class-rnn-many-to-many" caption="'I love AI' ban jaata hai 'J' aime l'IA'. RNN ek sequence leta hai aur outputs ki sequence deta hai." />
 
-<Given>
+### RNN versus feedforward network
 
-har input $x_t$ mein 3 numbers hain, hidden state mein 2 numbers hain, aur layer mein ek bias vector hai (jaise Keras `SimpleRNN` mein).
+<Img id="class-rnn-vs-feedforward" caption="RNN ke har neuron mein khud par wapas loop hota hai. Feed-forward network mein loops nahi hote." />
 
-</Given>
+| Aspect | Feedforward network | RNN |
+|---|---|---|
+| Memory | Pichhle inputs ki built-in memory nahi | Hidden state hai jo pichhle steps ki information carry karta hai |
+| Data | Har input alag treat hota hai | Sequences par kaam karta hai; order matter karta hai |
+| Weights | Sequence ke har element ke liye alag parameters chahiye honge | Har time step par same weights, isliye parameters kam |
+| Length | Fixed-size input | Alag-alag length ki sequences handle kar sakta hai |
 
-<Find>
+<Cite id="class-dl-m5" loc="p. 7" /> <Cite id="class-dl-m5" loc="p. 8" /> <Cite id="class-dl-m5" loc="p. 13" />
 
-recurrent layer ke trainable parameters ki ginti.
+## Unfolding the computational graph
 
-</Find>
+<Box kind="definition">
 
-<Steps>
-
-1. Input weights $U$: 2 hidden units mein se har ek 3 inputs mein se har ek se juda hai, toh $2 \times 3 = 6$. *(Har input–hidden pair ka ek weight.)*
-2. Recurrent weights $W$: har hidden unit pichhle step ke har hidden unit se juda hai, toh $2 \times 2 = 4$. *(Yahi memory loop hai.)*
-3. Bias $b$: har hidden unit ka ek, toh $2$. *(Har neuron ka apna bias.)*
-4. Total: $6 + 4 + 2 = 12$. *(Teeno groups add karo.)*
-
-</Steps>
-
-<Answer>
-
-12 parameters, sequence mein 5 steps hon ya 500.
-
-</Answer>
-
-<Box kind="verify">
-
-Is baar hidden unit ke hisaab se group karo: 2 hidden units mein se har ek ke 3 input weights, 2 recurrent weights aur 1 bias hain, yaani $3 + 2 + 1 = 6$ numbers, aur $2 \times 6 = 12$. Same answer. Keras ise units × (units + inputs + 1) $= 2 \times (2 + 3 + 1) = 12$ likhta hai. (PyTorch ka `nn.RNN` do bias vectors rakhta hai, toh woh $12 + 2 = 14$ batayega.)
+**Unfolding** means showing the same RNN cell separately at each time step. The **weights are shared** across all time steps. <Cite id="class-dl-chp5" loc="slide 12" />
 
 </Box>
 
-</Sum>
+<Img id="class-rnn-unfolding" caption="Same RNN cell chaar time steps par dikhaya gaya. Inputs x1 se x4, outputs h1 se h4, har jagah same weights." />
 
-## Deep (stacked) RNNs
+Unfolding loop ko chain bana deti hai, taaki us par normal backpropagation chal sake.
 
-RNN layers ko stack kar sakte ho: layer 1 ke hidden states har step pe layer 2 ke inputs ban jaate hain. Neeche ki layers simple patterns pakadti hain (letters, sounds), upar ki layers zyada abstract (words, meaning), deep feedforward network ki tarah. **Advantage:** zyada expressive. **Disadvantage:** slow aur train karna mushkil. <Cite id="gfdl-ch10" loc="§10.5" /> <Cite id="d2l-deep-rnn" />
+<Img id="class-rnn-unfolded-activation" caption="Module 5 ka unfolded RNN ka drawing: neeche x of t, upar y of t, aur activation a ek step se doosre step tak pass hoti hai." />
 
-<Img id="img-dl-n3-deep-rnn" caption="Stacked RNN: har layer ki hidden states upar wali layer ka input hain, yaani time direction ke upar depth judti hai." />
+## RNN kaise seekhta hai? Backpropagation through time (BPTT)
 
-## Bidirectional RNNs
+RNN bhi kisi aur network ki tarah seekhta hai: apni prediction ko actual answer se compare karta hai aur weights adjust karta hai. Lekin RNN mein kai time steps hote hain, to error peeche kaise bheja jaaye? Wahi **Backpropagation Through Time (BPTT)** hai. <Cite id="class-dl-chp5" loc="slide 10" />
 
-**Ye kya hai.** **Bidirectional RNN (BiRNN)** same sequence pe do RNNs hain, ek left se right padhta hai aur ek right se left, jinke hidden states har step pe combine hote hain.
+<Box kind="definition">
 
-**Ye kyun zaroori hai.** Ordinary RNN ne step $t$ pe sirf past dekha hai. Par kabhi kabhi ek word ka matlab uske baad aane wale word pe depend karta hai. "He said, Teddy bears are on sale" aur "He said, Teddy Roosevelt was a president" mein, jab tak agla word na padho, pata nahi chalta ki "Teddy" toy hai ya person.
+**BPTT** is backpropagation applied across the different time steps of an RNN. Easy meaning: forward through time, phir backward through time. <Cite id="class-dl-chp5" loc="slide 10" />
 
-**Analogy.** Jaise ek sentence ko do baar padhna, ek baar aage se aur ek baar peeche se, aur phir jo samjha use combine karna.
+</Box>
 
-**Kaise kaam karta hai, step by step.**
+<Img id="class-rnn-bptt-idea" caption="Forward (normal flow): t1 se t4. Loss nikalne ke baad error t4 se t1 tak peeche jaata hai." />
 
-1. Ek **forward** RNN $x_1, x_2, \dots, x_T$ padhta hai aur har step pe ek forward state banata hai. Ise **past** pata hai.
-2. Ek **backward** RNN, apne alag weights ke saath, $x_T, \dots, x_1$ padhta hai aur har step pe ek backward state banata hai. Ise **future** pata hai.
-3. Har step pe dono states end to end jod diye jaate hain (concatenate) ek lambe vector mein.
-4. Output layer ye joda hua vector use karti hai, isliye har output poora sentence dekhta hai.
+**BPTT ke steps** (example: I → love → AI): <Cite id="class-dl-chp5" loc="slide 10" />
+
+1. **Forward pass:** RNN har word padhta hai aur h1, h2, h3 aur ek output deta hai.
+2. **Calculate loss:** prediction ko actual output se compare karo.
+3. **Backward pass:** error loss se t3, t2, t1 tak peeche jaata hai.
+4. **Update weights:** nikale gaye gradients se weights update karo.
+
+<Img id="class-rnn-bptt-steps" caption="BPTT ke chaar steps: forward pass, calculate loss, backward pass, update weights." />
 
 ```mermaid
-%% caption: Teen steps pe ek bidirectional RNN. Upar wali row left se right padhti hai, neeche wali right se left. Har output dono ko jodta hai, isliye y2 ko x1 aur x3 dono pata hain.
+%% caption: Class ka complete RNN learning flow: time mein aage, phir error time mein peeche, phir weights badalte hain.
 flowchart LR
-  X1["x1"] --> F1
-  X2["x2"] --> F2
-  X3["x3"] --> F3
-  X1 --> B1
-  X2 --> B2
-  X3 --> B3
-  F1(("forward h1")) --> F2(("forward h2")) --> F3(("forward h3"))
-  B3(("backward h3")) --> B2(("backward h2")) --> B1(("backward h1"))
-  F1 --> Y1["y1"]
-  B1 --> Y1
-  F2 --> Y2["y2"]
-  B2 --> Y2
-  F3 --> Y3["y3"]
-  B3 --> Y3
+  A["Input sequence ('I love eating')"] --> B["RNN cell (current input + previous hidden state)"]
+  B --> C["Hidden states carry information forward"]
+  C --> D["Output layer: next-word prediction"]
+  D --> E["Compare with target ('pizza')"]
+  E --> F["Loss (how wrong?)"]
+  F --> G["BPTT: backward through time"]
+  G --> H["Update weights W, U, b, V, c"]
+  H -->|"try again"| A
 ```
 
-<Img id="img-dl-n3-birnn" caption="Bidirectional RNN mein forward chain aur backward chain hoti hai; har output sequence ka past aur future dono dekhta hai." />
+### Ek complete example: agla word predict karna
 
-| Advantages | Disadvantages |
-|---|---|
-| Har output past aur future dono context use karta hai | Koi bhi output dene se pehle **poora** sequence chahiye, isliye live, word-by-word prediction nahi kar sakta |
-| Tagging aur recognition ke liye usually zyada accurate | Lagbhag double computation aur parameters |
+Class ek poora example karwati hai. <Cite id="class-dl-chp5" loc="slide 14" />
 
-**Applications:** speech recognition, part-of-speech tagging, named-entity recognition, missing word fill karna. <Cite id="gfdl-ch10" loc="§10.3" /> <Cite id="d2l-birnn" /> <Cite id="gfg-birnn" /> <Cite id="keras-bidirectional" />
+<Img id="class-rnn-example-forward" caption="Input 'I love eating ___'. Target 'pizza' hai. RNN ek-ek word padhta hai aur 'I', 'I love' aur 'I love eating' ki information rakhta hai." />
 
-## Training: backpropagation through time (BPTT)
+1. **The sequence:** "I love eating ___", target (sahi agla word) "pizza" hai.
+2. **Forward pass:** RNN words ek-ek karke padhta hai, current word aur pichhli information (hidden state se) use karke.
+3. **Output layer and prediction:** final hidden state output layer mein jaati hai jo agle word ki probabilities deti hai: pizza 70%, burger 15%, apple 10%, salad 5%. Prediction pizza hai.
+4. **Compare with target:** agar prediction target ke barabar hai to loss chhota hota hai (zero ke paas).
+5. **Wrong prediction:** agar model "apple" predict kare to loss bada hota hai.
+6. **BPTT:** error peeche bheja jaata hai taaki pata chale ki galti mein kis hisse ka haath tha aur weights aur biases ke gradients nikal sakein.
+7. **Update the weights** $(W, U, b, V, c)$ gradients se.
+8. **Try again:** wahi sentence ab pizza 90%, burger 5%, apple 3%, salad 2% deta hai.
 
-**Ye kya hai.** BPTT **unfolded** RNN pe lagaya gaya ordinary backpropagation hai. <Cite id="gfdl-ch10" loc="§10.2.2" />
+<Img id="class-rnn-example-loss" caption="Galat prediction ('apple') se loss bada. BPTT error ko h3, h2, h1 mein peeche bhejta hai." />
 
-**Ye kyun zaroori hai.** Weights time ke across shared hain, aur late step ka loss bahut steps pehle ke inputs pe depend karta hai. Ordinary backpropagation ko bina loop ka graph chahiye, isliye pehle unfold karte hain aur phir time ke along backpropagate karte hain.
+<Img id="class-rnn-example-update" caption="Weights update hone ke baad 'pizza' 90% ho jaata hai." />
 
-**Kaise kaam karta hai, step by step.**
+<Box kind="verify">
 
-1. RNN ko poore sequence pe **unfold** karo.
-2. **Forward pass.** $t = 1$ se $T$ tak, har step ka hidden state, output aur loss nikalo.
-3. **Total loss.** Step losses add karo: $L = L_1 + L_2 + \dots + L_T$.
-4. **Backward pass.** Last step se pehle step tak peeche jao. Har hidden state pe error do jagah se aata hai: uska apna output, **aur** agla hidden state jisme woh feed hua tha.
-5. **Add karo.** Same $U$, $W$, $V$ har copy mein hain, isliye har weight ka gradient saare time steps ke gradients ka **sum** hai.
-6. Har weight ko gradient descent se ek baar **update** karo.
+Dono tables ki probabilities 100% banti hain: $70 + 15 + 10 + 5 = 100$ aur $90 + 5 + 3 + 2 = 100$.
 
-Ek line mein: total loss step losses ka sum hai, isliye shared weight ka gradient har step ke loss ke gradients ka sum hai (jisme se har ek khud pichhle steps tak peeche jaata hai):
-
-$$
-\frac{\partial L}{\partial W} = \sum_{t=1}^{T} \frac{\partial L_t}{\partial W}
-$$
-
-```mermaid
-%% caption: Teen steps pe BPTT. Forward pass left se right jaata hai. Gradient usi chain pe right se left jaata hai, aur W se peeche har arrow use ek aur factor se multiply karta hai.
-flowchart RL
-  L["Total loss L = L1 + L2 + L3"] --> H3(("h3"))
-  H3 -- "× factor" --> H2(("h2"))
-  H2 -- "× factor" --> H1(("h1"))
-  L --> H2
-  L --> H1
-  H1 --> G["U, W, V ke gradients saare steps pe add"]
-  H2 --> G
-  H3 --> G
-```
-
-<Img id="img-dl-n3-rnn-bptt" caption="Backpropagation through time: loss L saare steps ke errors jodta hai, aur har step wahi weights share karta hai, isliye unka gradient saare steps par add hota hai." />
-
-**Important observation.** Step 3 ke loss se step 1 tak pahunchne ke liye gradient step 3, phir step 2 se peeche guzarta hai, aur har step peeche jaane pe woh **ek aur factor se multiply** hota hai (roughly "tanh ka slope times $W$"). $k$ steps peeche jaane ka matlab $k$ factors ka product. Agle section ki jad yahi hai. <Cite id="gfg-bptt" /> <Cite id="mlm-bptt" />
-
-| Advantages of BPTT | Disadvantages of BPTT |
-|---|---|
-| Shared weights ke exact gradients; ordinary backpropagation use karta hai | Har hidden state store karna padta hai, isliye memory sequence length ke saath badhti hai |
-| RNN ko time ke across links seekhne deta hai | Lambe sequences ke liye slow: steps parallel nahi chal sakte |
-| | Lambe products se vanishing ya exploding gradients |
+</Box>
 
 ### Truncated BPTT
 
-**Ye kya hai.** Bahut lambe sequences (jaise 100,000 characters ki book) ke liye BPTT ka sasta version.
+Bahut lambi sequence (maan lo 100 steps) mein normal BPTT error ko poori sequence mein bhejne ki koshish karta hai. Ye computationally expensive, memory intensive aur bahut lambi sequences ke liye mushkil ho sakta hai. <Cite id="class-dl-chp5" loc="slide 22" />
 
-**Kaise kaam karta hai.**
+<Box kind="definition">
 
-1. Sequence ko chunks mein kaato, jaise har ek 50 steps ka.
-2. **Forward** pass abhi bhi hidden state ko ek chunk se agle chunk tak le jaata hai, isliye memory aage behti rehti hai.
-3. **Backward** pass sirf current chunk ke andar peeche jaata hai, phir weights update hote hain.
-
-**Advantages:** fast, bahut kam memory, aur bahut lambe products se bachta hai (isliye kam exploding). **Disadvantage:** network chunk se lambe links directly nahi seekh sakta. <Cite id="nptel-dl" /> <Cite id="d2l-bptt" />
-
-## Vanishing aur exploding gradients
-
-**Ye kya hain.** "Vanilla" (plain) RNN ki main limitation. BPTT ke dauraan early time steps tak bheja gaya gradient ya toh zero ki taraf chhota ho jaata hai (**vanishing gradient**) ya bahut bada ho jaata hai (**exploding gradient**).
-
-**Ye kyun hota hai, words mein.** Ek step peeche jaane pe gradient ek factor se multiply hota hai jo tanh ke slope aur recurrent weights $W$ se bana hai. Bahut steps peeche jaane pe aise bahut factors multiply hote hain. Agar factors usually 1 se chhote hain, toh product bahut tezi se chhota hota hai. Agar 1 se bade hain, toh bahut tezi se badhta hai. <Cite id="gfdl-ch10" loc="§10.7" /> <Cite id="pascanu2013" />
-
-<Box kind="intuition">
-
-Chinese whispers (telephone) ka game: ek message 20 logon se guzarta hai. Agar har insaan jo suna uska sirf aadha aage bataye, toh end tak lagbhag kuch nahi pahunchta. Agar har ek aadha aur badha chadha ke bataye, toh line ke end pe kuch bahut hi blown up sunai deta hai. Time mein peeche jaate gradients bhi aise hi behave karte hain.
+**Truncated BPTT** limits backpropagation to a fixed number of time steps instead of going through the entire sequence. <Cite id="class-dl-chp5" loc="slide 22" />
 
 </Box>
 
-**Worked sum: gradient kitni tezi se chhota ya bada hota hai.**
+<Img id="class-rnn-truncated-bptt" caption="Truncation length 5 ke saath, normal BPTT 100 → 99 → ... → 1 jaata hai, jabki truncated BPTT chhoti windows 1-5, 6-10, 11-15 wagairah mein kaam karta hai." />
+
+## Vanilla RNN ki limitations
+
+Basic (vanilla) RNN sequences ke liye achha kaam karta hai, lekin in cheezon mein struggle kar sakta hai: <Cite id="class-dl-chp5" loc="slide 12" />
+
+1. Long-term dependencies.
+2. Vanishing gradients.
+3. Exploding gradients.
+4. Bahut pehle ke time steps ki information yaad rakhna mushkil.
+5. Sequential processing se training slow ho sakti hai.
+
+<Img id="class-rnn-limitations" caption="Lambi sequence par vanilla RNN ko important purani information yaad rakhna mushkil lag sakta hai, vanishing ya exploding gradients ki wajah se." />
+
+### Long-term dependency problem
+
+<Img id="class-rnn-long-term" caption="'I was born in India' ... kai words baad ... 'I speak Hindi'. Important information (India) prediction (Hindi) se door hai." />
+
+Basic RNN ko important information ko kai time steps tak le jaana mushkil lag sakta hai. Ye **long-term dependency problem** hai. Chhoti sequence mein RNN information aasani se le jaata hai; lambi sequence mein word 1 ki information ko word 50 ke output ko influence karna pad sakta hai. <Cite id="class-dl-chp5" loc="slide 11" /> <Cite id="class-dl-chp5" loc="slide 15" /> <Cite id="class-dl-m5" loc="p. 16" />
+
+### Vanishing aur exploding gradients
+
+BPTT ke dauraan gradient ko kai time steps se guzarna padta hai. Guzarte hue wo bahut chhota ya bahut bada ho sakta hai. <Cite id="class-dl-chp5" loc="slide 10" />
+
+<Img id="class-rnn-bptt-long" caption="50-step sequence mein gradient ko saare 50 steps peeche jaana padta hai, isliye wo vanish ya explode ho sakta hai." />
+
+<Box kind="definition">
+
+**Vanishing gradient:** gradient values bahut chhoti ho jaati hain, isliye model seekhna band kar deta hai ya bahut zyada time leta hai. Gradient time mein peeche jaate hue chhota hota jaata hai, isliye pehle ke time steps ko bahut kam learning signal milta hai. <Cite id="class-dl-m5" loc="p. 14" /> <Cite id="class-dl-chp5" loc="slide 11" />
+
+**Exploding gradient:** gradient bahut bada ho jaata hai. Isse bahut bade weight updates, unstable training aur seekhna mushkil ho jaata hai. <Cite id="class-dl-chp5" loc="slide 11" />
+
+</Box>
+
+<Img id="class-rnn-vanishing" caption="Gradient time mein peeche jaate hue 1, 0.1, 0.01, 0.001, 0.0001 ho jaata hai." />
+
+<Img id="class-rnn-exploding" caption="Gradient 1, 10, 100, 1000, 10000 ho jaata hai. Vanishing matlab too small, exploding matlab too large." />
+
+<Img id="class-rnn-two-gradient-problems" caption="Do gradient problems ki class table, memory trick ke saath." />
+
+<Img id="class-rnn-why-vanish" caption="Aisa kyun hota hai: lambi sequences mein gradients almost zero ho jaate hain, isliye pehle ke time steps ko bahut kam learning signal milta hai, aur RNN ko long-term dependencies seekhna mushkil lagta hai." />
+
+<Img id="class-rnn-gradient-plots" caption="Module 5 ke plots: time mein peeche jaate hue derivative size infinity ki taraf badhta (exploding) ya zero ki taraf ghatta (vanishing) hai." />
+
+**Sum: factor kya karta hai.** Slides ke numbers lo: gradient har step peeche jaate hue same factor se multiply hota hai. <Cite id="class-dl-chp5" loc="slide 11" />
 
 <Sum>
 
 <Given>
 
-har step peeche jaane pe gradient same factor $r$ se multiply hota hai; hum $r = 0.5$ aur $r = 1.5$ dekhenge.
+start gradient 1. Case A: har step par 0.1 se multiply. Case B: har step par 10 se multiply. Time mein chaar step peeche.
 
 </Given>
 
 <Find>
 
-10 steps peeche jaane ke baad gradient kitna badalta hai.
+har step ke baad gradient.
 
 </Find>
 
 <Steps>
 
-1. 10 steps peeche jaana = 10 factors multiply karna, toh change $r^{10}$ hai. *(Har step ka ek factor.)*
-2. $r = 0.5$ ke liye: das baar aadha karo:
-
-   $$
-   \begin{aligned}
-   1 &\to 0.5 \\
-   &\to 0.25 \\
-   &\to 0.125 \\
-   &\to 0.0625 \\
-   &\to 0.03125 \\
-   &\to 0.015625 \\
-   &\to 0.0078 \\
-   &\to 0.0039 \\
-   &\to 0.00195 \\
-   &\to 0.000977
-   \end{aligned}
-   $$
-
-   *(Har step sirf aadha rakhta hai.)*
-3. $r = 1.5$ ke liye: das baar 1.5 se multiply karo:
-
-   $$
-   \begin{aligned}
-   1 &\to 1.5 \\
-   &\to 2.25 \\
-   &\to 3.375 \\
-   &\to 5.06 \\
-   &\to 7.59 \\
-   &\to 11.39 \\
-   &\to 17.09 \\
-   &\to 25.63 \\
-   &\to 38.44 \\
-   &\to 57.67
-   \end{aligned}
-   $$
-
-   *(Har step aadha aur add karta hai.)*
+1. **Case A (factor 1 se kam):** $1 \to 0.1 \to 0.01 \to 0.001 \to 0.0001$. Har step 0.1 se multiply karta hai.
+2. **Case B (factor 1 se zyada):** $1 \to 10 \to 100 \to 1000 \to 10000$. Har step 10 se multiply karta hai.
+3. 4 steps ke baad: $0.1^4 = 0.0001$ aur $10^4 = 10000$.
 
 </Steps>
 
 <Answer>
 
-$0.5^{10} \approx 0.001$ (lagbhag 1000 guna kamzor: vanishing) aur $1.5^{10} \approx 58$ (lagbhag 58 guna bada: exploding).
+Case A vanish hokar 0.0001 ho jaata hai. Case B explode hokar 10,000. Sequence jitni lambi, haalat utni kharab.
 
 </Answer>
 
 <Box kind="verify">
 
-Is baar square karke dekho. $0.5^2 = 0.25$, $0.5^4 = 0.0625$, $0.5^8 = 0.0039$, aur
-
-$$
-\begin{aligned}
-0.5^{10} &= 0.5^8 \times 0.5^2 \\
-&= 0.0039 \times 0.25 \\
-&= 0.000977
-\end{aligned}
-$$
-
-saath hi $2^{10} = 1024$, toh $0.5^{10} = 1/1024$. $1.5^2 = 2.25$, $1.5^4 = 5.0625$, $1.5^8 = 25.63$, aur $1.5^{10} = 25.63 \times 2.25 = 57.67$. Same answers.
+Wapas multiply karo: $0.0001 \times 10 \times 10 \times 10 \times 10 = 1$, yaani start value. Isi tarah $10000 \times 0.1^4 = 1$.
 
 </Box>
 
 </Sum>
 
-| Factor per step | After 10 steps | What happens |
-|---|---|---|
-| 0.5 | $0.5^{10} \approx 0.001$ | **Vanishing:** lagbhag 1000 guna kamzor |
-| 1.5 | $1.5^{10} \approx 58$ | **Exploding:** lagbhag 58 guna bada |
+**Fixes.** **Exploding gradients** ka solution simple hai: gradients ko truncate ya squash karna (class truncated BPTT bhi use karti hai). **Vanishing gradients** ko solve karna bahut mushkil tha; Hochreiter aur Schmidhuber ke **LSTM** ne ye problem solve ki (LSTM and GRU note dekho). <Cite id="class-dl-m5" loc="p. 14" /> <Cite id="class-dl-m5" loc="p. 16" />
 
-**tanh se vanishing kyun likely hai.** tanh ka slope maximum 1 hai (sirf centre pe) aur sigmoid ka maximum 0.25; baaki jagah ye bahut chhote hain, jaisa plot dikhata hai. Isliye, jab tak $W$ bada na ho, har factor usually 1 se chhota hota hai. Khapra ke lectures isko aise kehte hain: agar slope times $W$ ka size 1 se neeche rahe, gradient vanish hota hai; 1 se upar ho to explode kar sakta hai. <Cite id="nptel-dl" />
+```mermaid
+%% caption: Hamein behtar RNN kyun chahiye. Basic RNN lambi sequences mein phansta hai, gradient vanish ya explode hota hai, long-term dependencies kho jaati hain, isliye LSTM aur GRU behtar memory control ke liye gates jodte hain.
+flowchart TD
+  A["Basic RNN"] --> B["Long sequences"]
+  B --> C["Vanishing / exploding gradient"]
+  C --> D["Difficulty with long-term dependencies"]
+  D --> E["Need better memory control"]
+  E --> F["LSTM"]
+  E --> G["GRU"]
+```
 
-<Figure caption="tanh (peak 1) aur sigmoid (peak 0.25) ke slopes. 0 se door dono zero ke kareeb hain. Time mein har step peeche gradient inme se ek slope se multiply hota hai, isliye product usually chhota hota jaata hai.">
-  <CurvePlot curves="tanh-derivative,sigmoid-derivative" x="-5,5" y="0,1.1" xLabel="value inside the activation" yLabel="slope" />
-</Figure>
+## Bidirectional RNN
 
-**Effects.**
+<Box kind="definition">
 
-- **Vanishing gradients:** door ke peeche wale steps ko lagbhag koi learning signal nahi milta, isliye network ki **short memory** hoti hai. "The cat, which ate all the fish on the table, **was** full" mein woh nahi seekh paata ki "was" das words pehle wale "cat" se agree karta hai. Training crash nahi hoti; bas chupchaap long dependencies seekhne mein fail hoti hai.
-- **Exploding gradients:** weight update bahut door jump karta hai, loss bahut upar neeche hota hai, aur numbers overflow hokar "NaN" (not a number) ban sakte hain. Ye notice karna aasaan hai.
-
-**Fixes.**
-
-| Problem | Fix | How it helps |
-|---|---|---|
-| Exploding | **Gradient clipping** | Agar gradient threshold se lamba hai, use threshold tak scale down karo, direction same rakhte hue (jaise $[3, 4]$, length 5, length 1 pe clip karke $[0.6, 0.8]$ banta hai) |
-| Exploding aur cost | **Truncated BPTT** | Har product mein kam factors |
-| Vanishing | **LSTM aur GRU cells** | Gates ek aisa path banate hain jahan memory lagbhag bina badle aage copy hoti hai, isliye gradient har step pe chhota nahi hota |
-| Vanishing | Careful starting weights, ReLU-type activations | Start mein factors ko 1 ke paas rakhte hain |
-
-<Cite id="gfdl-ch10" loc="§10.11.1" /> <Cite id="pytorch-clip-grad-norm" /> <Cite id="gfg-vanishing-exploding-rnn" />
-
-**Worked sum: gradient clipping.**
-
-<Sum>
-
-<Given>
-
-ek gradient $g = [3, 4]$ aur clipping threshold 1.
-
-</Given>
-
-<Find>
-
-clipped gradient.
-
-</Find>
-
-<Steps>
-
-1. Gradient ki length:
-
-   $$
-   \begin{aligned}
-   \sqrt{3^2 + 4^2} &= \sqrt{9 + 16} \\
-   &= \sqrt{25} \\
-   &= 5
-   \end{aligned}
-   $$
-
-   *(Clipping total size dekhta hai.)*
-2. Compare: $5 > 1$, isliye clip karna padega. *(Threshold se neeche hota to waise hi chhod dete.)*
-3. Scale factor:
-
-   $$
-   \begin{aligned}
-   \frac{\text{threshold}}{\text{length}} &= \frac{1}{5} \\
-   &= 0.2
-   \end{aligned}
-   $$
-
-   *(Itna chhota karo ki nayi length threshold ke barabar ho.)*
-4. Har part multiply karo:
-
-   $$
-   [3 \times 0.2, 4 \times 0.2] = [0.6, 0.8]
-   $$
-
-   *(Har part same amount se chhota hota hai, isliye direction same rehti hai.)*
-
-</Steps>
-
-<Answer>
-
-clipped gradient $[0.6, 0.8]$ hai.
-
-</Answer>
-
-<Box kind="verify">
-
-Nayi length:
-
-$$
-\begin{aligned}
-\sqrt{0.6^2 + 0.8^2} &= \sqrt{0.36 + 0.64} \\
-&= \sqrt{1} \\
-&= 1
-\end{aligned}
-$$
-
-exactly threshold. Direction: $3 : 4 = 0.75$ aur $0.6 : 0.8 = 0.75$, same ratio, isliye gradient abhi bhi usi taraf point karta hai.
+**Bidirectional RNN:** sequence ko forward aur backward dono directions mein process karta hai taaki dono taraf ki information use ho sake. Normal RNN mainly past ki information use karta hai. <Cite id="class-dl-chp5" loc="slide 12" />
 
 </Box>
 
-</Sum>
+<Img id="class-rnn-bidirectional" caption="x1 se x4 par forward aur backward pass. 'I went to the bank to deposit money' mein 'bank' samajhne ke liye pehle aur baad ke dono words kaam aate hain." />
 
-<Box kind="pitfall">
+**Ye kaise kaam karta hai.** Hum do alag sequences dekhte hain: ek left se right aur doosri ulti order mein. "I love mango juice" word sequence ke liye forward layer sequence jaisi hai waisi deti hai, aur backward layer "juice mango love I" deti hai. Typically do alag RNNs use hote hain, har direction ke liye ek. Unke hidden states usually concatenate karke ek single hidden state banate hain, aur outputs combined states se bante hain. Final hidden state ek decoder mein jaati hai, jaise fully connected network ke baad softmax. <Cite id="class-dl-m5" loc="p. 32" /> <Cite id="class-dl-m5" loc="p. 33" />
 
-Clipping sirf **exploding** gradients fix karta hai. Woh chhote gradient ko bada nahi kar sakta, isliye **vanishing** gradients ke liye kuch nahi karta. Unke liye LSTM jaise gated cells chahiye (LSTM aur GRU note dekho). <Cite id="hochreiter1997" />
+```mermaid
+%% caption: Bidirectional RNN. Do RNNs same sequence ko ulti directions mein padhte hain aur output layer se pehle unke hidden states jod diye jaate hain.
+flowchart LR
+  S["Sequence: I love mango juice"] --> F["Forward RNN: I → love → mango → juice"]
+  S --> B["Backward RNN: juice → mango → love → I"]
+  F --> J["Concatenate hidden states"]
+  B --> J
+  J --> D["Decoder: fully connected + softmax"]
+  D --> O["Output"]
+```
+
+**BRNN ki limitations.** <Cite id="class-dl-m5" loc="p. 33" />
+
+- Prediction karne se pehle poori sequence available honi chahiye. Real-time speech recognition mein poora utterance available nahi hota.
+- Language model mein jo agla word predict karta hai, BRNN suitable nahi hai kyunki wo future words bhi expect karta hai; accuracy kharab aati hai.
+- BRNN, RNN se slow hai kyunki backward pass shuru hone ke liye forward pass ke results chahiye. Gradients ki dependency chain lambi ho jaati hai.
+
+## Encoder-decoder (sequence to sequence) architecture
+
+<Box kind="definition">
+
+A **sequence to sequence model** aims to map a fixed-length input with a fixed-length output where the length of the input and the output may differ. <Cite id="class-dl-m5" loc="p. 38" />
 
 </Box>
 
-## Simple RNN ke advantages aur disadvantages
+**Example.** "What are you doing today?" ko English se Chinese mein translate karne par input 5 words ka hai aur output 7 symbols ka. Hum regular LSTM network se English sentence ke har word ko Chinese sentence se one-to-one map nahi kar sakte. Uses: machine translation, speech recognition, image captioning. <Cite id="class-dl-m5" loc="p. 38" />
 
-| Advantages | Disadvantages |
+Model ke **3 parts hain: encoder, intermediate (encoder) vector aur decoder.** <Cite id="class-dl-m5" loc="p. 39" />
+
+<Img id="class-rnn-encoder-decoder" caption="Encoder RNN cells x1, x2, x3 padhte hain. Final hidden state encoder vector hai. Decoder RNN cells y1, y2 banate hain." />
+
+1. **Encoder:** kai recurrent units ka stack (behtar performance ke liye LSTM ya GRU cells). Har unit input sequence ka ek element leta hai, us element ki information collect karta hai aur aage bhejta hai. Question-answering problem mein input sequence question ke saare words hain, $x_i$ matlab $i$-th word. Hidden states RNN formula $h_t = f(W_{hh} h_{t-1} + W_{hx} x_t)$ se nikalte hain. <Cite id="class-dl-m5" loc="p. 40" />
+2. **Encoder vector:** encoder ka banaya final hidden state. Ye saare input elements ki information rakhne ki koshish karta hai taaki decoder sahi predictions kar sake. Ye **decoder ka initial hidden state** banta hai. <Cite id="class-dl-m5" loc="p. 41" />
+3. **Decoder:** kai recurrent units ka stack, har ek time step $t$ par ek output $y_t$ predict karta hai. Har unit pichhle unit se hidden state leta hai aur ek output aur apna hidden state banata hai, $h_t = f(W^{(hh)} h_{t-1})$, aur output $y_t = \text{softmax}(W^{S} h_t)$. Question answering mein output sequence answer ke words hain. <Cite id="class-dl-m5" loc="p. 42" />
+
+Model ki taakat ye hai ki wo **alag-alag length ki sequences ko ek doosre se map** kar sakta hai. Inputs aur outputs correlated nahi hote aur unki lengths alag ho sakti hain. <Cite id="class-dl-m5" loc="p. 42" />
+
+```mermaid
+%% caption: Encoder-decoder (sequence to sequence). Encoder input ko ek vector mein squeeze karta hai; decoder us vector ko kisi bhi length ki output sequence mein kholta hai.
+flowchart LR
+  X["Input sequence x1, x2, x3"] --> E["Encoder: RNN / LSTM / GRU cells"]
+  E --> V["Encoder vector (final hidden state)"]
+  V --> D["Decoder: RNN / LSTM / GRU cells"]
+  D --> Y["Output sequence y1, y2, ..."]
+```
+
+<Img id="class-rnn-seq2seq-encoding" caption="Translation: encoder 'Welcome to NYC' ko numbers (har word ka vector) mein badalta hai aur decoder ko deta hai, jo start-of-sequence word se shuru karta hai." />
+
+<Img id="class-rnn-seq2seq-decoding" caption="Decoder 'Bienvenue', phir 'à', phir 'NYC' output karta hai, har predicted word ko agle input ki tarah wapas deta hai." />
+
+### Application: image captioning
+
+**Image captioning** matlab image se textual description banana, image ke objects aur actions ke basis par. Generated output ek sentence mein batata hai ki image mein kya hai. Task do modules mein baanta jaata hai: ek **image-based model (encoder)** jo image ke features nikalta hai, jiske liye hum usually **CNN** use karte hain, aur ek **language-based model (decoder)** jo un features ko natural sentence banata hai, jiske liye hum **RNN** use karte hain. <Cite id="class-dl-m5" loc="p. 45" /> <Cite id="class-dl-m5" loc="p. 46" />
+
+<Img id="class-rnn-image-captioning" caption="Pretrained CNN feature vector deta hai, aur LSTM cells ki chain softmax ke saath caption word-by-word output karti hai, jaise 'Giraffes standing ...'." />
+
+```mermaid
+%% caption: Image captioning do networks ko jodta hai. CNN picture padhta hai; RNN sentence ek-ek word karke likhta hai.
+flowchart LR
+  A["Image"] --> B["CNN (encoder): extracts features"]
+  B --> C["Feature vector"]
+  C --> D["RNN / LSTM (decoder)"]
+  D --> E["Caption: word 1, word 2, ..."]
+```
+
+## Recursive neural networks
+
+**Recursive neural networks (RvNNs)** RNNs ko generalize karte hain. Apni **tree structure** ki wajah se wo hierarchical models seekh sakte hain, jabki RNN sirf sequential data handle karta hai. Tree mein har node ke children ki sankhya fixed hoti hai taaki recursive operations ho sakein aur steps mein same weights use ho. Child representations ko parent representations mein combine kiya jaata hai. NLP mein ek main use sentences ka syntactic parsing hai: noun ya verb phrases jaise chhote components pehchaano aur unhe hierarchy mein organize karo. <Cite id="class-dl-m5" loc="p. 34" /> <Cite id="class-dl-m5" loc="p. 36" />
+
+<Img id="class-rnn-recursive-tree" caption="'Programming is a lot of fun' ka syntax tree: aisi tree structure jis par recursive network kaam karta hai." />
+
+| Recurrent network | Recursive network |
 |---|---|
-| Kisi bhi length ke sequences handle karta hai | Long-range dependencies mein struggle karta hai (vanishing gradients) |
-| Har step pe same weights: kam parameters | Exploding gradients training ko unstable bana sakte hain |
-| Past ki memory rakhta hai | Steps ek ke baad ek process karne padte hain, isliye lambe sequences pe train karna slow hai |
-| One-to-many, many-to-one aur many-to-many tasks ke liye ek model | Plain RNN future nahi dekh sakta (bidirectional RNN dekh sakta hai) |
+| Chain structure, temporal sequences represent karta hai | Tree structure, hierarchical data represent karta hai |
+| Chain ki length mein weights shared | Tree ke har step par same weights, har node ke fixed children |
+| Sequential data jaise sentences ke liye | Hierarchical data ke liye, jaise sentence parsing |
 
-## RNN versus feedforward network
+<Cite id="class-dl-m5" loc="p. 37" />
 
-| Point | Feedforward network | RNN |
-|---|---|---|
-| Memory | Nahi | Hidden state steps ke across carry hota hai |
-| Input size | Fixed | Koi bhi length |
-| Weights | Har input position ke liye alag | Time steps ke across shared |
-| Data | Independent items (ek image) | Ordered, dependent items (ek sentence) |
-| Training | Backpropagation | Backpropagation through time |
+## RNN ki applications
 
-**RNNs ke applications:** next-word prediction aur text generation, speech recognition, machine translation, sentiment analysis, time-series forecasting (weather, stock prices), music generation. <Cite id="gfg-rnn" /> <Cite id="ibm-rnn" /> <Cite id="d2l-rnn" />
+RNNs sequence data wali problems solve karte hain: audio, text, video aur biological sequences. Jab order aur pichhli information matter karti hai tab ye kaam aate hain. <Cite id="class-dl-m5" loc="p. 15" /> <Cite id="class-dl-chp5" loc="slide 13" />
 
-## Simple RNN versus LSTM, long-term dependencies pe
+<Img id="class-rnn-applications" caption="Text aur sentiment analysis, next-word prediction, text generation, speech recognition, time-series prediction aur music generation." />
 
-| Point | Simple RNN | LSTM |
-|---|---|---|
-| Memory | Ek hidden state, har step pe poora rewrite hota hai | Alag cell state plus gates jo decide karte hain kya rakhna, add karna aur dikhana hai |
-| Bahut steps pe gradient | Har step pe ek factor se multiply, isliye usually vanish hota hai | Cell state zyaadatar addition se aage jaata hai, isliye gradient bahut der tak bachta hai |
-| Useful memory span | Short: bahut steps door ke links seekhna mushkil | Long: original paper ne test tasks mein 1000 se zyada steps ke gaps bridge kiye |
-| Parameters aur speed | Kam, har step fast | Same size ke simple RNN se lagbhag chaar guna weights, slow |
-| Good for | Chhote sequences, simple patterns | Lambe sentences, translation, speech, lambi time series |
+- **Speech recognition**, **generation of music**, **automated translations**, **analysis of video action**, **sequence study of the genome and DNA**. <Cite id="class-dl-m5" loc="p. 15" />
+- **Sentiment analysis** ("The movie was amazing" ka result Positive), **next-word prediction** ("I am going to ___" ka "school"), **text generation** ("Once upon a time..." se ek-ek word), **temperature prediction** (30, 31, 32, 33 degrees se Friday ke liye 34). <Cite id="class-dl-chp5" loc="slide 13" />
+- CNN ke saath milkar RNN un images ke labels (captions) banate hain jinhe tag nahi kiya gaya. <Cite id="class-dl-m5" loc="p. 16" />
 
-Gates ki details LSTM aur GRU note mein hain. <Cite id="hochreiter1997" /> <Cite id="gfdl-ch10" loc="§10.10" />
-
-**Conclusion.** RNN har step pe shared weights ke saath apna hidden state wapas feed karke neural network ko memory deta hai, jo kisi bhi length ke ordered data ke liye fit hai; iski kamzori vanishing gradients se aane wali short memory hai, jise fix karne ke liye LSTM aur GRU cells bane.
-
-Exam mein English mein likho: "An RNN gives a network memory by feeding back its hidden state with shared weights; its main limitation is the vanishing gradient, which LSTM and GRU fix."
-
-<Box kind="exam">
-
-"Explain RNN architecture" ke liye folded aur unfolded dono diagram draw karo, hidden state ko memory ki tarah explain karo, words mein bolne ke baad $h_t = \tanh(W h_{t-1} + U x_t + b)$ aur $\hat{y}_t = \text{softmax}(V h_t + c)$ likho, "the same weights are shared across time" likho, types examples ke saath list karo, aur BPTT aur vanishing-gradient limitation ek ek line mein mention karo.
-
-</Box>
+Sabmein common baat: **data sequence mein aata hai, aur pichhli information current ya future information ko samajhne ya predict karne mein madad karti hai.** <Cite id="class-dl-chp5" loc="slide 13" />
 
 ## Ye kahan puchha gaya
 
 | If the question says | What to write | Seen as |
 |---|---|---|
-| "Describe sequence learning problem" | Definition, teen properties (dependent inputs, variable length, har step same task), kinds ki table examples ke saath, RNN kyun fit hai | <PYQ id="2023-12/q1e" /> |
-| "Explain RNN architecture in detail" ya "working of RNN with a diagram" | Folded aur unfolded diagram, step-by-step working, do equations, parameter sharing, types, BPTT, advantages aur limitations | <PYQ id="2023-12/q4a" /> <PYQ id="2025-05/q4a" /> |
-| "Key components of an RNN" | Components table, equations, unfolding, time pe summed loss | <PYQ id="2024-12/q4a" /> |
-| "Vanishing and exploding gradient in RNNs" | BPTT factors kyun multiply karta hai, $0.5^{10}$ aur $1.5^{10}$ numbers, tanh slope plot, effects, fixes (clipping, truncation, LSTM/GRU) | <PYQ id="2023-12/q6b" /> |
-| "LSTM, how it overcomes the limitation of RNN" | Pehle RNN ki limitation (vanishing gradient), phir LSTM cell (LSTM aur GRU note dekho) | <PYQ id="2024-05/q4a" /> |
-| "How RNNs suit sequential data; RNN vs LSTM on long-term dependencies; real application" | Memory aur sharing, RNN vs LSTM table, machine translation jaisa ek application | <PYQ id="2025-05/q4b" /> |
+| "Describe sequence learning problem" ya "sequence modelling" | Sequence ki definition, problem sentence, examples ki table, normal network kyun fail hota hai, kaun se networks use hote hain | <PYQ id="2023-12/q1e" /> <PYQ id="assignment-2/q5a" /> |
+| "Explain RNN architecture / working of RNN with a diagram" | Hidden state, cell, unfolded diagram, equations, shared weights, types, BPTT | <PYQ id="2023-12/q4a" /> <PYQ id="2025-05/q4a" /> <PYQ id="2024-12/q4a" /> |
+| "Vanishing and exploding gradient in RNNs" | BPTT har step par gradient ko multiply karta hai: bahut chhota ya bahut bada, effects, fixes | <PYQ id="2023-12/q6b" /> |
+| "Encoder-decoder / bidirectional RNN" | seq2seq ke teen parts, ya ulti directions mein do RNNs, limits | <PYQ id="assignment-2/q5d" /> |
+| "RNN suited for sequential data; RNN vs LSTM" | Memory aur shared weights, phir long-term dependency problem | <PYQ id="2025-05/q4b" /> <PYQ id="2024-05/q4a" /> |
 
 ## Quick revision
 
-- Sequence problems: inputs ek doosre pe depend karte hain, length badalti hai, har step pe same task.
-- Kinds: one-to-many (captioning), many-to-one (sentiment), many-to-many (translation, tagging).
-- RNN: hidden state = memory; $h_t = \tanh(W h_{t-1} + U x_t + b)$, $\hat{y}_t = \text{softmax}(V h_t + c)$; har step pe same $U, W, V$.
-- Unfolding loop ko shared weights wali copies ki chain bana deta hai, taaki backpropagation chal sake.
-- Bidirectional RNN: forward RNN plus backward RNN; output dono ko jodta hai; poora sequence chahiye.
-- BPTT: unfolded chain pe backprop; shared weights ke gradients time pe sum hote hain. Truncated BPTT sirf chunks ke andar backpropagate karta hai.
-- Har step peeche gradient ek factor se multiply hota hai: 1 se neeche vanish ($0.5^{10} \approx 0.001$), 1 se upar explode ($1.5^{10} \approx 58$).
-- Clipping exploding gradients fix karta hai; LSTM aur GRU vanishing gradients fix karte hain.
+- Sequence: order matter karta hai. Sequence learning problem: jab order aur pichhli information matter kare tab seekhna.
+- RNN: hidden state memory carry karta hai. Current input + previous hidden state → new hidden state. Har step par same weights.
+- Unfolding: same RNN cell har time step par dikhaya gaya. BPTT: time mein aage, phir time mein peeche.
+- Types: one to one, one to many (captioning, music), many to one (sentiment), many to many (translation).
+- Vanishing gradient = too small (seekhna ruk jaata hai). Exploding gradient = too large (unstable). Vanilla RNN long-term dependencies nahi rakh paata. Fix: LSTM aur GRU; truncated BPTT; gradient clipping.
+- Bidirectional RNN: forward aur backward RNNs, hidden states joined. Poori sequence chahiye.
+- Encoder-decoder: encoder, encoder vector, decoder. Input aur output ki lengths alag ho sakti hain.
+- Recurrent = chain (sequences); recursive = tree (hierarchies).

@@ -1,59 +1,35 @@
 ---
-references: [hochreiter1997, gers2000, gfdl-ch10, d2l-lstm, colah-lstm, gfg-lstm]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** an LSTM (Long Short-Term Memory) is an improved RNN cell that can remember information for many time steps. It keeps a separate long-term memory, the cell state, and uses three gates (numbers between 0 and 1) to decide what to forget, what new information to write in, and what to output.
+**In simple words:** an LSTM is an RNN cell with a long-term memory (the cell state) and three gates that decide what to forget, what to store and what to show.
 
-**Why it is needed.** A plain RNN rewrites its whole memory at each step, so its gradients vanish and it forgets long-ago inputs. The LSTM (Hochreiter and Schmidhuber, 1997; forget gate added in 2000) keeps memory by copying and adding instead. <Cite id="hochreiter1997" /> <Cite id="gers2000" />
+**Definition:** LSTM is a special kind of recurrent neural network capable of handling long-term dependencies. It is an advanced RNN that allows information to persist and can handle the vanishing gradient problem of the RNN. <Cite id="class-dl-m5" loc="p. 18" />
 
-**Analogy.** A student keeping notes on a small whiteboard: erase what is not needed (**selective forget**), write down the important new points (**selective write**), and read out only the relevant part when asked (**selective read**).
+**Why needed:** a plain RNN cannot remember long-term dependencies because of the vanishing gradient; "I grew up in India ... I speak Hindi" needs "India" to survive many steps. LSTMs are designed to avoid this. <Cite id="class-dl-m5" loc="p. 18" />
 
-**Components**
+<Img id="class-lstm-gru-lstm-cell-equations" caption="The LSTM cell of Module 5: the cell state runs along the top; the forget, input and output gates control it; the gate equations are on the right." />
 
-- **Cell state** $c_t$: the long-term memory line. **Hidden state** $h_t$: the output at this step.
-- **Forget gate** $f_t$: how much old memory to keep.
-- **Input gate** $i_t$: how much of the new candidate $\tilde{c}_t$ (values $-1$ to $1$) to add.
-- **Output gate** $o_t$: how much memory to show as $h_t$.
+**Architecture.** There are two states: the **hidden state** (short-term memory, $H_{t-1}$, $H_t$) and the **cell state** (long-term memory, $C_{t-1}$, $C_t$). Three gates (sigmoid, values 0 to 1): <Cite id="class-dl-m5" loc="p. 20" /> <Cite id="class-dl-m5" loc="p. 21" />
 
-**How it works, step by step**
+1. **Forget gate** $f_t = \sigma(x_t U_f + H_{t-1} W_f)$: removes information no longer useful.
+2. **Input gate** $i_t = \sigma(x_t U_i + H_{t-1} W_i)$ with new information $N_t = \tanh(x_t U_c + H_{t-1} W_c)$: adds useful new information.
+3. **Output gate** $o_t = \sigma(x_t U_o + H_{t-1} W_o)$: decides what is shown as output.
 
-1. Join the previous hidden state $h_{t-1}$ and the input $x_t$; each gate is a sigmoid layer on this.
-2. Forget: multiply the old cell state by $f_t$.
-3. Write: add $i_t$ times the candidate. This gives the new cell state.
-4. Read: $h_t$ is $o_t$ times tanh of the new cell state.
-
-**The memory update.** Each gate is a sigmoid layer with learned weights and biases, so its output is between 0 and 1 <Cite id="gfdl-ch10" loc="§10.10.1" /> <Cite id="d2l-lstm" />. Two lines carry the whole idea. Here $\odot$ means multiplying matching numbers one by one:
-
-$$
-c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t, \qquad h_t = o_t \odot \tanh(c_t)
-$$
+Cell state: $C_t = f_t C_{t-1} + i_t N_t$. Hidden state: $H_t = o_t \tanh(C_t)$. Softmax on $H_t$ gives the prediction. <Cite id="class-dl-m5" loc="p. 24" /> <Cite id="class-dl-m5" loc="p. 25" />
 
 ```mermaid
-%% caption: LSTM cell. The cell state c is only multiplied by the forget gate and added to, so it can carry information far.
-flowchart LR
-  IN["h(t-1), x(t)"] --> F["Forget gate f"]
-  IN --> I["Input gate i"]
-  IN --> CC["Candidate c̃"]
-  IN --> O["Output gate o"]
-  C0["c(t-1)"] --> M1["f × c(t-1)"]
-  F --> M1
-  I --> M2["i × c̃"]
-  CC --> M2
-  M1 --> ADD["+ : c(t)"]
-  M2 --> ADD
-  ADD --> T["tanh(c(t))"]
-  T --> M3["o × tanh : h(t)"]
-  O --> M3
+%% caption: One LSTM step as four questions: forget, add, remember, output.
+flowchart TD
+  A["Previous cell state C_(t-1)"] --> B["Forget gate: what to forget"]
+  B --> C["Input gate: what to add"]
+  C --> D["New cell state C_t"]
+  D --> E["Output gate: what to output"]
+  E --> F["Hidden state H_t"]
 ```
 
-<Img id="img-dl-n3-lstm-cell" caption="The cell state runs along the top and is changed only by the forget gate (multiply) and the input gate (add); the output gate shapes h(t)." />
+**Example:** $f_t = 0.2$, $C_{t-1} = 10$, $i_t = 0.8$, $N_t = 5$ give $C_t = 2 + 4 = 6$. <Cite id="class-dl-chp5" loc="slide 17" />
 
-**Why it works.** Along the cell state the gradient is multiplied only by the forget gate at each step. When it stays near 1 the gradient does not vanish, so the LSTM learns long-range links. <Cite id="colah-lstm" />
+**Advantages:** handles long-term dependencies and vanishing gradients; trained by BPTT. **Applications:** Siri, Google voice search, time series, text classification. <Cite id="class-dl-m5" loc="p. 31" />
 
-**Advantages:** long-term memory, greatly reduced vanishing gradients, fine control through separate gates.
-
-**Disadvantages:** about 4 times the parameters of a plain RNN, slower, and exploding gradients still need clipping.
-
-**Applications:** machine translation, speech recognition, handwriting recognition, time-series forecasting. <Cite id="gfg-lstm" />
-
-**Conclusion:** the LSTM uses a cell state with forget, input and output gates to remember long-term information.
+**Conclusion:** the cell state carries long-term memory; the gates control what enters, stays and leaves.

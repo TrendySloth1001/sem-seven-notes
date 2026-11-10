@@ -1,514 +1,426 @@
 ---
 title: "LSTM and GRU"
 module: 5
-summary: "Two improved recurrent cells that can remember information for a long time. They use small gates, each a number between 0 and 1, to decide what to forget, what to read in and what to write out, which also greatly reduces the vanishing-gradient problem of a plain RNN."
+summary: "The two gated recurrent cells of the class. LSTM keeps a long-term memory (the cell state) and uses a forget gate, an input gate and an output gate to decide what to throw away, what to store and what to show. GRU is the simpler cell with only a reset gate and an update gate. Both fix the long-term memory problem of the plain RNN. Includes the teacher's numerical examples and the LSTM versus GRU comparison."
 keyIdeas:
-  - "A plain RNN forgets long-ago inputs because its gradients vanish. LSTM and GRU add gates to control the memory."
-  - "A gate is a sigmoid output between 0 and 1 that is multiplied with a vector: 0 blocks everything, 1 lets everything through."
-  - "LSTM keeps a separate cell state (long-term memory) and uses three gates: forget, input and output (selective forget, read and write)."
-  - "The cell state is updated by keeping part of the old memory and adding new information, never by rewriting it, so the gradient can flow back through many steps without shrinking much."
-  - "GRU is a simpler version with two gates (update and reset), no separate cell state and about a quarter fewer weights than an LSTM of the same size."
-  - "Neither always wins: they perform similarly on many tasks. GRU is faster; LSTM is the safer choice for very long dependencies."
+  - "LSTM is a special kind of recurrent neural network capable of handling long-term dependencies. LSTM uses gates to control the flow of information."
+  - "LSTM has a hidden state (short-term memory) and a cell state (long-term memory). The cell state carries the information along all the time steps."
+  - "Forget gate removes information that is no longer useful, input gate adds useful new information, output gate decides what part of the memory is given as the output. Gate values are between 0 and 1 (sigmoid)."
+  - "Cell state update: C_t = f_t × C_(t-1) + i_t × N_t. Hidden state: H_t = o_t × tanh(C_t)."
+  - "GRU has no separate cell state and only two gates: the reset gate (how much past to use) and the update gate (how much old and new information to keep)."
+  - "LSTM: 3 gates, more parameters, more powerful. GRU: 2 gates, fewer parameters, simpler, so bigger models can be built."
 references:
-  - gfdl-ch10
-  - hochreiter1997
-  - gers2000
-  - cho2014
-  - chung2014
-  - pascanu2013
-  - sutskever2014
-  - graves2013
-  - nptel-dl
-  - colah-lstm
-  - d2l-lstm
-  - d2l-gru
-  - gfg-lstm
-  - gfg-lstm-networks
-  - gfg-gru
-  - gfg-rnn-lstm-gru
-  - keras-lstm
-  - keras-gru
-  - pytorch-lstm
-  - pytorch-gru
-  - wiki-lstm
-  - wiki-gru
-  - wiki-vanishing-gradient-rnn
-  - ibm-lstm
-  - mlm-lstm
-  - av-lstm
-  - av-lstm-gru
+  - class-dl-chp5
+  - class-dl-m5
+  - class-dl-qb2
 ---
 
 Before the new ideas, here are the old ones you need. If you already know them, skip to the next section.
 
 ## The basics first
 
-- A **recurrent neural network (RNN)** reads a sequence one step at a time and keeps a memory vector called the **hidden state** $h_t$. At every step a plain RNN mixes the old memory with the new input, squashes the result through tanh, and **overwrites** the memory with it, using the same weights at every step.
-- The **sigmoid** $\sigma$ squashes any number into the range $0$ to $1$. The **tanh** squashes any number into $-1$ to $1$.
-- The next two symbols appear only in the equations, which you write when a question asks for the architecture. $\odot$ means **element-wise multiplication**: first number times first number, second times second, and so on. For example $[0.5, 1] \odot [4, 6] = [2, 6]$.
-- $[h_{t-1}, x_t]$ means the two vectors **joined end to end** into one longer vector.
-- An RNN is trained with **backpropagation through time (BPTT)**. Going back one step multiplies the gradient by a factor, usually below 1, so after many steps the gradient **vanishes** and the RNN cannot learn links between far-apart words. This is the problem LSTM and GRU solve. This topic is syllabus <Syl m="5" />.
+- An **RNN** reads a sequence one step at a time. At every step it takes the current input and the previous **hidden state** and gives a new hidden state (see the RNN note). <Cite id="class-dl-chp5" loc="slide 7" />
+- **BPTT** (backpropagation through time) sends the error backward through all the time steps to update the weights. <Cite id="class-dl-chp5" loc="slide 10" />
+- In a long sequence the gradient may become too small (**vanishing gradient**) or too large (**exploding gradient**). <Cite id="class-dl-chp5" loc="slide 11" />
+- **Sigmoid** squeezes any number into a value between 0 and 1. **tanh** squeezes it between −1 and 1. <Cite id="class-dl-m5" loc="p. 13" />
+- A **gate** here is just a number between 0 and 1 that is multiplied with some information. 0 closes the gate (nothing passes), 1 opens it fully (everything passes).
 
-## Why a plain RNN forgets
+## Why a plain RNN is not enough
 
-Read: "I grew up in **France** ... (30 more words) ... so I speak fluent **French**." To predict "French", the network must keep "France" for 30 steps. In a plain RNN the whole hidden state is squashed and rewritten at every step, and during training the gradient from step 30 back to step 1 is multiplied by about 30 small factors. It vanishes, so the network never learns that link. <Cite id="gfdl-ch10" loc="§10.7" />
+A basic RNN may struggle to retain information over very long sequences. In "I was born in India ... many words later ... I speak Hindi", the word "India" has to reach the prediction "Hindi" across many time steps. During BPTT the gradient becomes almost zero over that distance, so earlier time steps receive very little learning signal. This is the **long-term dependency problem.** <Cite id="class-dl-chp5" loc="slide 15" /> <Cite id="class-dl-m5" loc="p. 16" />
 
-**The fix, in one line:** instead of rewriting the memory at every step, let the network decide, with small switches called **gates**, what to keep, what to add and what to show. Keeping is done by **copying** the old memory forward, which does not shrink the gradient.
+<Img id="class-lstm-gru-why-lstm" caption="Basic RNN, long sequences, vanishing or exploding gradient, difficulty with long-term dependencies, so we need better memory control: what if the network could decide what to keep and what to forget?" />
 
-## What a gate is
-
-<Box kind="definition">
-
-A **gate** is a vector of numbers between 0 and 1, made by a sigmoid layer from the current input and the previous hidden state. It is multiplied element-wise with another vector to decide how much of each number passes through: 0 means "block completely", 1 means "let through completely", and 0.3 means "let 30% through".
-
-</Box>
-
-**Tiny example.** A memory vector $[5, -2, 8]$ passed through the gate $[1, 0, 0.5]$ becomes $[5, 0, 4]$: the first number is kept, the second erased, the third halved.
-
-A gate is like a **water tap** that can be anywhere from fully closed to fully open. Because the sigmoid is smooth, the network can learn how far to open each tap with ordinary gradient descent. Gates use the sigmoid (a 0 to 1 dial); the new memory content uses tanh (values $-1$ to $1$, so it can push memory up or down).
-
-<Figure caption="Gates use the sigmoid (output between 0 and 1, so it works as a how-much-to-let-through dial). The new candidate memory uses tanh (output between -1 and 1, so it can push memory values up or down).">
-  <CurvePlot curves="sigmoid,tanh" x="-6,6" y="-1.2,1.2" xLabel="input to the layer" yLabel="output" />
-</Figure>
+```mermaid
+%% caption: From the RNN problem to the two solutions of the class. Both LSTM and GRU add gates for better control of memory.
+flowchart TD
+  A["Basic RNN"] --> B["Long-term dependency problem"]
+  B --> C["Better architectures"]
+  C --> D["LSTM (3 gates)"]
+  C --> E["GRU (2 gates)"]
+```
 
 ## LSTM: Long Short-Term Memory
 
-**What it is.** An LSTM is an RNN cell with a separate long-term memory, the **cell state** $c_t$, and three gates that control it. It was proposed by Hochreiter and Schmidhuber in 1997; the forget gate was added by Gers, Schmidhuber and Cummins in 2000, and that version is the one used today. <Cite id="hochreiter1997" /> <Cite id="gers2000" />
+<Box kind="definition">
 
-**Why it is needed.** To remember information over long gaps, which a plain RNN cannot do because of vanishing gradients.
+**LSTM** is a special kind of recurrent neural network capable of handling long-term dependencies. Long Short Term Memory Network is an advanced RNN, a sequential network, that allows information to persist. It is capable of handling the vanishing gradient problem faced by RNN. <Cite id="class-dl-m5" loc="p. 18" />
 
-**The analogy.** A student writing notes on a small whiteboard during a long lecture. The board has limited space, so at each moment the student
+**Key idea:** LSTM uses **gates** to control the flow of information. <Cite id="class-dl-chp5" loc="slide 11" />
 
-1. **erases** what is no longer needed (**selective forget**),
-2. **writes down** only the important parts of what was just said (**selective read** of the new input),
-3. when asked a question, **says out** only the part of the board that is relevant (**selective write** to the output).
+</Box>
 
-The whiteboard is the **cell state** $c_t$, the long-term memory that runs along the whole sequence. The **hidden state** $h_t$ is the short-term, "what I am saying right now" output. This three-part picture is the usual way to teach LSTM gates. <Cite id="nptel-dl" />
+<Img id="class-lstm-gru-lstm-idea" caption="LSTM is an improved type of RNN for long-term dependencies. Key idea: it uses gates to control the flow of information." />
 
-### The parts of an LSTM cell
+**Everyday analogy.** While watching a video you remember the previous scene, and while reading a book you know what happened in the earlier chapter. The RNN also remembers previous information, but it cannot remember long-term dependencies because of the vanishing gradient. LSTMs are explicitly designed to avoid the long-term dependency problem. <Cite id="class-dl-m5" loc="p. 18" />
 
-At each time step the cell takes in the input $x_t$, the previous hidden state $h_{t-1}$ and the previous cell state $c_{t-1}$, and produces $h_t$ and $c_t$.
+### Why does an LSTM need gates?
 
-| Part | Plain words | Operation |
-|---|---|---|
-| Forget gate $f_t$ | For each memory number, how much of the old memory to keep (1 keep, 0 erase) | Selective forget |
-| Input gate $i_t$ | How much of the new candidate to write into memory | Selective read |
-| Candidate $\tilde{c}_t$ | The new information that could be added, between $-1$ and $1$ | New content |
-| Cell state $c_t$ | Keep part of the old memory, add part of the new | Long-term memory |
-| Output gate $o_t$ | How much of the memory to show as output | Selective write |
-| Hidden state $h_t$ | The output at this step, also passed to the next step | Short-term output |
+An RNN receives new information at every time step, but not all information is important. In "I live in Mumbai. I love pizza. I am studying Computer Engineering." the LSTM has to decide: what information should I keep, what should I forget, what new information should I add, and what information should I output? **Gates control the flow of information in an LSTM.** <Cite id="class-dl-chp5" loc="slide 16" />
 
-<Img id="img-dl-n3-lstm-cell" caption="One LSTM cell. The cell state runs along the top like a conveyor belt; three sigmoid gates (forget, input, output) decide how much to remove, add and show." />
+<Img id="class-lstm-gru-why-gates" caption="Old information goes through a gate (keep or forget), new information goes through a gate, and then the memory is updated." />
 
-### How an LSTM step works
+### The architecture: three parts and two states
 
-1. **Look.** Join the previous hidden state and the current input.
-2. **Selective forget.** The forget gate looks at them and decides, for each memory number, how much to keep. In words: forget gate = sigmoid of (weights times the joined vector, plus a bias).
-3. **Selective read.** The input gate decides how much new information to let in, and a tanh layer proposes the candidate new information.
-4. **Update the memory.** New cell state = (forget gate times old cell state) **plus** (input gate times candidate). Old memory is kept by multiplying and adding, never squashed.
-5. **Selective write.** The output gate decides how much of the memory to show. New hidden state = output gate times tanh of the new cell state.
-6. Pass $c_t$ and $h_t$ to the next step and repeat with the same weights.
+At a high level an LSTM works very much like an RNN cell. It has three parts, and each part performs an individual function. The three parts are called **gates**: <Cite id="class-dl-m5" loc="p. 20" />
+
+1. **Forget gate:** chooses whether the information coming from the previous time step is to be remembered or is irrelevant and can be forgotten.
+2. **Input gate:** the cell tries to learn new information from the input to this cell.
+3. **Output gate:** the cell passes the updated information from the current time step to the next time step.
+
+The class syllabus lists the same three jobs as **selective forget** (forget gate), **selective write** (input gate) and **selective read** (output gate). <Cite id="class-dl-chp5" loc="slide 2" />
+
+<Img id="class-lstm-gru-lstm-three-parts" caption="An LSTM block with three parts: forget irrelevant information from the long-term memory, add or update new information, pass the updated information on." />
+
+Just like a simple RNN, an LSTM has a hidden state, $H_{t-1}$ for the previous time step and $H_t$ for the current one. In addition it has a **cell state**, $C_{t-1}$ and $C_t$. **The hidden state is known as short-term memory and the cell state is known as long-term memory.** The cell state carries the information along all the time steps. <Cite id="class-dl-m5" loc="p. 21" />
+
+<Img id="class-lstm-gru-cell-vs-hidden" caption="Cell state = long-term memory (carries important information through the sequence). Hidden state = current or short-term information (used to produce the current output)." />
+
+<Img id="class-lstm-gru-cell-big-picture" caption="At every time step the LSTM receives the previous hidden state, the current input and the previous cell state, and produces a new cell state and a new hidden state." />
+
+<Img id="class-lstm-gru-rnn-vs-lstm-unit" caption="The inside of a basic RNN unit (one layer) next to an LSTM unit (input gate, input modulation gate, forget gate, output gate, and the cell state c passing through)." />
+
+<Img id="class-lstm-gru-lstm-cell-equations" caption="The LSTM cell of Module 5. The top line is the cell state: the forget gate multiplies it, the input gate times the candidate is added to it. The output gate times tanh of the cell state gives the new hidden state. The four gate equations are on the right." />
+
+### Forget gate: what should we forget?
+
+In a cell of the LSTM network, the first step is to decide whether we should keep the information from the previous time step or forget it. A **sigmoid** is applied, so $f_t$ is a number between 0 and 1. <Cite id="class-dl-m5" loc="p. 22" />
+
+$$
+f_t = \sigma(x_t U_f + H_{t-1} W_f)
+$$
+
+$x_t$ is the input at the current time step, $U_f$ the weight associated with the input, $H_{t-1}$ the hidden state of the previous time step and $W_f$ the weight matrix associated with the hidden state. If $f_t = 0$ then $C_{t-1} \times f_t = 0$ (forget everything). If $f_t = 1$ then $C_{t-1} \times f_t = C_{t-1}$ (forget nothing). <Cite id="class-dl-m5" loc="p. 22" />
+
+<Img id="class-lstm-gru-forget-gate" caption="Old memory 'I live in Mumbai', new sentence 'I moved to Pune'. The forget gate output near 0.1 means mostly forget, near 0.9 means mostly keep." />
+
+### Input gate and new information: what should we store?
+
+The input gate quantifies the importance of the new information carried by the input. $i_t = \sigma(x_t U_i + H_{t-1} W_i)$. <Cite id="class-dl-m5" loc="p. 23" />
+
+The new information that may be passed to the cell state is a function of the previous hidden state and the current input, with **tanh** as the activation, so its value is between −1 and 1. If $N_t$ is negative the information is subtracted from the cell state, and if it is positive the information is added. <Cite id="class-dl-m5" loc="p. 23" />
+
+$$
+N_t = \tanh(x_t U_c + H_{t-1} W_c)
+$$
+
+<Img id="class-lstm-gru-input-gate" caption="The input gate looks at the current input, selects the important information and adds it to memory. It uses values between 0 and 1 to control how much is stored." />
+
+### Updating the cell state
+
+$N_t$ is not added directly. It is first multiplied by the input gate, and the old cell state is multiplied by the forget gate: <Cite id="class-dl-m5" loc="p. 24" />
+
+<Box kind="key">
+
+$$
+C_t = f_t \times C_{t-1} + i_t \times N_t
+$$
+
+$C_{t-1}$ is the cell state of the previous time step. **New cell state = (what we keep of the old) + (what we add of the new).** <Cite id="class-dl-m5" loc="p. 24" />
+
+</Box>
+
+<Img id="class-lstm-gru-update-cell" caption="Two decisions: forget what is no longer useful and add important new information. Old memory 'I live in Mumbai' becomes 'I live in Pune'." />
+
+<Img id="class-lstm-gru-cell-update" caption="Cell state = old useful information + new useful information." />
+
+### Output gate: what should we output?
+
+The output gate decides what information of the updated memory is given as the current output. Its value is also between 0 and 1 because of the sigmoid. The current hidden state is the output gate value times tanh of the updated cell state: <Cite id="class-dl-m5" loc="p. 24" />
+
+$$
+o_t = \sigma(x_t U_o + H_{t-1} W_o), \qquad H_t = o_t \times \tanh(C_t)
+$$
+
+So the hidden state is a function of the long-term memory $C_t$ and the current output. If we need the output of the current time step, we apply **softmax** on $H_t$; the token with the maximum score is the prediction. <Cite id="class-dl-m5" loc="p. 25" />
+
+<Img id="class-lstm-gru-output-gate" caption="The cell may remember many things, but for the current prediction it may only need 'Pune'. The output gate decides what becomes the hidden state or output." />
+
+<Img id="class-lstm-gru-output-flow" caption="New cell state, output gate (select relevant information), new hidden state, output." />
+
+### The whole LSTM step
+
+<Img id="class-lstm-gru-how-lstm-works" caption="Previous cell state, forget gate, input gate, updated cell state, output gate, hidden state, output. The four questions: what to forget, add, remember, output." />
+
+<Img id="class-lstm-gru-info-flow" caption="Current input, previous hidden state and previous cell state go into the LSTM cell. Out come the new cell state C t and the new hidden state h t." />
 
 ```mermaid
-%% caption: One LSTM cell at time t. The path old cell state, × f, +, new cell state is the cell state, the long-term memory: it is only multiplied by the forget gate and added to, never squashed. The three gates are sigmoid dials between 0 and 1.
+%% caption: One LSTM time step. The previous cell state is cut down by the forget gate, the input gate adds new information, and the output gate decides what goes out as the hidden state.
 flowchart LR
-  IN["h(t-1) and x(t) joined"] --> F["Forget gate f = σ(...)"]
-  IN --> I["Input gate i = σ(...)"]
-  IN --> CC["Candidate c̃ = tanh(...)"]
-  IN --> O["Output gate o = σ(...)"]
-  C0["Old cell state c(t-1)"] --> M1["× f : keep part of old memory"]
-  F --> M1
-  I --> M2["i × c̃ : new information to add"]
-  CC --> M2
-  M1 --> ADD["+ : new cell state c(t)"]
-  M2 --> ADD
-  ADD --> T["tanh(c(t))"]
-  T --> M3["× o : new hidden state h(t)"]
-  O --> M3
-  ADD --> CN["c(t) to next step"]
-  M3 --> HN["h(t) to output and next step"]
+  A["Current input x_t"] --> G["Gates: forget f_t, input i_t, output o_t, new information N_t"]
+  B["Previous hidden state H_(t-1)"] --> G
+  C["Previous cell state C_(t-1)"] --> F["Multiply by forget gate f_t"]
+  G --> F
+  G --> I["Multiply N_t by input gate i_t"]
+  F --> S["Add: new cell state C_t"]
+  I --> S
+  S --> O["tanh(C_t) × output gate o_t"]
+  G --> O
+  O --> H["New hidden state H_t"]
 ```
 
-<Img id="img-dl-n3-lstm-sequence" caption="The same LSTM unit placed in a sequence: it receives c and h from the previous step and passes new c and h to the next one." />
+```mermaid
+%% caption: The four questions of the class, in order. LSTM controls memory with gates instead of simply carrying all information forward.
+flowchart TD
+  A["Previous cell state"] --> B["Forget gate: what should I forget?"]
+  B --> C["Input gate: what should I add?"]
+  C --> D["Updated cell state: what should I remember?"]
+  D --> E["Output gate: what should I output?"]
+  E --> F["Hidden state"]
+  F --> G["Output"]
+```
 
-### The LSTM equations
+<Img id="class-lstm-gru-lstm-chain" caption="A chain of LSTM cells. The hidden state h t goes from each cell to the next." />
 
-Write these when the question says "architecture" or "in detail". They are the six steps above in symbols, nothing new. Each $W$ is a learned weight matrix and each $b$ a learned bias, all shared across time steps. <Cite id="gfdl-ch10" loc="§10.10.1" /> <Cite id="d2l-lstm" /> <Cite id="colah-lstm" />
-
-$$
-f_t = \sigma\left(W_f [h_{t-1}, x_t] + b_f\right) \qquad \text{forget gate}
-$$
-
-$$
-i_t = \sigma\left(W_i [h_{t-1}, x_t] + b_i\right) \qquad \text{input gate}
-$$
-
-$$
-\tilde{c}_t = \tanh\left(W_c [h_{t-1}, x_t] + b_c\right) \qquad \text{candidate memory}
-$$
-
-$$
-c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t \qquad \text{new cell state}
-$$
-
-$$
-o_t = \sigma\left(W_o [h_{t-1}, x_t] + b_o\right) \qquad \text{output gate}
-$$
-
-$$
-h_t = o_t \odot \tanh(c_t) \qquad \text{new hidden state}
-$$
-
-**Sum 1: one LSTM step with one memory number.** This shows the update in action. Gate values are given directly, so no weights are needed.
+**Sum: one LSTM update by hand (the class example).** <Cite id="class-dl-chp5" loc="slide 17" />
 
 <Sum>
 
 <Given>
 
-old cell state $c_{t-1} = 2$; forget gate $f_t = 0.9$; input gate $i_t = 0.2$; candidate $\tilde{c}_t = 0.5$; output gate $o_t = 0.8$.
+old memory (cell state) $C_{t-1} = 10$. Forget gate $f_t = 0.2$. New information $N_t = 5$. Input gate $i_t = 0.8$.
 
 </Given>
 
 <Find>
 
-the new cell state $c_t$ and the new hidden state $h_t$.
+the new cell state $C_t$.
 
 </Find>
 
 <Steps>
 
-1. **Keep part of the old memory.** Multiply the old memory by the forget gate, because the forget gate says what fraction to keep: $0.9 \times 2 = 1.8$.
-2. **Choose how much new information to add.** Multiply the candidate by the input gate, because the input gate says what fraction of the new content to let in: $0.2 \times 0.5 = 0.1$.
-3. **Update the memory.** Add the two parts, because the cell state is "kept old plus added new": $c_t = 1.8 + 0.1 = 1.9$.
-4. **Squash the memory for output.** Apply tanh to the new memory, so the output stays between $-1$ and $1$: $\tanh(1.9) \approx 0.956$.
-5. **Choose how much to show.** Multiply by the output gate, because it says what fraction of the memory to reveal: $h_t = 0.8 \times 0.956 \approx 0.765$.
+1. **What the old memory keeps:** $f_t \times C_{t-1} = 0.2 \times 10 = 2$. Only a small amount of the old information is retained, because the gate is nearly closed.
+2. **What is added:** $i_t \times N_t = 0.8 \times 5 = 4$.
+3. **Add them:** $C_t = 2 + 4 = 6$.
 
 </Steps>
 
 <Answer>
 
-$c_t = 1.9$ and $h_t \approx 0.765$.
+$C_t = 6$
 
 </Answer>
 
 <Box kind="verify">
 
-Check $c_t$ by the change instead of the total. Forgetting removes $(1 - 0.9) \times 2 = 0.2$ from the old memory, and the input adds $0.1$, so the net change is $-0.2 + 0.1 = -0.1$, and $2 - 0.1 = 1.9$. Same answer. Check $h_t$ by its range: tanh of a positive number lies between 0 and 1, so $h_t$ must lie between $0$ and $o_t = 0.8$; $0.765$ does, and is close to $0.8$ because $\tanh(1.9)$ is close to 1.
+Use the formula in one line: $C_t = 0.2 \times 10 + 0.8 \times 5 = 2 + 4 = 6$. Also check the gate ends: if $f_t$ were 1 and $i_t$ were 0, $C_t$ would be $10$, the old memory unchanged; if $f_t$ were 0, the old memory would be erased.
 
 </Box>
 
 </Sum>
 
-**What it means.** The memory barely changed because the forget gate was nearly open and the input gate nearly closed. That is how an LSTM carries "France" for 30 steps: it learns to keep $f_t$ near 1 and $i_t$ near 0 until the memory is needed.
+<Img id="class-lstm-gru-lstm-numeric" caption="The class numerical example. Forget gate 0.2 × old memory 10 = 2. Input gate 0.8 × new information 5 = 4. New cell state 2 + 4 = 6." />
+
+### How an LSTM learns
+
+LSTM does **not** use a completely different backpropagation method. It is also trained using BPTT: a forward pass over the sequence gives a prediction and a loss, and the error is propagated backward through the sequence. The difference is that **the cell state provides a better pathway for information and gradients across time.** <Cite id="class-dl-chp5" loc="slide 18" />
+
+<Img id="class-lstm-gru-lstm-learn" caption="Forward pass, prediction, loss, then the error goes backward through t4, t3, t2, t1 using BPTT." />
+
+<Img id="class-lstm-gru-complete-working" caption="Complete LSTM working: current input, forget gate, input gate, updated cell state, output gate, hidden state, output; and training with forward, prediction, loss, BPTT, weight update." />
 
 ### How the LSTM overcomes the limitation of the RNN
 
-<Box kind="intuition">
+- The RNN's limitation: the memory is overwritten at every step and the gradient vanishes over long sequences, so it cannot remember long-term dependencies.
+- The LSTM keeps a separate **cell state** (long-term memory) that is changed only by forgetting a little and adding a little, controlled by the gates. Useful information can therefore travel across many time steps, and the gradient has a better path back through time. <Cite id="class-dl-m5" loc="p. 18" /> <Cite id="class-dl-chp5" loc="slide 18" />
+- LSTM is capable of handling the vanishing gradient problem faced by RNN. <Cite id="class-dl-m5" loc="p. 18" />
 
-In a plain RNN the memory is pushed through a tanh and multiplied by $W$ at every step, like a photocopy of a photocopy that fades a little more each time. In an LSTM the cell state travels on a "conveyor belt": at each step it is only multiplied by the forget gate and has something added. If the forget gate is 1, the memory is copied exactly.
+### RNN versus LSTM
 
-</Box>
+<Img id="class-lstm-gru-rnn-vs-lstm" caption="The class table of RNN versus LSTM. RNN provides basic sequence memory, while LSTM adds controlled memory using gates." />
 
-1. **Additive memory.** The cell state is updated by keeping and adding, not by rewriting through tanh and $W$. The original paper called this the **constant error carousel**. <Cite id="hochreiter1997" />
-2. **A gradient highway.** Going back one step along the cell state multiplies the gradient only by the forget gate. When the forget gate stays near 1, the gradient survives many steps (see Sum 2 below).
-3. **Learned gates.** The network itself decides how long to remember. If an old value really is not needed, the forget gate closes and the gradient stops there on purpose, which is correct behaviour. <Cite id="nptel-dl" />
+| Aspect | RNN | LSTM |
+|---|---|---|
+| Memory | Has hidden state | Has hidden state + cell state |
+| Memory mechanism | Basic memory mechanism | Special memory mechanism |
+| Long-term dependencies | Can struggle | Designed to handle better |
+| Gates | No gates | Uses gates |
+| Structure | Simpler | More complex |
+| Vanishing gradient | Can be a problem | Gates help preserve useful information |
 
-**Sum 2: how much gradient survives 50 steps.** Use this when the question says "how LSTM overcomes the limitation of RNN".
+<Cite id="class-dl-chp5" loc="slide 17" />
 
-<Sum>
+**Short sequence: RNN may work well. Long sequence with important earlier information: LSTM can be more suitable.** LSTM is especially useful when understanding the present requires remembering information from the past. <Cite id="class-dl-chp5" loc="slide 19" />
 
-<Given>
-
-50 time steps; a plain RNN that multiplies the gradient by about $0.5$ per step; an LSTM whose forget gate stays at $0.95$.
-
-</Given>
-
-<Find>
-
-the fraction of the gradient that reaches step 1 in each network.
-
-</Find>
-
-<Steps>
-
-1. **Write the rule.** Going back 50 steps multiplies the gradient by the per-step factor 50 times, so the surviving fraction is factor$^{50}$.
-2. **RNN, first 10 steps.** $0.5^{10} = 1/1024 \approx 0.000977$, because ten halvings divide by $2^{10} = 1024$.
-3. **RNN, all 50 steps.** 50 steps is five blocks of 10, so
-
-   $$
-   \begin{aligned}
-   0.5^{50} &= (0.000977)^5 \\
-   &\approx 8.9 \times 10^{-16}
-   \end{aligned}
-   $$
-4. **LSTM, first 10 steps.** $0.95^{10} \approx 0.599$ (multiply 0.95 by itself ten times).
-5. **LSTM, all 50 steps.** $(0.599)^5$: $0.599^2 \approx 0.359$, $0.359^2 \approx 0.129$, and $0.129 \times 0.599 \approx 0.077$.
-
-</Steps>
-
-<Answer>
-
-the RNN keeps about $9 \times 10^{-16}$ of the gradient (effectively zero), the LSTM keeps about $0.077$, roughly 8%, which is still usable.
-
-</Answer>
-
-<Box kind="verify">
-
-Check with logarithms instead of repeated multiplication.
-
-$$
-\begin{aligned}
-50 \times \log_{10} 0.5 &= 50 \times (-0.301) \\
-&= -15.05
-\end{aligned}
-$$
-
-and $10^{-15.05} \approx 8.9 \times 10^{-16}$.
-
-$$
-\begin{aligned}
-50 \times \ln 0.95 &= 50 \times (-0.0513) \\
-&= -2.565
-\end{aligned}
-$$
-
-and $e^{-2.565} \approx 0.077$. Both match. Sense check: both answers are below 1 (a factor under 1 always shrinks), and the LSTM's is far bigger because its factor is much closer to 1.
-
-</Box>
-
-</Sum>
-
-<Box kind="pitfall">
-
-Do not overclaim. The LSTM greatly **reduces** the vanishing-gradient problem; it does not remove it completely, and it does not stop **exploding** gradients. In practice LSTMs are still trained with gradient clipping. <Cite id="pascanu2013" /> <Cite id="gfdl-ch10" loc="§10.11.1" />
-
-</Box>
+<Img id="class-lstm-gru-lstm-short-long" caption="For t1 to t4 an RNN can work well. For a sequence up to t50 with important information from earlier steps, LSTM is more suitable." />
 
 ### Advantages, disadvantages and applications of LSTM
 
-| Advantages | Disadvantages |
-|---|---|
-| Remembers information over long gaps (the 1997 paper bridged time lags of over 1000 steps on artificial tasks) | Four sets of weights, so about 4 times the parameters of a plain RNN |
-| Greatly reduces vanishing gradients | Slower to train and run; steps still cannot run in parallel |
-| Separate gates give fine control: keep old and add new independently | Needs more data to train well; can overfit small datasets |
-| Can process sequences of any length | Exploding gradients still need clipping |
+- **Advantages over RNN:** handles long-term dependencies; copes with the vanishing gradient problem; controls memory with gates. <Cite id="class-dl-chp5" loc="slide 17" />
+- **Disadvantages:** more complex structure and more parameters than an RNN (and than a GRU). <Cite id="class-dl-chp5" loc="slide 21" />
+- **Applications:** LSTM is a very popular deep learning algorithm for sequence models. Apple's Siri and Google's voice search are real-world examples. It is also used for time-series predictions and text classification. <Cite id="class-dl-m5" loc="p. 31" />
+  - **Language understanding:** "I grew up in India. After many years, I moved to another country. I still speak ___" gives "Hindi", because LSTM uses the earlier "India". <Cite id="class-dl-chp5" loc="slide 19" />
+  - **Time-series prediction:** day 1 to day 5 values (stock or temperature) give the next value.
+  - **Speech recognition:** a sequence of sounds becomes words; earlier sounds help understand the complete word or sentence.
 
-**Applications:** machine translation, speech recognition, handwriting recognition, text generation, time-series forecasting (stock, weather, energy demand). <Cite id="gfg-lstm" /> <Cite id="ibm-lstm" /> <Cite id="keras-lstm" />
+<Img id="class-lstm-gru-lstm-language" caption="'India' appears much earlier in the sentence; LSTM can use information from earlier parts of a sequence when making a later prediction." />
 
 ## GRU: Gated Recurrent Unit
 
-**What it is.** The GRU, proposed by Cho and others in 2014, is a simpler gated RNN cell. It merges the LSTM's cell state and hidden state into **one** vector $h_t$ and uses only **two gates**. <Cite id="cho2014" />
+<Box kind="definition">
 
-**Why it is needed.** It keeps the LSTM's main benefit, long-term memory without vanishing gradients, with fewer weights and faster training.
+**GRU** is another type of RNN that uses gates to control information and handle long-term dependencies. GRUs are a modified form of RNNs. They are highly effective at capturing much longer range dependencies and also help with the vanishing gradient problem. <Cite id="class-dl-chp5" loc="slide 20" /> <Cite id="class-dl-m5" loc="p. 27" />
 
-**The two gates.**
+</Box>
 
-- **Update gate** $z_t$: how much of the old memory to keep, and therefore how much new memory to take in. It does the job of the LSTM's forget and input gates **together**: keeping more old memory automatically means taking in less new.
-- **Reset gate** $r_t$: how much of the old memory to look at when making the new candidate. If it is near 0, the candidate is built almost only from the current input, as if starting fresh (useful at the start of a new sentence).
+<Img id="class-lstm-gru-gru-intro" caption="RNN has the long-term dependency problem; LSTM is one solution and GRU is another. GRU uses two main gates: the update gate and the reset gate." />
 
-**The analogy.** You keep a running summary of a news story. The update gate is how much of your old summary you keep. The reset gate is whether you look at the old summary while writing the new sentence, or write it from today's news alone.
+Here, the LSTM's three gates are replaced by two: the **reset gate** and the **update gate**. As with LSTMs, these gates have sigmoid activations, forcing their values to lie between 0 and 1. <Cite id="class-dl-m5" loc="p. 28" />
 
-<Img id="img-dl-n3-gru-cell" caption="One GRU cell. Only two gates: reset r and update z. The update gate mixes the old state and the new candidate, and there is no separate cell state." />
+**GRU has no separate cell state.** It mainly uses the **hidden state** to carry information. The hidden state is the GRU's main memory. <Cite id="class-dl-chp5" loc="slide 20" />
+
+<Img id="class-lstm-gru-gru-big-picture" caption="Previous hidden state and current input go into the GRU cell, which gives the new hidden state and the output. Unlike LSTM, no separate cell state." />
+
+<Img id="class-lstm-gru-gru-hidden" caption="In GRU the hidden state carries the information forward from h t minus 1 to h t to h t plus 1." />
+
+### Reset gate and update gate (the use of each gate)
+
+- **Reset gate:** intuitively it controls **how much of the previous state we might still want to remember** (how much past information to use). 0 means ignore most of the previous information, 1 means use most of it. It controls the influence of the past when processing new information. <Cite id="class-dl-m5" loc="p. 28" /> <Cite id="class-dl-chp5" loc="slide 20" />
+- **Update gate:** lets us control **how much of the new state is just a copy of the old state.** It decides how much information should come from the previous hidden state and how much from the new candidate information, so it controls how much old information is kept and how much new information is used. <Cite id="class-dl-m5" loc="p. 28" /> <Cite id="class-dl-chp5" loc="slide 20" />
+- In summary, GRUs have two distinguishing features: **reset gates help capture short-term dependencies in sequences, and update gates help capture long-term dependencies.** <Cite id="class-dl-m5" loc="p. 30" />
+
+<Img id="class-lstm-gru-reset-gate" caption="Reset gate: how much past information should we use? 0 ignores most previous information, 1 uses most of it." />
+
+<Img id="class-lstm-gru-update-gate" caption="Update gate: controls how much old information is kept and how much new information is used." />
+
+<Img id="class-lstm-gru-gru-gates" caption="Computing the reset gate and the update gate: the previous hidden state and the current input go through two fully connected layers with sigmoid." />
 
 ### How a GRU step works
 
-1. **Look.** Join the previous hidden state and the current input.
-2. **Gates.** Compute the update gate and the reset gate, each a sigmoid (0 to 1).
-3. **Candidate.** Multiply the old state by the reset gate, join it with the input, and pass it through tanh to get the candidate new memory.
-4. **Blend.** New state = (update gate times old state) **plus** (one minus update gate) times candidate. This is a weighted average of old and new.
-5. Pass $h_t$ to the output and the next step.
+<Cite id="class-dl-chp5" loc="slide 20" />
+
+1. Look at the previous hidden state $h_{t-1}$ and the current input $x_t$.
+2. Use the **reset gate** $r_t$ to decide how much of $h_{t-1}$ to use.
+3. Create the **candidate** (new) information $\tilde{h}_t$.
+4. Use the **update gate** $z_t$ to mix the old hidden state and the candidate.
+5. Produce the **new hidden state** $h_t$.
+
+<Img id="class-lstm-gru-gru-update-steps" caption="The six steps of the class: previous hidden state and current input, reset gate, candidate information, update gate, new hidden state." />
 
 ```mermaid
-%% caption: One GRU cell. There is no separate cell state. The update gate z mixes old memory and new candidate, z of the old and 1 − z of the new; the reset gate r decides how much old memory the candidate may look at.
+%% caption: One GRU time step, as the class draws it. Two gates, no separate cell state: the hidden state is the memory.
 flowchart LR
-  IN["h(t-1) and x(t)"] --> Z["Update gate z = σ(...)"]
-  IN --> R["Reset gate r = σ(...)"]
-  H0["Old state h(t-1)"] --> RH["r × h(t-1)"]
-  R --> RH
-  RH --> CAND["Candidate h̃ = tanh(... with x(t))"]
-  H0 --> KEEP["z × h(t-1) : keep old"]
-  Z --> KEEP
-  Z --> NEW["(1 − z) × h̃ : take new"]
-  CAND --> NEW
-  KEEP --> ADD["+ : new state h(t)"]
-  NEW --> ADD
-  ADD --> OUT["h(t) to output and next step"]
+  A["Previous hidden state h_(t-1) + current input x_t"] --> R["Reset gate r_t: how much past to use?"]
+  R --> C["Candidate hidden state: what new information can I create?"]
+  A --> U["Update gate z_t: how much old / new to keep?"]
+  C --> M["Mix old and candidate"]
+  U --> M
+  M --> H["New hidden state h_t"]
+  H --> O["Output"]
 ```
 
-<Img id="img-dl-n3-gru-sequence" caption="The GRU unit in a sequence. Compare with the LSTM drawing: one state h is passed along instead of two (c and h)." />
+<Img id="class-lstm-gru-gru-cell" caption="The GRU cell of Module 5: reset gate r t, update gate z t, candidate hidden state, and the new hidden state h t." />
 
-### The GRU equations
-
-Write these when the question says "in detail". They are the steps above in symbols. The form in Goodfellow's book and d2l. <Cite id="gfdl-ch10" loc="§10.10.2" /> <Cite id="d2l-gru" />
+**The GRU equations** (Module 5, p. 26, with the update gate $z_t$ as the share of the **old** state kept, the convention of the class slides): <Cite id="class-dl-m5" loc="p. 26" /> <Cite id="class-dl-chp5" loc="slide 21" />
 
 $$
-z_t = \sigma\left(W_z [h_{t-1}, x_t] + b_z\right) \qquad \text{update gate}
+\begin{aligned}
+r_t &= \sigma(W_r [x_t, h_{t-1}] + b_r) &&\text{(reset gate)}\\
+z_t &= \sigma(W_z [x_t, h_{t-1}] + b_z) &&\text{(update gate)}\\
+\tilde{h}_t &= \tanh(W_h [x_t,\ r_t \odot h_{t-1}] + b_h) &&\text{(candidate)}\\
+h_t &= z_t \odot h_{t-1} + (1 - z_t) \odot \tilde{h}_t &&\text{(new hidden state)}
+\end{aligned}
 $$
 
-$$
-r_t = \sigma\left(W_r [h_{t-1}, x_t] + b_r\right) \qquad \text{reset gate}
-$$
-
-$$
-\tilde{h}_t = \tanh\left(W_h [r_t \odot h_{t-1}, x_t] + b_h\right) \qquad \text{candidate}
-$$
-
-$$
-h_t = z_t \odot h_{t-1} + (1 - z_t) \odot \tilde{h}_t \qquad \text{new hidden state}
-$$
+$\sigma$ is sigmoid, $\odot$ is element-wise multiplication and $[x_t, h_{t-1}]$ is concatenation.
 
 <Box kind="pitfall">
 
-Some sources (for example Olah's blog and Chung et al.'s 2014 comparison) write $h_t = (1 - z_t) \odot h_{t-1} + z_t \odot \tilde{h}_t$. That is the same model with the meaning of $z_t$ flipped (there, $z_t$ near 1 means "take the new"). Either is correct if you say what $z_t$ means. Use one form consistently in an answer. <Cite id="chung2014" /> <Cite id="colah-lstm" />
+**Two ways of writing the last line.** The class slides use $z$ as the share of the old state kept ($h_t = z \odot h_{t-1} + (1-z) \odot \tilde{h}_t$, with $z = 0.7$ meaning "70% kept"). The Module 5 figure on p. 26 writes it the other way round ($h_t = (1 - z_t) \odot h_{t-1} + z_t \odot \tilde{h}_t$). Both describe the same mixing; they only swap what $z$ means. Pick one and use it consistently in the answer. <Cite id="class-dl-m5" loc="p. 26" />
 
 </Box>
 
-**Sum 3: one GRU step with one memory number.**
+<Img id="class-lstm-gru-gru-equations" caption="The Key Equations box of Module 5 p. 26, and the roles of the three parts: reset gate, update gate and candidate state." />
+
+<Img id="class-lstm-gru-gru-hidden-state" caption="Computing the hidden state in a GRU: the reset gate scales the old hidden state, tanh makes the candidate, and the update gate blends old and candidate." />
+
+**Sum: the update gate on numbers (the class example).** <Cite id="class-dl-chp5" loc="slide 21" />
 
 <Sum>
 
 <Given>
 
-old state $h_{t-1} = 1.0$; update gate $z_t = 0.75$; candidate $\tilde{h}_t = -0.2$.
+previous hidden state $h_{t-1} = 10$, new candidate information $\tilde{h}_t = 4$, update gate $z = 0.7$.
 
 </Given>
 
 <Find>
 
-the new state $h_t$.
+the new hidden state $h_t$.
 
 </Find>
 
 <Steps>
 
-1. **Keep part of the old memory.** Multiply the old state by the update gate, because $z_t$ is the fraction of old memory kept: $0.75 \times 1.0 = 0.75$.
-2. **Find the share left for new information.** Subtract the update gate from 1, because whatever is not kept is taken from the candidate: $1 - 0.75 = 0.25$.
-3. **Take that share of the candidate.** $0.25 \times (-0.2) = -0.05$.
-4. **Blend.** Add the two parts: $h_t = 0.75 + (-0.05) = 0.70$.
+1. **Old information kept:** $z \times h_{t-1} = 0.7 \times 10 = 7$ (70% kept).
+2. **New information used:** $(1 - z) \times \tilde{h}_t = 0.3 \times 4 = 1.2$ (30% used).
+3. **Add them:** $h_t = 7 + 1.2 = 8.2$.
 
 </Steps>
 
 <Answer>
 
-$h_t = 0.70$.
+$h_t = 8.2$
 
 </Answer>
 
 <Box kind="verify">
 
-Check by moving from the candidate towards the old state. The gap between old and new is $1.0 - (-0.2) = 1.2$; the update gate says to move 75% of that gap from the candidate towards the old state:
-
-$$
--0.2 + 0.75 \times 1.2 = -0.2 + 0.9 = 0.70
-$$
-
-Same answer. Range check: a weighted average must lie between $-0.2$ and $1.0$, nearer $1.0$ since that has the bigger weight; $0.70$ does.
+The new value lies between the old value 4 and 10, as a weighted average should: $4 \le 8.2 \le 10$. The two shares $0.7 + 0.3 = 1$. (This is a simplified illustration: the full GRU also uses the reset gate and the candidate.)
 
 </Box>
 
 </Sum>
 
-**What it means.** Three quarters of the old memory were kept and a quarter of the new mixed in. If the update gate were 1, the state would be copied exactly, so, as in the LSTM, the gradient along that path is not shrunk.
+<Img id="class-lstm-gru-gru-numeric" caption="The class example: previous information 10 with 70% kept gives 7, new information 4 with 30% used gives 1.2, so the new hidden state is 8.2." />
 
-### Advantages, disadvantages and applications of GRU
+<Img id="class-lstm-gru-gru-forward" caption="GRU forward pass for 'I love AI': current input and previous hidden state give a new hidden state at each step. GRU is trained with BPTT like RNN and LSTM." />
 
-| Advantages | Disadvantages |
-|---|---|
-| Fewer gates and no cell state: three weight sets instead of four, about 25% fewer parameters | One gate couples keeping and adding, so less fine control than an LSTM |
-| Faster to train and run, less memory | No output gate: the whole state is always exposed |
-| Often as accurate as LSTM, and works well with smaller datasets | Can be slightly worse on very long dependencies |
-| Also greatly reduces vanishing gradients | Still sequential; exploding gradients still need clipping |
+<Img id="class-lstm-gru-gru-complete" caption="Complete GRU working with its four questions: reset gate (how much past to use), candidate (what new information to create), update gate (how much old or new to keep), hidden state (what to carry forward)." />
 
-**Applications:** speech recognition, machine translation, music modelling, time-series forecasting, and on-device models where speed and memory matter. <Cite id="gfg-gru" /> <Cite id="keras-gru" /> <Cite id="pytorch-gru" />
+### Advantages of GRU
+
+- **Simpler architecture** (two gates, no separate cell state), so **fewer parameters** and we can build bigger models. <Cite id="class-dl-m5" loc="p. 31" /> <Cite id="class-dl-chp5" loc="slide 21" />
+- It captures long-range dependencies and helps with the vanishing gradient problem. <Cite id="class-dl-m5" loc="p. 27" />
+- Used in NLP (text generation, translation), speech recognition, time-series forecasting, video analysis and emotion recognition. <Cite id="class-dl-m5" loc="p. 26" />
 
 ## LSTM versus GRU
 
-| Point | LSTM | GRU |
+The GRU is a simplified LSTM: its single update gate does the job of the forget and input gates together. LSTM is more powerful and effective as it has 3 gates instead of 2; GRU has the advantage of a simpler architecture. <Cite id="class-dl-m5" loc="p. 31" />
+
+<Img id="class-lstm-gru-vs-table" caption="The class table of LSTM versus GRU. Both improve the basic RNN's ability to handle long-term dependencies, but they use different ways to control information." />
+
+| Feature | LSTM | GRU |
 |---|---|---|
-| Proposed | Hochreiter and Schmidhuber, 1997 (forget gate added in 2000) | Cho et al., 2014 |
-| Gates | 3: forget, input, output | 2: update, reset |
-| Memory | Separate cell state $c_t$ and hidden state $h_t$ | One hidden state $h_t$ only |
-| Keeping versus adding | Separate forget and input gates, independent | One update gate does both: keep $z$, add $1 - z$ |
-| Output control | Output gate decides how much memory to show | No output gate: the whole state is the output |
-| Weight sets | 4 (forget, input, candidate, output) | 3 (update, reset, candidate), about 25% fewer parameters |
-| Speed | Slower | Faster to train and run |
-| Data | Often better with lots of data and very long dependencies | Often does as well with less data |
-| Typical uses | Machine translation, speech recognition, long text | Similar tasks where speed or memory matters, smaller datasets |
+| Main memory | Cell state + hidden state | Hidden state only |
+| Gates | 3 main gates | 2 main gates |
+| Forget gate | Yes | No |
+| Input gate | Yes | No |
+| Output gate | Yes | No |
+| Reset gate | No | Yes |
+| Update gate | No | Yes |
+| Structure | More complex | Simpler |
+| Parameters | More | Fewer |
 
-**Sum 4: count the parameters, if asked.** Each gate (and the candidate) is one small layer: a weight for every pair of (hidden unit, joined input) plus one bias per hidden unit. <Cite id="keras-lstm" /> <Cite id="pytorch-lstm" />
-
-<Sum>
-
-<Given>
-
-input size $m = 3$, hidden size $n = 2$. LSTM has 4 weight sets (forget, input, candidate, output); GRU has 3 (update, reset, candidate).
-
-</Given>
-
-<Find>
-
-the number of trainable parameters in one LSTM layer and one GRU layer.
-
-</Find>
-
-<Steps>
-
-1. **Length of the joined input.** $h_{t-1}$ has $n = 2$ numbers and $x_t$ has $m = 3$, so the joined vector has $2 + 3 = 5$.
-2. **Weights in one set.** Each of the $n = 2$ units has one weight per joined number: $2 \times 5 = 10$.
-3. **Biases in one set.** One per unit: $2$.
-4. **One set in total.** $10 + 2 = 12$. In symbols, one set has $n(n + m) + n$ numbers.
-5. **LSTM.** 4 sets: $4 \times 12 = 48$.
-6. **GRU.** 3 sets: $3 \times 12 = 36$.
-
-</Steps>
-
-<Answer>
-
-LSTM has 48 parameters and GRU has 36 parameters.
-
-</Answer>
-
-<Box kind="verify">
-
-Count by where each weight comes from instead of by set. LSTM: input weights $4 \times (n \times m) = 4 \times 6 = 24$, recurrent weights $4 \times (n \times n) = 4 \times 4 = 16$, biases $4 \times n = 8$; total $24 + 16 + 8 = 48$. GRU: $18 + 12 + 6 = 36$. Same answers. Ratio check: $36 / 48 = 0.75$, so GRU has 25% fewer parameters, as the table says.
-
-</Box>
-
-</Sum>
-
-Keras' default GRU, with `reset_after=True`, keeps an extra bias per set and shows $36 + 3 \times 2 = 42$. Say which version you use.
-
-**Which is better?** Chung and others compared them on music and speech data and found both clearly better than a plain tanh RNN, but neither consistently better than the other. So the honest answer is: it depends on the task; try GRU first when speed matters, LSTM when sequences are very long. <Cite id="chung2014" /> <Cite id="av-lstm-gru" /> <Cite id="gfg-rnn-lstm-gru" />
-
-## RNN versus LSTM on long-term dependencies
-
-| Point | Plain RNN | LSTM |
-|---|---|---|
-| Memory | One hidden state, fully rewritten each step | Cell state that is kept and added to |
-| Gradient over many steps | Multiplied by tanh slope times $W$ each step, usually vanishes | Along the cell path multiplied by the forget gate, which can stay near 1 |
-| Useful memory span | A few steps to a few tens of steps in practice | Can link inputs hundreds of steps apart |
-| Control | None: everything is mixed in every step | Learned gates decide what to forget, read and write |
-| Parameters and speed | Fewer, faster per step | About 4 times as many, slower per step |
-
-**A real application where LSTM clearly beats a plain RNN: machine translation.** To translate a long sentence, the meaning of the first words (the subject, whether the sentence is a question, a "not") must be remembered until the end, and the verb's form often depends on a subject many words earlier. A plain RNN loses that early information because of vanishing gradients. Sutskever and others used deep LSTMs for English to French translation and reported that the LSTM handled long sentences well. Speech recognition is another example, where deep bidirectional LSTMs gave strong results. <Cite id="sutskever2014" /> <Cite id="graves2013" /> <Cite id="hochreiter1997" />
-
-**Conclusion.** Both are gated RNNs that fix the plain RNN's short memory; LSTM gives more control with three gates and a cell state, GRU gives similar accuracy with two gates and fewer weights.
+<Cite id="class-dl-chp5" loc="slide 21" />
 
 ## Where this was asked
 
 | If the question says | What to write | Seen as |
 |---|---|---|
-| "Explain Gated Recurrent Unit in detail" | Why gates, the two gates in words, step-by-step working, the four equations, GRU diagram, advantages, disadvantages, uses | <PYQ id="2023-12/q2a" /> |
-| "Explain LSTM architecture" | Cell state and three gates (selective forget, read, write), step-by-step working, six equations, LSTM diagram, advantages, uses | <PYQ id="2023-12/q5b" /> |
-| "Explain LSTM model, how it overcomes the limitation of RNN" | RNN's vanishing gradient first, then the LSTM cell, then the conveyor-belt argument with the $0.5^{50}$ vs $0.95^{50}$ numbers (Sum 2) | <PYQ id="2024-05/q4a" /> |
-| "Differentiate between the (architecture of) LSTM and GRU" | Short description and diagram of each, then the comparison table | <PYQ id="2024-12/q3b" /> <PYQ id="2025-05/q3b" /> |
-| "How RNNs suit sequential data; RNN vs LSTM for long-term dependencies; real-world application" | Memory and weight sharing; the RNN vs LSTM table; machine translation with the justification | <PYQ id="2025-05/q4b" /> |
+| "Explain LSTM architecture" or "Analyse the architecture of LSTM" | Definition, cell state and hidden state, three gates with equations, cell update, diagram | <PYQ id="2023-12/q5b" /> <PYQ id="assignment-2/q5b" /> |
+| "LSTM, how it overcomes the limitation of RNN" | The RNN problem first, then cell state and gates | <PYQ id="2024-05/q4a" /> |
+| "Explain GRU" or "use of update gate and reset gate" | Definition, two gates and their use, equations, GRU diagram | <PYQ id="2023-12/q2a" /> <PYQ id="assignment-2/q5c" /> |
+| "Differentiate LSTM and GRU" | The comparison table, then one line on why GRU is simpler | <PYQ id="2024-12/q3b" /> <PYQ id="2025-05/q3b" /> |
+| "RNN versus LSTM, long-term dependencies, real application" | RNN vs LSTM table, a long-sequence example such as speech or language | <PYQ id="2025-05/q4b" /> |
 
 ## Quick revision
 
-- Gate = sigmoid output in 0..1, multiplied element-wise: 0 blocks, 1 passes.
-- LSTM: cell state (long-term) plus hidden state (output); forget gate = selective forget, input gate = selective read, output gate = selective write.
-- LSTM update: $c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t$, $h_t = o_t \odot \tanh(c_t)$.
-- LSTM beats vanishing gradients because along the cell state the gradient is multiplied only by the forget gate, which can stay near 1.
-- GRU: update gate (keep old vs take new) and reset gate (how much old to use for the candidate); $h_t = z_t \odot h_{t-1} + (1-z_t) \odot \tilde{h}_t$.
-- GRU: fewer gates, no cell state, about 25% fewer parameters, faster. LSTM: more control, safer for very long sequences. Results are often similar.
+- Plain RNN forgets long-ago inputs (vanishing gradient). LSTM and GRU add gates to control memory.
+- LSTM: hidden state (short-term) + cell state (long-term). Forget gate $f_t$, input gate $i_t$, output gate $o_t$, new information $N_t = \tanh(\cdot)$.
+- $C_t = f_t C_{t-1} + i_t N_t$ and $H_t = o_t \tanh(C_t)$. Class example: $0.2 \times 10 + 0.8 \times 5 = 6$.
+- Sigmoid gates give 0 to 1 (0 forget or block, 1 keep or pass). tanh gives −1 to 1.
+- GRU: two gates, reset (how much past to use, short-term) and update (how much old and new to keep, long-term); no cell state; hidden state is the memory. Class example: $0.7 \times 10 + 0.3 \times 4 = 8.2$.
+- LSTM: 3 gates, more parameters, more powerful. GRU: 2 gates, fewer parameters, simpler.
+- Both are trained by BPTT.

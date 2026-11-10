@@ -1,104 +1,35 @@
 ---
-references: [hochreiter1997, gfdl-ch10, nptel-dl, d2l-lstm, gfg-lstm, mlm-lstm]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** LSTM (Long Short-Term Memory) ek RNN cell hai jiske paas alag long-term memory aur teen gates hote hain, jo decide karte hain ki kya bhoolna hai, kya add karna hai aur kya output dena hai, isliye wo door-door ke shabdon ko jod sakta hai.
+**In simple words:** plain RNN bahut pehle ki baatein bhool jaata hai, kyunki learning signal phika pad jaata hai. LSTM ek alag long-term memory aur gates jodta hai, isliye important information kai steps tak bachi rehti hai.
 
-**Plain RNN ki limitation.** Plain RNN har step pe apni poori memory dobara likh deta hai. Training mein time ke through peeche jaane wala error har step pe ek factor se multiply hota hai jo aksar 1 se kam hota hai, isliye wo **vanish** ho jaata hai aur RNN wo lambe sentence ke end ke "French" ko shuru ke "France" se nahi jod paata. <Cite id="gfdl-ch10" loc="§10.7" />
+**RNN ki limitation:** BPTT mein gradient ko kai time steps peeche jaana padta hai, aur wo bahut chhota ho jaata hai (vanishing gradient). Pehle ke time steps ko lagbhag koi learning signal nahi milta, isliye RNN **long-term dependencies** nahi seekh paata ("I was born in India ... I speak Hindi"). <Cite id="class-dl-chp5" loc="slide 11" /> <Cite id="class-dl-m5" loc="p. 16" />
 
-**LSTM ke parts aur working** <Cite id="nptel-dl" /> <Cite id="d2l-lstm" />
+**LSTM:** ek special kind ka RNN jo long-term dependencies handle kar sakta hai. Isme hidden state (short-term memory) aur **cell state** (long-term memory) hota hai jo saare time steps mein information carry karta hai. <Cite id="class-dl-m5" loc="p. 21" />
 
-- **Cell state** $c_t$: long-term memory, time ke saath chalta "conveyor belt"; $h_t$ output hai.
-- **Forget gate** $f_t$: purani memory kitni rakhni hai (0 sab hata deta hai, 1 sab rakhta hai).
-- **Input gate** $i_t$: naya candidate memory $\tilde{c}_t$ kitna add karna hai.
-- **Output gate** $o_t$: memory kitni bahar bhejni hai.
+<Img id="class-lstm-gru-rnn-vs-lstm" caption="RNN versus LSTM ki class table: RNN mein sirf hidden state aur gates nahi; LSTM cell state aur gates jodta hai, isliye long-term dependencies behtar handle karta hai." />
 
-Har gate 0 se 1 ka number hai ($\odot$ matlab element-wise multiply):
+**Ye limitation kaise door karta hai** <Cite id="class-dl-chp5" loc="slide 17" /> <Cite id="class-dl-chp5" loc="slide 18" />
 
-$$
-c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t, \qquad h_t = o_t \odot \tanh(c_t)
-$$
+1. **Forget gate** purani information hata deta hai jo ab useful nahi.
+2. **Input gate** useful nayi information jodta hai. New cell state $C_t = f_t C_{t-1} + i_t N_t$.
+3. **Output gate** chunta hai ki hidden state ke roop mein kya bahar jaaye, $H_t = o_t \tanh(C_t)$.
+4. Cell state har step par thoda hi badalta hai, isliye useful information bachi rehti hai aur gradient ko time mein peeche jaane ka behtar raasta milta hai. LSTM bhi BPTT se train hota hai.
 
 ```mermaid
-%% caption: LSTM cell. Upar wali cell state line sirf forget gate se scale hoti hai aur usme add hota hai, yahi woh raasta hai jahan gradient bachta hai.
+%% caption: RNN ki problem aur LSTM ka jawab.
 flowchart LR
-  C0["c(t-1)"] --> M1["× forget gate f"]
-  M1 --> ADD["+"]
-  ADD --> C1["c(t)"]
-  IN["h(t-1), x(t)"] --> F["f = σ(...)"]
-  F --> M1
-  IN --> I["i = σ(...)"]
-  IN --> CC["c̃ = tanh(...)"]
-  I --> M2["i × c̃"]
-  CC --> M2
-  M2 --> ADD
-  IN --> O["o = σ(...)"]
-  C1 --> M3["o × tanh(c(t)) = h(t)"]
-  O --> M3
+  A["RNN: memory overwritten, gradient vanishes"] --> B["Long-term dependency lost"]
+  C["LSTM: cell state + gates"] --> D["Forget old, add new, output what is needed"]
+  D --> E["Long-term dependency kept"]
 ```
 
-<Img id="img-dl-n3-lstm-cell" caption="Cell state upar se seedha jaata hai aur use sirf multiply aur add kiya jaata hai; teen sigmoid gates tay karte hain kya bhoolna, jodna aur nikalna hai." />
+| Aspect | RNN | LSTM |
+|---|---|---|
+| Memory | Hidden state | Hidden state + cell state |
+| Gates | Koi nahi | Forget, input, output |
+| Long-term dependencies | Struggle | Handle karne ke liye designed |
+| Vanishing gradient | Problem | Gates useful information bachate hain |
 
-**Limitation kaise dur hoti hai**
-
-1. **Additive memory.** Memory scale aur add se update hoti hai, har step pe weight matrix se squash nahi hoti ("constant error carousel"). <Cite id="hochreiter1997" />
-2. **Gradient highway.** Cell state ke raaste pe error sirf forget gate se multiply hota hai. Gate 1 ke paas rahe to error kai steps tak bachta hai, aur network seekhta hai ki ye kab karna hai.
-
-**Worked example: 50 steps ke baad bacha error.** Maan lo error har step pe ek fixed factor se multiply hota hai.
-
-<Sum>
-
-<Given>
-
-50 steps; plain RNN factor 0.5; LSTM forget gate 0.95.
-
-</Given>
-
-<Find>
-
-har ek ke liye error ka kitna hissa bacha.
-
-</Find>
-
-<Steps>
-
-1. RNN: $0.5^{50} = 1/2^{50}$, kyunki 0.5 se 50 baar multiply karna 50 baar aadha karne ke barabar hai. $2^{50} \approx 1.126 \times 10^{15}$ hai, to ye $\approx 8.9 \times 10^{-16}$ hai.
-2. LSTM: $0.95^{50} = (0.95^{10})^5$ kyunki 50 matlab das ke paanch group. $0.95^{10} \approx 0.5987$, aur $0.5987^5 \approx 0.077$ (do baar square: $0.3585$, $0.1285$; phir $0.5987$ se multiply).
-
-</Steps>
-
-<Answer>
-
-plain RNN error ka lagbhag $8.9 \times 10^{-16}$ rakhta hai (lagbhag kuch nahi); LSTM lagbhag 0.077 (abhi bhi kaam ka).
-
-</Answer>
-
-<Box kind="verify">
-
-Logarithm se check karo.
-
-$$
-\begin{aligned}
-50 \times \log_{10} 0.5 &= 50 \times (-0.301) \\
-&= -15.05
-\end{aligned}
-$$
-
-aur $10^{-15.05} \approx 8.9 \times 10^{-16}$. LSTM ke liye
-
-$$
-\begin{aligned}
-50 \times \ln 0.95 &= 50 \times (-0.0513) \\
-&= -2.565
-\end{aligned}
-$$
-
-aur $e^{-2.565} \approx 0.077$. Dono match karte hain.
-
-</Box>
-
-</Sum>
-
-**Advantages:** long-term memory, lambe sequences pe stable learning. **Disadvantages:** RNN se lagbhag chaar guna weights, isliye slow; exploding gradients ke liye ab bhi clipping chahiye. <Cite id="mlm-lstm" /> <Cite id="gfg-lstm" />
-
-Exam mein English mein likho: "LSTM solves the vanishing gradient problem by using gates and an additive cell state."
+**Conclusion:** gated cell state LSTM ko wo yaad rakhne deta hai jo matter karta hai aur wo bhoolne deta hai jo nahi. <Cite id="class-dl-m5" loc="p. 18" />

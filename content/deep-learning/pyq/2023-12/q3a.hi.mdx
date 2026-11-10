@@ -1,55 +1,72 @@
 ---
-references: [gfdl-ch9, cs231n-cnn, gfg-cnn, d2l-cnn-padding]
+references: [class-dl-chp4, class-dl-m4]
 ---
 
-**In simple words:** convolutional neural network (CNN) image ko ek time pe ek chhote patch mein dekhta hai. Chhote learned filters image pe slide karke edges jaise patterns dhoondhte hain, pooling result ko chhota karti hai, aur fully connected layers final decision leti hain.
+**In simple words:** CNN ek deep learning model hai jo sliding filters se images ke features seekhta hai. Convolution aur pooling layers features dhundti hain; flatten aur fully connected layers class decide karti hain.
 
-**Why it is needed.** Ek 32×32×3 image pe bhi fully connected layer har neuron ke liye 3072 weights leti hai, ye nahi dekhti ki kaun se pixels paas-paas hain, aur har position pe ek hi pattern dobara seekhna padta hai. CNN in teeno problems ko solve karta hai.
+**Definition:** CNN ek type ka deep neural network hai jo specially images aur dusre grid-like data ke liye bana hai. <Cite id="class-dl-chp4" loc="slide 5" />
 
-**Architecture, layer by layer**
+**Kyun zaroori:** fully connected network mein parameters bahut zyada ho jaate hain (28×28 pixels aur 100 neurons ko 78,400 weights chahiye) aur spatial information kho jaati hai. CNN local connectivity, weight sharing aur pooling use karta hai. <Cite id="class-dl-chp4" loc="slide 5" />
 
-1. **Input layer:** image height × width × channels ke roop mein, jaise $32 \times 32 \times 3$.
-2. **Convolutional layer:** filters chuni hui stride aur padding ke saath input pe slide karte hain. Har position pe filter sabhi input channels pe multiply aur add karke ek number deta hai; ek filter ek feature map deta hai. Wahi filter har jagah reuse hota hai (**weight sharing**) aur har output sirf ek chhota patch dekhta hai (**local connectivity**).
-3. **ReLU:** negative values ko 0 bana deta hai, non-linearity add karne ke liye.
-4. **Pooling layer:** chhote blocks (usually 2×2, stride 2) ka max ya average; height aur width aadhi karti hai, channels same rakhti hai, aur iske koi parameters nahi hote.
-5. **Repeat** conv → ReLU → pool: shuruaati layers edges dhoondhti hain, gehri layers shapes aur object ke parts.
-6. **Flatten aur fully connected layers**, phir **softmax output layer** jo har class ke liye ek probability deti hai.
+<Img id="class-cnn-arch-digits" caption="CNN architecture: input, convolution + ReLU, max pooling, flatten, fully connected layer, softmax." />
 
 ```mermaid
-%% caption: CNN architecture. Convolution, ReLU aur pooling features nikaalte hain; flatten, fully connected aur softmax classify karte hain.
+%% caption: CNN ka architecture. Left part features nikalta hai, right part classify karta hai.
 flowchart LR
-  A["Input 32×32×3"] --> B["Conv + ReLU"]
-  B --> C["Pool"]
-  C --> D["Conv + ReLU"]
-  D --> E["Pool"]
-  E --> F["Flatten"]
-  F --> G["Fully connected"]
-  G --> H["Softmax output"]
+  A["Input image"] --> B["Convolution + ReLU"]
+  B --> C["Pooling"]
+  C --> D["More convolution + pooling"]
+  D --> E["Flatten"]
+  E --> F["Fully connected layer"]
+  F --> G["Softmax: class"]
 ```
 
-<Img id="img-dl-n2-cnn-typical" caption="Convolution aur subsampling layers maps ko chhota karte hue features dhoondhti hain; end mein fully connected layer class deti hai." />
+**Layers** <Cite id="class-dl-chp4" loc="slide 28" />
 
-**Advantages:** kam parameters, features khud seekhta hai, image mein kahin bhi pattern dhoondh leta hai. **Limitation:** bahut labelled data aur GPU time chahiye. <Cite id="gfdl-ch9" /> <Cite id="gfg-cnn" />
+1. **Convolution + ReLU:** filters input par slide karte hain, multiply aur add karte hain, har filter ek feature map deta hai. Output size $\lfloor (N - F + 2P)/S \rfloor + 1$, depth = filters ki sankhya.
+2. **Pooling:** height aur width kam karta hai, depth nahi.
+3. **Flatten + fully connected + softmax:** features vector ban jaate hain aur class probabilities mein badalte hain.
 
-**Numerical: is convolutional layer ke parameters.**
+**Convolution layer ke parameters** $= (F \times F \times D + 1) \times K$. <Cite id="class-dl-chp4" loc="slide 27" />
 
-Given: input $32 \times 32 \times 3$, das $5 \times 5$ filters, stride $S = 1$, padding $P = 2$.
+<Img id="class-cnn-architectures-sum-ten-filters" caption="Isi sum ka class drawing: 32×32×3 input, 5×5×3 ke 10 filters, stride 1, padding 2, output 32×32×10, har filter ke 76 parameters, total 760." />
 
-To find: is layer ke parameters ki sankhya.
+<Sum>
 
-1. **Ek filter ke weights:** $5 \times 5 \times 3 = 75$, kyunki har filter sabhi 3 input channels ko cover karta hai.
-2. **Ek bias add karo:** $75 + 1 = 76$.
-3. **Das filters se multiply karo:** $76 \times 10 = 760$. Wahi numbers sabhi positions pe reuse hote hain, to positions parameters nahi badhate.
-4. **Output size:** $(32 - 5 + 2 \times 2)/1 + 1 = 32$, to output $32 \times 32 \times 10$ hai. Padding size same rakhti hai aur parameters nahi badhati.
+<Given>
 
-**Answer: 760 parameters** (750 weights + 10 biases).
+input volume 32×32×3, das 5×5 filters, stride 1, padding 2.
+
+</Given>
+
+<Find>
+
+parameters ki sankhya (aur output size).
+
+</Find>
+
+<Steps>
+
+1. **Har filter 5×5×3 hai,** kyunki uski depth input depth (3) ke barabar honi chahiye.
+2. **Har filter ke weights:** $5 \times 5 \times 3 = 75$.
+3. **Har filter ka ek bias jodo:** $75 + 1 = 76$.
+4. **Saare das filters:** $76 \times 10 = 760$.
+5. **Output size:** $(32 - 5 + 2 \cdot 2)/1 + 1 = 32$, depth 10, to 32×32×10. Stride aur padding se parameter count nahi badalta.
+
+</Steps>
+
+<Answer>
+
+760 parameters (output 32×32×10).
+
+</Answer>
 
 <Box kind="verify">
 
-Dusre tarike se ginte hain: 10 filters × 75 weights = 750, plus 10 biases = 760. Scale ke liye, isi 32×32×10 output ke liye fully connected layer ko $3072 \times 10240 = 31{,}457{,}280$ weights chahiye (lagbhag 31.5 million), to weight sharing bahut bachata hai.
+Formula: $(5 \cdot 5 \cdot 3 + 1) \times 10 = 76 \times 10 = 760$. 5×5 filter ke saath padding 2 "same" padding hai ($P = (F-1)/2 = 2$), isliye 32×32 hi rehta hai.
 
 </Box>
 
-**Conclusion:** local connections aur weight sharing se CNN bahut kam parameters (yahan sirf 760) mein image features seekh leta hai.
+</Sum>
 
-Exam mein English mein likho: "A convolutional layer has (F × F × C_in + 1) × K parameters, because each filter spans all input channels, has one bias, and is reused at every position."
+**Conclusion:** CNN shared filters se features seekhta hai, isliye image kitni bhi badi ho is layer ko sirf 760 parameters chahiye.

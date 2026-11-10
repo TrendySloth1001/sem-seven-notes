@@ -1,61 +1,35 @@
 ---
-references: [hochreiter1997, gers2000, gfdl-ch10, d2l-lstm, colah-lstm, gfg-lstm]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** LSTM (Long Short-Term Memory) ek improved RNN cell hai jo info ko bahut time steps tak yaad rakh sakta hai. Iske paas ek alag long-term memory hoti hai, jise cell state kehte hain, aur teen gates (0 se 1 ke beech numbers) decide karte hain ki kya bhoolna hai, kya naya likhna hai aur kya output dena hai.
+**In simple words:** LSTM ek RNN cell hai jisme long-term memory (cell state) hoti hai aur teen gates jo tay karte hain ki kya forget karna hai, kya store karna hai aur kya dikhana hai.
 
-**Why it is needed.** Simple RNN har step par poori memory dobara likhta hai, isliye uske gradients vanish ho jaate hain aur wo purani inputs bhool jaata hai. LSTM (Hochreiter aur Schmidhuber, 1997; forget gate 2000 mein add hua) memory ko copy aur add karke rakhta hai. <Cite id="hochreiter1997" /> <Cite id="gers2000" />
+**Definition:** LSTM ek special kind ka recurrent neural network hai jo long-term dependencies handle kar sakta hai. Ye ek advanced RNN hai jo information ko persist hone deta hai aur RNN ki vanishing gradient problem handle kar sakta hai. <Cite id="class-dl-m5" loc="p. 18" />
 
-**Analogy.** Ek student jo chhote whiteboard par notes likhta hai: jo zaroori nahi use mitaata hai (**selective forget**), naye important points likhta hai (**selective write**), aur poochhne par sirf relevant hissa padhta hai (**selective read**).
+**Kyun zaroori:** plain RNN vanishing gradient ki wajah se long-term dependencies yaad nahi rakh paata; "I grew up in India ... I speak Hindi" mein "India" ko kai steps tak bachna padta hai. LSTMs isse bachne ke liye bane hain. <Cite id="class-dl-m5" loc="p. 18" />
 
-**Components**
+<Img id="class-lstm-gru-lstm-cell-equations" caption="Module 5 ka LSTM cell: upar cell state chalta hai; forget, input aur output gates use control karte hain; gate equations right side mein hain." />
 
-- **Cell state** $c_t$: long-term memory ki line. **Hidden state** $h_t$: is step ka output.
-- **Forget gate** $f_t$: purani memory kitni rakhni hai.
-- **Input gate** $i_t$: naya candidate $\tilde{c}_t$ (value $-1$ se $1$) kitna add karna hai.
-- **Output gate** $o_t$: memory ka kitna hissa $h_t$ ke roop mein dikhana hai.
+**Architecture.** Do states hain: **hidden state** (short-term memory, $H_{t-1}$, $H_t$) aur **cell state** (long-term memory, $C_{t-1}$, $C_t$). Teen gates (sigmoid, values 0 se 1): <Cite id="class-dl-m5" loc="p. 20" /> <Cite id="class-dl-m5" loc="p. 21" />
 
-**How it works, step by step**
+1. **Forget gate** $f_t = \sigma(x_t U_f + H_{t-1} W_f)$: jo information ab useful nahi use hata deta hai.
+2. **Input gate** $i_t = \sigma(x_t U_i + H_{t-1} W_i)$ aur new information $N_t = \tanh(x_t U_c + H_{t-1} W_c)$: useful nayi information jodta hai.
+3. **Output gate** $o_t = \sigma(x_t U_o + H_{t-1} W_o)$: tay karta hai ki output mein kya dikhana hai.
 
-1. Pichla hidden state $h_{t-1}$ aur input $x_t$ jodo; har gate is par ek sigmoid layer hai.
-2. Forget: purani cell state ko $f_t$ se multiply karo.
-3. Write: $i_t$ guna candidate add karo. Isse nayi cell state banti hai.
-4. Read: $h_t$ = $o_t$ guna tanh (nayi cell state).
-
-**The memory update.** Har gate ek sigmoid layer hai jiske learned weights aur biases hain, to uska output 0 se 1 ke beech hota hai <Cite id="gfdl-ch10" loc="§10.10.1" /> <Cite id="d2l-lstm" />. Do lines poora idea carry karti hain. Yahan $\odot$ ka matlab hai matching numbers ko ek-ek karke multiply karna:
-
-$$
-c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t, \qquad h_t = o_t \odot \tanh(c_t)
-$$
+Cell state: $C_t = f_t C_{t-1} + i_t N_t$. Hidden state: $H_t = o_t \tanh(C_t)$. $H_t$ par softmax prediction deta hai. <Cite id="class-dl-m5" loc="p. 24" /> <Cite id="class-dl-m5" loc="p. 25" />
 
 ```mermaid
-%% caption: LSTM cell. Cell state c sirf forget gate se multiply hoti hai aur usme add hota hai, isliye wo information ko door tak le ja sakti hai.
-flowchart LR
-  IN["h(t-1), x(t)"] --> F["Forget gate f"]
-  IN --> I["Input gate i"]
-  IN --> CC["Candidate c̃"]
-  IN --> O["Output gate o"]
-  C0["c(t-1)"] --> M1["f × c(t-1)"]
-  F --> M1
-  I --> M2["i × c̃"]
-  CC --> M2
-  M1 --> ADD["+ : c(t)"]
-  M2 --> ADD
-  ADD --> T["tanh(c(t))"]
-  T --> M3["o × tanh : h(t)"]
-  O --> M3
+%% caption: LSTM ka ek step chaar sawaalon ki tarah: forget, add, remember, output.
+flowchart TD
+  A["Previous cell state C_(t-1)"] --> B["Forget gate: what to forget"]
+  B --> C["Input gate: what to add"]
+  C --> D["New cell state C_t"]
+  D --> E["Output gate: what to output"]
+  E --> F["Hidden state H_t"]
 ```
 
-<Img id="img-dl-n3-lstm-cell" caption="Cell state upar se guzarti hai aur sirf forget gate (multiply) aur input gate (add) se badalti hai; output gate h(t) banata hai." />
+**Example:** $f_t = 0.2$, $C_{t-1} = 10$, $i_t = 0.8$, $N_t = 5$ se $C_t = 2 + 4 = 6$. <Cite id="class-dl-chp5" loc="slide 17" />
 
-**Why it works.** Cell state ke raaste par gradient har step par sirf forget gate se multiply hota hai. Jab wo 1 ke paas rehta hai, gradient vanish nahi hota, aur LSTM lambe faasle ke links seekh leta hai. <Cite id="colah-lstm" />
+**Advantages:** long-term dependencies aur vanishing gradients handle karta hai; BPTT se train hota hai. **Applications:** Siri, Google voice search, time series, text classification. <Cite id="class-dl-m5" loc="p. 31" />
 
-**Advantages:** long-term memory, vanishing gradients mein bahut kami, separate gates se fine control.
-
-**Disadvantages:** plain RNN se lagbhag 4 guna parameters, slow, aur exploding gradients ke liye phir bhi clipping chahiye.
-
-**Applications:** machine translation, speech recognition, handwriting recognition, time-series forecasting. <Cite id="gfg-lstm" />
-
-**Conclusion:** LSTM ek cell state use karta hai jiske saath forget, input aur output gates hain, jo long-term information yaad rakhte hain.
-
-Exam mein English mein likho: "The LSTM uses a cell state with forget, input and output gates to remember long-term information."
+**Conclusion:** cell state long-term memory carry karta hai; gates control karte hain ki kya andar aaye, kya rahe aur kya bahar jaaye.

@@ -1,611 +1,778 @@
 ---
-title: "LeNet, AlexNet, ResNet"
+title: "LeNet, AlexNet, VGG, GoogLeNet, ResNet and U-Net"
 module: 4
-summary: "Teen famous CNN designs, jinhone apne time ki problem solve ki: LeNet-5 (1998) ne handwritten digits padhe, AlexNet (2012) ne ReLU, dropout aur GPUs ke saath ImageNet jeeta, aur ResNet (2015) ne skip connections se 100 se zyada layers wale networks train kiye. Har ek ke liye: kyun banaya gaya, uski layers, kya naya tha, advantages, limits aur uses, saath mein output size aur parameter count ke step-by-step sums."
+summary: "Class mein padhaye gaye famous CNN designs, har ek apne waqt ki problem solve karta hai: LeNet-5 handwritten digits padhta hai, AlexNet ReLU, dropout aur GPUs se ImageNet jeetta hai, VGG chhote 3×3 filters se deep jaata hai, GoogLeNet alag-alag size ke filters parallel chalata hai, ResNet skip connections se bahut deep networks train karta hai, aur U-Net har pixel ko label karta hai. Layer sizes nikaal ke check kiye gaye hain."
 keyIdeas:
-  - "LeNet-5: 32×32 input, do conv + subsampling pairs, phir 120, 84 aur 10 units ki layers; lagbhag 60 hazaar parameters; tanh-type activation."
-  - "AlexNet: 5 conv layers + 3 fully connected layers, lagbhag 60 million parameters; ReLU, dropout, overlapping max pooling, data augmentation aur GPU training ki pehli badi jeet."
-  - "ResNet: block ke input ko uske output mein add karta hai, y = F(x) + x, isliye block ko sirf change (residual) seekhna padta hai."
-  - "Skip connections degradation problem fix karte hain: inke bina, aur layers add karne se training error bhi badh jaata tha."
-  - "1998 se 2015 ka trend: deeper networks, tanh ki jagah ReLU, max pooling, aur bade fully connected layers pe kam dependence."
+  - "LeNet-5 (1998): 32×32 grayscale input, C1 6 filters 5×5, S2 pooling, C3 16 filters, S4 pooling, C5 120 filters, F6 84, output 10. Paanch trainable layers, lagbhag 60 hazaar parameters."
+  - "AlexNet (2012): 227×227×3 input, 5 convolution + 3 fully connected layers, ReLU, max pooling, dropout 0.5, data augmentation, GPU training; lagbhag 62 million parameters."
+  - "VGG-16 (2014): sirf 3×3 convolutions, 13 convolution + 3 fully connected layers, har pooling ke baad size aadha aur channels double; lagbhag 138 million parameters."
+  - "GoogLeNet (2014): Inception module 1×1, 3×3, 5×5 convolutions aur 3×3 max pooling ko parallel chalata hai aur outputs stack karta hai; 1×1 convolutions computation kam karte hain; global average pooling fully connected layers ki jagah leta hai."
+  - "ResNet (2015): skip (shortcut) connection kuch layers ke output mein input jod deta hai, y = F(x) + x, isliye bahut deep networks (50 se 152 layers) degradation problem ke bina train hote hain."
+  - "U-Net (2015): segmentation ke liye skip connections wala U-shaped encoder-decoder, image ke har pixel ko label karta hai."
 references:
-  - gfdl-ch9
-  - lecun1998
-  - krizhevsky2012
-  - he2015
-  - srivastava2014
-  - ioffe2015
-  - cs231n-cnn
-  - nptel-dl
-  - d2l-lenet
-  - d2l-alexnet
-  - d2l-resnet
-  - gfg-lenet
-  - gfg-alexnet
-  - gfg-resnet
-  - av-lenet
-  - av-alexnet
-  - ibm-cnn
-  - wiki-lenet
-  - wiki-alexnet
-  - wiki-resnet
-  - wiki-cnn
+  - class-dl-chp4
+  - class-dl-m4
+  - class-dl-qb2
 ---
 
-Naye ideas se pehle, purane ideas jo chahiye wo yahan hain. Agar pehle se aate hain to agle section pe chale jao. Convolutional neural networks wala note in sabko detail mein samjhata hai.
+Naye ideas se pehle wo purani baatein jo chahiye. Agar aapko pata hai to seedha agle section par jao.
 
-## Pehle basics
+## Basics pehle
 
-- **Convolutional layer** apne input pe chhote learned **filters** slide karti hai. Har filter ek **feature map** deta hai.
-- **Output size.** Filter edge ke bahar nahi latak sakta, isliye output input se thoda chhota hota hai; padding zeros ka border add karke size bachaati hai, aur bada stride (step) size ko jaldi chhota karta hai. Symbols mein: $O = (N - F + 2P)/S + 1$, jahan $N$ input size, $F$ filter size, $P$ padding aur $S$ stride hai. Ye sirf calculation questions mein chahiye.
-- **Pooling** har feature map ko chhota karta hai (chhote blocks ka max ya average) aur iske koi parameters nahi hote.
-- **ReLU** positive values rakhta hai aur negatives ko 0 kar deta hai. **tanh** aur **sigmoid** S-shaped curves hain jo bade inputs pe flat ho jaate hain ("saturate"), wahan slope almost zero hota hai, isliye learning slow ho jaati hai.
-- **Dropout** training ke dauraan random neurons ko off kar deta hai taaki overfitting kam ho. **Batch normalization** har layer ki values ko average 0 aur spread 1 pe rescale karta hai, jisse training fast aur stable hoti hai.
-- **ImageNet (ILSVRC)** ek yearly contest tha (2010 se 2017) jisme lagbhag 1.2 million training images aur 1000 classes thi. **Top-5 error** un test images ka fraction hai jinki sahi class network ke paanch best guesses mein nahi hai.
+- **Convolution layer** chhote filters ko image par slide karta hai aur feature maps deta hai. Output size $= \lfloor (N - F + 2P)/S \rfloor + 1$ aur output depth = filters ki sankhya. Layer ke parameters $= (F \times F \times D + 1) \times K$. (CNN note dekho.) <Cite id="class-dl-chp4" loc="slide 19" /> <Cite id="class-dl-chp4" loc="slide 27" />
+- **Pooling layer** height aur width kam karta hai, depth nahi. **Max pooling** har region ki sabse badi value rakhta hai, **average pooling** average. <Cite id="class-dl-chp4" loc="slide 31" />
+- **Fully connected (FC) layer** har input ko har neuron se jodta hai. Aakhri layer **softmax** se class probabilities deti hai. <Cite id="class-dl-chp4" loc="slide 28" />
+- **ReLU** positive values rakhta hai aur negative values ko 0 bana deta hai. **Dropout** training ke dauraan randomly neurons band karta hai taaki overfitting kam ho. **ImageNet** lagbhag 14 million images ka dataset hai jisme hazaar classes hain. <Cite id="class-dl-m4" loc="p. 54" />
 
 ## Named architectures kyun seekhein?
 
-**Architecture** network ka poora plan hai: kaun si layers, kis order mein, kis size ki. Har famous architecture ek milestone hai jisne poocha "ab aage kaise badhein?"
+CNN ke kai architectures hain jo AI ko power dene wale algorithms banane mein key rahe hain: **LeNet, AlexNet, VGGNet, GoogLeNet, ResNet aur ZFNet.** Har ek ne ek naya idea diya jo baad ke saare networks use karte hain. <Cite id="class-dl-m4" loc="p. 41" />
 
-**Everyday analogy.** Cars ki history socho. Ek early car ne prove kiya ki idea kaam karta hai. Baad wali car mein bahut bada engine aur better tyres lage aur wo har race jeeti. Modern car mein ek clever naya part aaya (jaise power steering) jisne pehle impossible cheez ko easy bana diya. LeNet ne prove kiya ki CNNs kaam karte hain, AlexNet ne unhe bada aur fast banaya, aur ResNet ne wo shortcut add kiya jisse bahut deep networks train ho sake. Ye syllabus <Syl m="4" /> hai, CNN module ka last topic. <Cite id="gfdl-ch9" loc="§9.11" />
+<Img id="class-cnn-architectures-timeline-table" caption="Major CNN architectures ki class table, saal aur har ek ke main contribution ke saath." />
+
+<Img id="class-cnn-architectures-quick-memory" caption="Quick memory: LeNet = CNN ka janm, AlexNet = GPU + ReLU, VGG = chhote filters ke saath deeper, GoogLeNet = parallel Inception modules, ResNet = skip connections, EfficientNet = behtar efficiency. Early se modern." />
 
 ```mermaid
-%% caption: Teeno architectures ek timeline pe. Har step ne networks ko deeper banaya aur wo problem fix ki jo pichle design ko rok rahi thi.
+%% caption: CNN architectures ki kahani jaise class mein draw ki gayi, early se modern tak. Har step ne ek idea joda.
 flowchart LR
-  A["1998 LeNet-5: 7 layers, ~60 hazaar parameters, digits"] --> B["2012 AlexNet: 8 layers, ~60 million parameters, ImageNet winner"]
-  B --> C["2015 ResNet: 152 layers tak, skip connections, ImageNet winner"]
+  A["LeNet-5 (1998): conv + pooling + FC"] --> B["AlexNet (2012): ReLU, dropout, GPU"]
+  B --> C["VGG (2014): small 3×3 filters, deeper"]
+  C --> D["GoogLeNet (2014): Inception modules"]
+  D --> E["ResNet (2015): skip connections"]
+  E --> F["DenseNet (2017), EfficientNet (2019)"]
 ```
+
+<Img id="class-cnn-architectures-other-major" caption="VGG (kai 3×3 filters stacked), GoogLeNet (parallel convolutions), ResNet (convolutions ke around skip), DenseNet (har layer kai baad ki layers se) aur EfficientNet (depth, width aur resolution scale) ki bahut short pictures." />
 
 ## LeNet-5 (1998)
 
-**Ye kya hai.** LeNet-5 sabse pehle successful convolutional neural networks mein se ek hai, jise Yann LeCun aur unke colleagues ne AT&amp;T mein handwritten digits (MNIST dataset) aur bank cheques padhne ke liye banaya. <Cite id="lecun1998" />
+<Box kind="definition">
 
-**Ye kyun zaroori tha.** Pehle ke digit readers hand-designed features use karte the, jo handwriting badalte hi toot jaate the. LeNet ne apne features seedha pixels se seekhe, aur weight sharing use kiya taaki network 1990s ke computers ke liye kaafi chhota rahe. Goodfellow batate hain ki 1990s ke end tak aise networks pe based ek system US ke 10% se zyada cheques padh raha tha. <Cite id="gfdl-ch9" loc="§9.11" />
-
-<Img id="img-dl-n3-mnist-digits" caption="MNIST digits: jaise chhote handwritten images LeNet-5 padhne ke liye bana tha. Ek hi digit har baar alag dikhta hai, isliye network ko shape seekhni padti hai." />
-
-**Ye kaise kaam karta hai, step by step.** Paper layers ko C (convolution), S (subsampling) aur F (fully connected) naam deta hai. Input ko chhod ke saat layers mein weights hain. Idea simple hai: shuru ki layers chhote strokes dhoondhti hain, beech ki layers strokes ko shapes mein jodti hain, aur last layers decide karti hain ki shapes kaun sa digit banate hain.
-
-1. **Input:** ek 32×32 grayscale image.
-2. **C1:** 5×5 ke 6 filters simple strokes aur edges dhoondhte hain, 28×28 ke 6 maps dete hain.
-3. **S2:** 2×2 subsampling har map ko aadha karke 14×14 kar deta hai.
-4. **C3:** 5×5 ke 16 filters strokes ko shapes mein jodte hain, 10×10 ke 16 maps dete hain.
-5. **S4:** subsampling unhe aadha karke 5×5 kar deta hai.
-6. **C5:** 5×5 ke 120 filters poore 5×5 map ko cover karte hain, 120 numbers dete hain.
-7. **F6:** 84 units ki ek fully connected layer.
-8. **Output:** 10 units, har digit ke liye ek.
-
-```mermaid
-%% caption: LeNet-5 left se right, har layer ke baad data ke size ke saath. Convolution aur subsampling do baar alternate hote hain, phir teen layers classification karti hain.
-flowchart LR
-  A["Input 32×32×1"] --> B["C1 conv 5×5, 6 maps: 28×28×6"]
-  B --> C["S2 subsample 2×2: 14×14×6"]
-  C --> D["C3 conv 5×5, 16 maps: 10×10×16"]
-  D --> E["S4 subsample 2×2: 5×5×16"]
-  E --> F["C5 conv 5×5: 120"]
-  F --> G["F6 fully connected: 84"]
-  G --> H["Output: 10 digits"]
-```
-
-<Img id="img-dl-n3-lenet5" caption="LeNet-5 stacked maps ki tarah: convolution aur pooling do baar alternate hote hain, maps chhote hote jaate hain, phir dense layers digit decide karti hain. Is drawing mein input 28×28 hai; original paper mein 32×32." />
-
-| Layer | What it does | Output | Trainable parameters (from the paper) |
-|---|---|---|---|
-| Input | Grayscale image | 32×32×1 | 0 |
-| C1 | 5×5 ke 6 filters, stride 1 | 28×28×6 | 156 |
-| S2 | 2×2 subsampling, stride 2 | 14×14×6 | 12 |
-| C3 | 5×5 ke 16 filters, har ek sirf kuch S2 maps se connected | 10×10×16 | 1,516 |
-| S4 | 2×2 subsampling, stride 2 | 5×5×16 | 32 |
-| C5 | 5×5 ke 120 filters, saare 16 maps pe | 1×1×120 | 48,120 |
-| F6 | Fully connected | 84 | 10,164 |
-| Output | 10 RBF units, har digit ka ek | 10 | haath se fixed (count nahi) |
-
-Ye milke paper ke "about 60,000 trainable free parameters" bante hain. Output layer count nahi hoti kyunki har unit ka pattern haath se choose kiya gaya tha, seekha nahi gaya. <Cite id="lecun1998" />
-
-**Special features (words mein).**
-
-- **Trainable subsampling, aaj wala pooling nahi.** Har S unit apne chaar inputs add karta hai, ek learned coefficient se multiply karta hai, ek learned bias add karta hai aur sigmoid-type function lagata hai. Ye scaled average pooling jaisa behave karta hai.
-- **C3 mein partial connections.** Har C3 map sirf kuch S2 maps dekhta hai. Paper do reasons deta hai: kam connections, aur alag maps ko alag features seekhne pe majboor karna.
-- **Activation:** ek scaled tanh (S-shaped curve), ReLU nahi.
-- **Output:** 10 Euclidean RBF units, har ek naapta hai ki 84 numbers uske digit ke stored pattern se kitne door hain. Modern versions 10-way softmax use karte hain.
-- **Result:** MNIST pe 0.95% test error, aur 0.8% jab images ki extra distorted copies se train kiya (data augmentation). <Cite id="lecun1998" />
-
-<Box kind="pitfall">
-
-Bahut saare tutorials LeNet-5 ko ReLU, max pooling aur softmax ke saath draw karte hain. Ye modern substitutions hain. 1998 ka paper scaled tanh, trainable subsampling aur RBF outputs use karta hai. Exam mein dono version pe marks milte hain agar tum batao ki kaun sa draw kar rahe ho. D2L, example ke liye, sigmoid aur average pooling use karta hai, jo us time ke common choices the. <Cite id="d2l-lenet" />
+**LeNet-5** is a CNN architecture designed for handwritten digit recognition, which uses convolution, subsampling/pooling and fully connected layers to automatically learn features from images and classify them. <Cite id="class-dl-chp4" loc="slide 43" />
 
 </Box>
 
-**Advantages.** Chhota aur fast (lagbhag 60 hazaar parameters); apne features khud seekhe; weight sharing ne compact rakha; digits pe bahut accurate.
+<Img id="class-cnn-architectures-lenet-definition" caption="LeNet-5: sabse pehle ke successful CNNs mein se ek, Yann LeCun aur unke saathiyon ne banaya, handwritten digits pehchanne ke liye famous." />
 
-**Disadvantages.** Chhoti grayscale images ke liye design hua; 1000 classes wali badi colour photos ke liye bahut chhota; tanh-type activations slowly train hote hain; 1998 mein computers isse bahut bade versions train nahi kar sakte the.
+**Ye kyun zaroori tha?** CNNs se pehle image recognition manually designed features par depend karti thi jaise edges, curves aur corners. LeNet ka idea: network ko ye features khud seekhne do. Handwritten image → CNN features seekhta hai → edges → curves → shapes → digit classification 0 se 9. <Cite id="class-dl-chp4" loc="slide 43" />
 
-**Applications.** Handwritten digit recognition, bank cheque reading, postal ZIP code reading. Aaj ye CNN ka standard teaching example hai. <Cite id="gfg-lenet" /> <Cite id="av-lenet" />
+LeNet-5 pehla "famous" CNN architecture tha, LeCun et al. (1998) ne handwritten digits pehchanne ke liye banaya. LeCun aur unke saathiyon ne ek efficient architecture tak pahunchne mein ek dashak CNN models par kaam kiya. Isne deep learning researchers ko aaj ke efficient CNN models banane ke liye inspire kiya. <Cite id="class-dl-m4" loc="p. 43" />
 
-**Sum 1: LeNet-5 sizes aur parameters.** Theory question ("Describe LeNet") mein iski zaroorat nahi. Sirf tab use karo jab question sizes ya parameters calculate karne ko bole.
+**Input:** 32 × 32 grayscale image, yaani height = 32, width = 32 aur channels = 1. <Cite id="class-dl-chp4" loc="slide 43" /> <Cite id="class-dl-m4" loc="p. 44" />
+
+### Architecture
+
+Network mein **5 layers learnable parameters ke saath** hain, isliye naam LeNet-5. Ismein average pooling ke saath teen sets ki convolution layers hain, phir do fully connected layers, aur aakhir mein softmax classifier. <Cite id="class-dl-m4" loc="p. 44" />
+
+<Img id="class-cnn-architectures-lenet-architecture" caption="LeNet-5 left se right: 32×32×1 input, C1 28×28×6, S2 14×14×6, C3 10×10×16, S4 5×5×16, C5 1×1×120, F6 84, output 10. C = convolution, S = subsampling." />
+
+```mermaid
+%% caption: Har layer ke baad shape ke saath LeNet-5. Convolutions zyada feature maps banate hain; subsampling size aadha karta hai; aakhri layers classify karti hain.
+flowchart LR
+  A["Input 32×32×1"] --> B["C1: 6 filters 5×5 → 28×28×6"]
+  B --> C["S2: average pool 2×2 → 14×14×6"]
+  C --> D["C3: 16 filters 5×5 → 10×10×16"]
+  D --> E["S4: average pool 2×2 → 5×5×16"]
+  E --> F["C5: 120 filters 5×5 → 1×1×120"]
+  F --> G["F6: fully connected 84"]
+  G --> H["Output: 10 (softmax)"]
+```
+
+<Img id="class-cnn-architectures-lenet-flow" caption="LeNet-5 ki Module 4 wali picture, har layer ke neeche ek note ke saath: C1 low-level features (edges, strokes) seekhta hai, S2 size kam karta hai, C3 higher-level features seekhta hai, C5 fully connected layer jaisa kaam karta hai, F6 mein 84 neurons hain, output mein digits 0 se 9 ke liye 10 neurons." />
+
+**Layer by layer** <Cite id="class-dl-chp4" loc="slide 45" /> <Cite id="class-dl-m4" loc="p. 51" />
+
+| Layer | Operation | Input | Filters / neurons | Filter size | Output | What it learns |
+|---|---|---|---|---|---|---|
+| Input | Image | – | – | – | 32×32×1 | Raw pixel values |
+| C1 | Convolution (tanh) | 32×32×1 | 6 | 5×5 | 28×28×6 | Edges, lines, curves |
+| S2 | Subsampling (average pooling) | 28×28×6 | – | 2×2, stride 2 | 14×14×6 | Downsamples, keeps important information |
+| C3 | Convolution (tanh) | 14×14×6 | 16 | 5×5 | 10×10×16 | Edges ko shapes aur corners mein combine karta hai |
+| S4 | Subsampling | 10×10×16 | – | 2×2, stride 2 | 5×5×16 | Further downsampling |
+| C5 | Convolution (tanh) | 5×5×16 | 120 | 5×5 | 1×1×120 | High-level features (poora digit) |
+| F6 | Fully connected (tanh) | 120 | 84 | – | 84 | Saare features combine karke decide karta hai |
+| Output | Fully connected + softmax | 84 | 10 | – | 10 | Digits 0 se 9 ke scores / probability |
+
+<Img id="class-cnn-architectures-lenet-layer-table" caption="LeNet-5 ki class layer-by-layer table." />
+
+**Sizes check karo** formula $\lfloor (N - F + 2P)/S \rfloor + 1$ se (padding nahi): <Cite id="class-dl-chp4" loc="slide 19" />
 
 <Sum>
 
 <Given>
 
-32×32×1 input; har convolution 5×5 filters, stride 1, no padding use karta hai; har subsampling 2×2 windows, stride 2 use karta hai; C1 mein 6 filters, C3 mein 16, C5 mein 120; F6 mein 84 units. Output size rule $O = (N - F + 2P)/S + 1$.
+32×32×1 input; C1: 6 filters 5×5, stride 1; S2: 2×2 pooling, stride 2; C3: 16 filters 5×5; S4: 2×2 pooling, stride 2; C5: 120 filters 5×5. Padding nahi.
 
 </Given>
 
 <Find>
 
-C1, S2, C3, S4 aur C5 ka output size, aur C1, C5 aur F6 ke trainable parameters.
+har layer ka output size.
 
 </Find>
 
 <Steps>
 
-1. **C1 size.** $(32 - 5 + 0)/1 + 1 = 27 + 1 = 28$, toh 28×28×6. 5×5 filter 32 pixels mein sirf 28 positions pe fit hota hai; 6 filters 6 maps dete hain.
-2. **S2 size.** $(28 - 2)/2 + 1 = 13 + 1 = 14$, toh 14×14×6. Subsampling size aadha karta hai aur maps ki ginti same rakhta hai.
-3. **C3 size.** $(14 - 5)/1 + 1 = 9 + 1 = 10$, toh 10×10×16. C1 wala hi filter rule, ab 16 filters ke saath.
-4. **S4 size.** $(10 - 2)/2 + 1 = 4 + 1 = 5$, toh 5×5×16. Phir se aadha.
-5. **C5 size.** $(5 - 5)/1 + 1 = 0 + 1 = 1$, toh 1×1×120. 5×5 filter poore 5×5 map ko cover karta hai, isliye har filter ek number deta hai.
-6. **C1 parameters.** Har filter mein $5 \times 5 \times 1 = 25$ weights plus 1 bias, toh 26. Chhe filters: $6 \times 26 = 156$. Input mein ek hi channel hai, isliye har filter 5×5×1 hai.
-7. **C5 parameters.** Har filter S4 ke saare 16 maps dekhta hai: $5 \times 5 \times 16 = 400$ weights plus 1 bias, toh 401. Phir $120 \times 401 = 48{,}120$. Har filter ko har input map cover karna padta hai.
-8. **F6 parameters.** 84 units mein se har ek C5 ki saari 120 values se connected hai, plus 1 bias, toh 121. Phir $84 \times 121 = 10{,}164$. Fully connected unit mein har input ka ek weight hota hai.
+1. **C1:** $(32 - 5)/1 + 1 = 28$, depth 6, to **28×28×6**.
+2. **S2:** $(28 - 2)/2 + 1 = 14$, depth 6 hi rehti hai, to **14×14×6**.
+3. **C3:** $(14 - 5)/1 + 1 = 10$, depth 16, to **10×10×16**.
+4. **S4:** $(10 - 2)/2 + 1 = 5$, depth 16 hi rehti hai, to **5×5×16**.
+5. **C5:** $(5 - 5)/1 + 1 = 1$, depth 120, to **1×1×120** (5×5×16 map ko ek filter position cover kar leti hai, isliye 120 values flattened vector jaisi kaam karti hain).
 
 </Steps>
 
 <Answer>
 
-sizes 28×28×6 → 14×14×6 → 10×10×16 → 5×5×16 → 1×1×120; parameters C1 = 156, C5 = 48,120, F6 = 10,164.
+28×28×6 → 14×14×6 → 10×10×16 → 5×5×16 → 1×1×120, phir 84 aur 10.
 
 </Answer>
 
 <Box kind="verify">
 
-Sizes ko ek pattern se check karo: bina padding ka 5×5 filter hamesha size se 4 kam karta hai ($32 - 4 = 28$, $14 - 4 = 10$, $5 - 4 = 1$), aur 2×2 stride-2 window hamesha aadha karta hai ($28 / 2 = 14$, $10 / 2 = 5$). Dono steps se match karte hain. Parameters ko paper ke total se check karo: table ki har layer add karo,
-
-$$
-156 + 12 + 1{,}516 + 32 + 48{,}120 + 10{,}164
-$$
-
-Order mein: $156 + 12 = 168$; $168 + 1{,}516 = 1{,}684$; $1{,}684 + 32 = 1{,}716$; $1{,}716 + 48{,}120 = 49{,}836$; $49{,}836 + 10{,}164 = 60{,}000$. Ye bilkul paper ka "about 60,000" hai, toh teeno counts fit baithte hain.
+Ye wahi sizes hain jo class sheet par chhape hain. Pooling height aur width aadha karta hai aur depth kabhi nahi badalta ($6 \to 6$, $16 \to 16$), jaise class ka rule hai.
 
 </Box>
 
 </Sum>
 
-Exam mein English mein likho: "LeNet-5 has about 60,000 trainable parameters, most of them (48,120) in layer C5."
+**Parameters check karo** ("around sixty thousand"). Convolution layer ke $(F \times F \times D + 1) \times K$ parameters hote hain; fully connected layer ke (inputs × neurons) weights plus har neuron ka ek bias. Pooling ke koi nahi. <Cite id="class-dl-m4" loc="p. 51" /> <Cite id="class-dl-chp4" loc="slide 27" />
+
+<Sum>
+
+<Given>
+
+upar ki table ki LeNet-5 layers.
+
+</Given>
+
+<Find>
+
+total trainable parameters.
+
+</Find>
+
+<Steps>
+
+1. **C1:** $(5 \cdot 5 \cdot 1 + 1) \times 6 = 26 \times 6 = 156$.
+2. **C3:** input depth 6 hai, to $(5 \cdot 5 \cdot 6 + 1) \times 16 = 151 \times 16 = 2{,}416$.
+3. **C5:** input depth 16 hai, to $(5 \cdot 5 \cdot 16 + 1) \times 120 = 401 \times 120 = 48{,}120$.
+4. **F6:** $120 \times 84 + 84 = 10{,}164$.
+5. **Output:** $84 \times 10 + 10 = 850$.
+6. **Total:** $156 + 2{,}416 + 48{,}120 + 10{,}164 + 850 = 61{,}706$.
+
+</Steps>
+
+<Answer>
+
+lagbhag 61,706, jo class notes ka "around sixty thousand" hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Alag order mein add karo: $156 + 850 = 1{,}006$; $2{,}416 + 10{,}164 = 12{,}580$; $1{,}006 + 12{,}580 + 48{,}120 = 61{,}706$. (S2 aur S4 kuch nahi jodte.) Slide bhi lagbhag 60K kehti hai.
+
+</Box>
+
+</Sum>
+
+### Important ideas, aur LeNet-5 kyun matter karta hai
+
+<Img id="class-cnn-architectures-lenet-ideas" caption="LeNet-5 ke important ideas: convolution (filters edges, curves, shapes detect karte hain), subsampling / pooling (28×28 se 14×14, computation kam), hierarchical feature learning (edges, curves, digit ke parts, poora digit, classification)." />
+
+- **Convolution**, **subsampling / pooling**, **hierarchical feature learning** aur **multiple feature maps** (zyada filters = zyada feature maps; C1 mein 6, C3 mein 16). <Cite id="class-dl-chp4" loc="slide 43" />
+- LeNet ne dikhaya ki network **images se seedhe useful visual features khud seekh sakta hai**. Isne modern CNNs ke basic ideas establish kiye: convolution, pooling, feature maps, hierarchical feature learning, weight sharing aur end-to-end image classification. <Cite id="class-dl-chp4" loc="slide 43" />
+
+<Img id="class-cnn-architectures-lenet-vs-fc" caption="LeNet versus fully connected network: fully connected network mein parameters bahut zyada hote hain aur spatial structure ignore hota hai; LeNet mein parameters bahut kam, spatial information preserved aur features automatically seekhe jaate hain." />
+
+**LeNet-5 naam kyun?** Kyunki ismein paanch trainable layers hain (C1, C3, C5, F6 aur Output). Pooling layers S2 aur S4 trainable layers mein nahi ginti jaati. <Cite id="class-dl-chp4" loc="slide 43" />
+
+<Img id="class-cnn-architectures-lenet-why-five" caption="LeNet-5 ki paanch trainable layers aur important characteristics: 32×32×1 input, 6 filters, 16 filters, 120 filters, 2×2 subsampling, 84 neurons, 10 classes, tanh." />
+
+<Img id="class-cnn-architectures-lenet-conceptual" caption="Conceptually kya ho raha hai: pixels, phir edges aur curves (C1), phir shapes (C3), phir digit ke parts (C5), phir decision (F6). Example softmax output mein digit 5 ko sabse zyada score, 0.82, milta hai." />
+
+<Img id="class-cnn-architectures-lenet-example-eight" caption="Handwritten 8 par LeNet-5: C1 edges dhundta hai, S2 size kam karta hai, C3 curves aur shapes dhundta hai, S4 size kam karta hai, C5 complex features combine karta hai, F6 final representation banata hai, aur 8 ke liye output ka score sabse zyada hai." />
+
+**Merits aur demerits** (Module 4): LeNet ne computation aur parameter count kam karne ke liye spatial correlation use kiya, aur uski feature hierarchies automatically seekhi gayin. Lekin wo alag-alag picture classes par kam scale hua, bade-size filters use kiye aur sirf low-level features nikaale. <Cite id="class-dl-m4" loc="p. 85" />
+
+<Img id="class-cnn-architectures-merits" caption="LeNet aur AlexNet ke merits aur demerits ki Module 4 table." />
+
+<Box kind="key">
+
+**Exam-ready conclusion (LeNet-5):** LeNet-5 is an early and influential CNN architecture developed for handwritten digit recognition. It takes a grayscale image, extracts features hierarchically using convolution and subsampling layers, and uses fully connected layers to classify the image into one of ten digit classes. It is considered a foundational architecture in the development of modern CNNs. <Cite id="class-dl-chp4" loc="slide 43" />
+
+</Box>
 
 ## AlexNet (2012)
 
-**Ye kya hai.** AlexNet ek deep CNN hai jise Alex Krizhevsky, Ilya Sutskever aur Geoffrey Hinton ne banaya. Isne ILSVRC-2012 **15.3%** top-5 test error ke saath jeeta, jabki second-best entry ka **26.2%** tha. Goodfellow is jeet ko deep learning mein aaj ke strong commercial interest ki shuruaat maante hain. <Cite id="krizhevsky2012" /> <Cite id="gfdl-ch9" loc="§9.11" />
+<Box kind="definition">
 
-<Img id="img-dl-n3-imagenet-error" caption="ImageNet error saal ke hisaab se. 2012 ka bada drop AlexNet hai; 2015 tak best systems dashed human-performance line se aage nikal gaye." />
+**AlexNet** is a deep CNN architecture that became a landmark in 2012 by achieving outstanding ImageNet image-classification performance and popularizing deep learning for computer vision. <Cite id="class-dl-chp4" loc="slide 46" />
 
-**Ye kyun zaroori tha.** LeNet chhoti digit images pe kaam karta tha, par ImageNet mein 1000 classes ki ek million se zyada badi colour photos hain. Iske liye bahut bada network chahiye tha, aur bade network ne do nayi problems laayi: bahut slow training aur heavy overfitting. AlexNet ke naye ideas bilkul inhi do problems ko solve karte hain.
+</Box>
 
-**Ye kaise kaam karta hai (architecture).** Weights wali 8 layers: **5 convolutional** aur **3 fully connected**, end mein 1000-way softmax. Lagbhag **60 million parameters** aur 650,000 neurons. Pehli conv layers edges aur colour blobs dhoondhti hain, deeper layers textures aur object parts dhoondhti hain, aur fully connected layers in parts ko jodke class decide karti hain. Table common single-GPU description use karti hai, 227×227×3 input ke saath.
+<Img id="class-cnn-architectures-alexnet-what" caption="AlexNet ko Alex Krizhevsky, Ilya Sutskever aur Geoffrey Hinton ne 2012 mein banaya. Isne dikhaya ki GPUs aur bade data se train hua deep CNN useful image features seekh sakta hai aur bahut behtar perform karta hai." />
 
-| Layer | Setting | Output |
-|---|---|---|
-| Input | Colour image | 227×227×3 |
-| Conv1 + ReLU | 96 filters, 11×11, stride 4 | 55×55×96 |
-| Normalization + max pool | 3×3, stride 2 | 27×27×96 |
-| Conv2 + ReLU | 256 filters, 5×5, pad 2 | 27×27×256 |
-| Normalization + max pool | 3×3, stride 2 | 13×13×256 |
-| Conv3 + ReLU | 384 filters, 3×3, pad 1 | 13×13×384 |
-| Conv4 + ReLU | 384 filters, 3×3, pad 1 | 13×13×384 |
-| Conv5 + ReLU | 256 filters, 3×3, pad 1 | 13×13×256 |
-| Max pool | 3×3, stride 2 | 6×6×256 = 9216 values |
-| FC6 + ReLU + dropout | 4096 units | 4096 |
-| FC7 + ReLU + dropout | 4096 units | 4096 |
-| FC8 + softmax | 1000 classes | 1000 |
+**Ye kyun zaroori tha?** AlexNet se pehle CNNs strong aur train karne mein aasaan the, lekin bade, high-resolution images ke liye expensive the, bilkul wahi problem jab ImageNet aaya. Traditional approach: image → manually designed features → classifier → prediction. AlexNet ka approach: image → convolution → edges → shapes → textures → object parts → objects → classification. <Cite id="class-dl-m4" loc="p. 53" /> <Cite id="class-dl-chp4" loc="slide 46" />
+
+### AlexNet ke key features
+
+<Img id="class-cnn-architectures-alexnet-features" caption="Key features: deep CNN, sigmoid ya tanh ki jagah ReLU, max pooling, GPU training, dropout, bada dataset (ImageNet) aur automatic feature learning." />
+
+- **Aath layers** learnable parameters ke saath: **paanch convolutional layers aur teen fully connected layers**. Output layer ko chhod kar har layer mein ReLU use hota hai. <Cite id="class-dl-m4" loc="p. 54" /> <Cite id="class-dl-m4" loc="p. 55" />
+- tanh ki jagah **ReLU**: training lagbhag **chhe guna tez** ho gayi (Module example mein CIFAR-10 par error 25%). <Cite id="class-dl-m4" loc="p. 54" /> <Cite id="class-dl-m4" loc="p. 55" />
+- **GPU training**: neurons ko kai GPUs mein baanta gaya, isse training tez hui aur bada model bana. <Cite id="class-dl-m4" loc="p. 55" />
+- **Overlapping pooling** (padosi pooling regions overlap karte hain) ne error 0.5% kam kiya. <Cite id="class-dl-m4" loc="p. 55" />
+- 60 million parameters ke saath **overfitting** badha, isliye **dropout** (neurons ko ek fixed probability se drop karna, yahan 50%) aur **data augmentation** (data ki variety badhane ke liye image transformations) use hue. <Cite id="class-dl-m4" loc="p. 55" /> <Cite id="class-dl-chp4" loc="slide 43" />
+- Isne **2012 ImageNet competition jeeti** runner-up par bade margin se, aur ye ImageNet dataset (lagbhag 14 million images, 1000 classes) par train hua. Koi bhi convolutional layer hatane se performance bahut gir jaati hai. <Cite id="class-dl-m4" loc="p. 55" />
+
+### Architecture
+
+<Img id="class-cnn-architectures-alexnet-column" caption="Basic AlexNet list mein: input 227×227×3, convolution 1 ReLU aur max pooling ke saath, convolution 2 ReLU aur max pooling ke saath, convolutions 3, 4, 5 ReLU ke saath aur ek max pooling, phir FC6, FC7 aur output." />
+
+<Img id="class-cnn-architectures-alexnet-strip" caption="AlexNet left se right sizes ke saath: 227×227×3, 55×55×96, 27×27×96, 27×27×256, 13×13×256, 13×13×384, 13×13×384, 13×13×256, 6×6×256, flatten 9216, FC6 4096, FC7 4096, output 1000 (softmax)." />
 
 ```mermaid
-%% caption: AlexNet. Paanch convolution layers features dhoondhti hain, 1st, 2nd aur 5th ke baad max pooling. Teen fully connected layers, do dropout ke saath, decision leti hain.
+%% caption: Har layer ke baad shape ke saath AlexNet. Har convolution ke baad ReLU; dropout 0.5 do bade fully connected layers par.
 flowchart LR
-  A["Input 227×227×3"] --> B["Conv1 11×11 stride 4, 96 + pool"]
-  B --> C["Conv2 5×5, 256 + pool"]
-  C --> D["Conv3 3×3, 384"]
-  D --> E["Conv4 3×3, 384"]
-  E --> F["Conv5 3×3, 256 + pool"]
-  F --> G["FC6 4096 + dropout"]
-  G --> H["FC7 4096 + dropout"]
-  H --> I["FC8 1000 softmax"]
+  A["Input 227×227×3"] --> B["Conv1: 96 filters 11×11, stride 4 → 55×55×96"]
+  B --> C["Max pool 3×3, stride 2 → 27×27×96"]
+  C --> D["Conv2: 256 filters 5×5, pad 2 → 27×27×256"]
+  D --> E["Max pool 3×3, stride 2 → 13×13×256"]
+  E --> F["Conv3: 384 filters 3×3, pad 1 → 13×13×384"]
+  F --> G["Conv4: 384 filters 3×3, pad 1 → 13×13×384"]
+  G --> H["Conv5: 256 filters 3×3, pad 1 → 13×13×256"]
+  H --> I["Max pool 3×3, stride 2 → 6×6×256"]
+  I --> J["Flatten 9216 → FC6 4096 → FC7 4096 (dropout 0.5)"]
+  J --> K["FC8: 1000 (softmax)"]
 ```
 
-<Img id="img-dl-n3-lenet-vs-alexnet" caption="LeNet (left) aur AlexNet (right) saath mein. AlexNet zyada deep hai, sigmoid aur average pooling ki jagah ReLU aur max pooling use karta hai, aur dropout pe khatam hota hai. Is figure mein input 224×224 hai; note ki table mein common 227×227 version hai." />
+**Layer by layer** (output $= \lfloor (N + 2P - F)/S \rfloor + 1$): <Cite id="class-dl-m4" loc="p. 57" /> <Cite id="class-dl-m4" loc="p. 58" /> <Cite id="class-dl-m4" loc="p. 60" />
 
-<Box kind="pitfall">
+| Layer | Filters / units | Filter | Stride | Padding | Output |
+|---|---|---|---|---|---|
+| Input | – | – | – | – | 227×227×3 |
+| Conv1 + ReLU | 96 | 11×11 | 4 | 0 | 55×55×96 |
+| Max pool 1 | – | 3×3 | 2 | 0 | 27×27×96 |
+| Conv2 + ReLU | 256 | 5×5 | 1 | 2 | 27×27×256 |
+| Max pool 2 | – | 3×3 | 2 | 0 | 13×13×256 |
+| Conv3 + ReLU | 384 | 3×3 | 1 | 1 | 13×13×384 |
+| Conv4 + ReLU | 384 | 3×3 | 1 | 1 | 13×13×384 |
+| Conv5 + ReLU | 256 | 3×3 | 1 | 1 | 13×13×256 |
+| Max pool 3 | – | 3×3 | 2 | 0 | 6×6×256 |
+| Dropout 1 (0.5) + FC6 + ReLU | 4096 | – | – | – | 4096 |
+| Dropout 2 (0.5) + FC7 + ReLU | 4096 | – | – | – | 4096 |
+| FC8 + softmax | 1000 | – | – | – | 1000 |
 
-Paper kehta hai input 224×224×3 hai, par 11×11 filter aur stride 4 ke saath sizes sirf 227×227 se sahi aate hain; 224 ke saath padding kuch bhi ho, whole number nahi aata. CS231n ye mismatch point out karta hai. Size calculation dikhate waqt 227 use karo aur iska mention karo. <Cite id="cs231n-cnn" />
+Depth ke saath filters ki sankhya **badhti** hai (96, 256, 384, 384, 256) aur filter size **ghatta** hai (11, 5, 3, 3, 3), isliye deeper layers chhoti windows se zyada features nikaalti hain. <Cite id="class-dl-m4" loc="p. 58" />
 
-</Box>
-
-**Kya naya tha, aur har idea ne kyun help kiya.** <Cite id="krizhevsky2012" />
-
-1. **tanh ki jagah ReLU.** ReLU positive inputs pe saturate nahi hota, isliye gradients bade rehte hain aur learning fast hoti hai. Paper report karta hai ki ReLU network ne CIFAR-10 pe 25% training error, same tanh network se lagbhag chhe guna fast reach kiya.
-2. **Do GPUs pe training.** Har GTX 580 GPU mein sirf 3 GB memory thi, isliye network ko do GPUs mein split kiya gaya. Training mein paanch se chhe din lage.
-3. **Local response normalization** pehli do conv layers ke baad, jisse neighbouring feature maps compete kar sake. Aaj ye rarely use hota hai (batch normalization ne iski jagah le li).
-4. **Overlapping max pooling:** stride 2 ke saath 3×3 windows, toh neighbouring windows overlap karti hain. Isne non-overlapping 2×2 windows ke comparison mein error thoda kam kiya.
-5. **Dropout** probability 0.5 ke saath pehli do fully connected layers mein. Iske bina network bahut overfit karta tha. <Cite id="srivastava2014" />
-6. **Data augmentation:** 256×256 images se random 224×224 crops, horizontal flips, aur colour intensity mein changes, taaki network bahut zyada varied training images dekhe.
-
-**Parameters kahan hain (analysis).** Paanch conv layers mein sirf lagbhag 3.7 million parameters hain; teen fully connected layers mein lagbhag 58.6 million (akele FC6 mein lagbhag 37.8 million). Toh **AlexNet ke zyada tar parameters fully connected layers mein hain**, isiliye dropout wahan lagaya gaya. Conv layers saste hain kyunki ek chhota filter har position pe reuse hota hai (weight sharing); fully connected layer ko har input-output pair ke liye alag weight chahiye. (Ye single-GPU version total lagbhag 62.4 million hai; paper ka "60 million" thoda kam hai kyunki kuch layers do GPUs mein split thi.) Neeche Sum 3 ye count dikhata hai.
-
-**Everyday analogy.** LeNet ek bicycle tha. AlexNet wahi basic design tha jo motorbike ban gaya: bahut bada engine (60 million parameters), better fuel (ReLU), powerful workshop (GPUs) aur overfitting ke against achhe brakes (dropout aur augmentation).
-
-**Advantages.** Real photos pe accuracy mein huge jump; dikhaya ki GPUs pe trained deep CNNs hand-designed features ko hara dete hain; ReLU, dropout aur augmentation ko standard tools banaya.
-
-**Disadvantages.** Bahut bada aur memory-hungry, zyada tar FC layers ki wajah se; pehli layer mein bade 11×11 filters (baad mein VGG jaise networks mein chhote 3×3 filters ke stacks se replace hue); local response normalization zyada useful nahi nikla; sirf 8 layers, toh abhi bhi kaafi shallow.
-
-**Applications.** Large-scale image classification, aur pretrained feature extractor ki tarah (transfer learning) object detection aur medical images jaise tasks ke liye. <Cite id="d2l-alexnet" /> <Cite id="gfg-alexnet" /> <Cite id="av-alexnet" />
-
-**Sum 2: AlexNet output sizes.** Sirf un questions ke liye jo sizes calculate karne ko bolein.
+**Sum: AlexNet ke sizes check karo.** <Cite id="class-dl-m4" loc="p. 57" />
 
 <Sum>
 
 <Given>
 
-227×227×3 input aur upar wali table ki layer settings. Output size rule $O = (N - F + 2P)/S + 1$.
+input 227×227×3 aur upar ki table ki layer settings.
 
 </Given>
 
 <Find>
 
-last pooling tak har layer ke baad output size, aur FC6 ko kitni values jaati hain.
+har convolution aur pooling layer ke baad ka size, aur FC6 ka input.
 
 </Find>
 
 <Steps>
 
-1. **Conv1.**
-
-   $$
-   \begin{aligned}
-   (227 - 11 + 0)/4 + 1 &= 216/4 + 1 \\
-   &= 54 + 1 \\
-   &= 55
-   \end{aligned}
-   $$
-
-   toh 55×55×96. Bada 11×11 filter stride 4 ke saath image ko jaldi chhota karta hai; 96 filters 96 maps dete hain.
-2. **Pool1.** $(55 - 3)/2 + 1 = 52/2 + 1 = 26 + 1 = 27$, toh 27×27×96. Pooling maps ki ginti same rakhta hai.
-3. **Conv2.**
-
-   $$
-   (27 - 5 + 2 \times 2)/1 + 1 = 26 + 1 = 27
-   $$
-
-   toh 27×27×256. Padding 2 bilkul 5×5 filter ki kami poori karta hai, isliye size same rehta hai.
-4. **Pool2.** $(27 - 3)/2 + 1 = 12 + 1 = 13$, toh 13×13×256.
-5. **Conv3, Conv4, Conv5.** Har baar
-
-   $$
-   (13 - 3 + 2 \times 1)/1 + 1 = 12 + 1 = 13
-   $$
-
-   toh 13×13×384, 13×13×384 aur 13×13×256. Padding 1 3×3 filter ki kami poori karta hai.
-6. **Pool3.** $(13 - 3)/2 + 1 = 5 + 1 = 6$, toh 6×6×256.
-7. **FC6 ke liye flatten.**
-
-   $$
-   \begin{aligned}
-   6 \times 6 \times 256 &= 36 \times 256 \\
-   &= 9{,}216
-   \end{aligned}
-   $$
-
-   FC6 ko numbers ki ek lambi list chahiye.
+1. **Conv1:** $(227 + 0 - 11)/4 + 1 = 54 + 1 = 55$, depth 96, to 55×55×96.
+2. **Pool 1:** $(55 - 3)/2 + 1 = 26 + 1 = 27$, to 27×27×96.
+3. **Conv2:** $(27 + 4 - 5)/1 + 1 = 27$, depth 256, to 27×27×256.
+4. **Pool 2:** $(27 - 3)/2 + 1 = 13$, to 13×13×256.
+5. **Conv3, Conv4, Conv5:** har ek $(13 + 2 - 3)/1 + 1 = 13$, depths 384, 384, 256.
+6. **Pool 3:** $(13 - 3)/2 + 1 = 6$, to 6×6×256.
+7. **Flatten:** $6 \times 6 \times 256 = 9216$ values FC6 mein jaati hain.
 
 </Steps>
 
 <Answer>
 
-55×55×96 → 27×27×96 → 27×27×256 → 13×13×256 → 13×13×384 → 13×13×384 → 13×13×256 → 6×6×256, toh FC6 ko 9,216 values milti hain.
+55×55×96 → 27×27×96 → 27×27×256 → 13×13×256 → 13×13×384 → 13×13×384 → 13×13×256 → 6×6×256 → 9216.
 
 </Answer>
 
 <Box kind="verify">
 
-Ulta chalo: output $O$ dene wala input size $(O - 1) \times S + F - 2P$ hai. Conv1: $(55 - 1) \times 4 + 11 = 216 + 11 = 227$, given input. Pool1: $(27 - 1) \times 2 + 3 = 55$. Pool2: $(13 - 1) \times 2 + 3 = 27$. Pool3: $(6 - 1) \times 2 + 3 = 13$. Har layer apne pehle wale size pe wapas map hoti hai, toh forward sizes sahi hain. Agar 224 try karo, Conv1 $(224 - 11)/4 + 1 = 54.25$ deta hai, jo whole number nahi hai; yahi upar pitfall wala mismatch hai.
+3×3 filter, padding 1 aur stride 1 "same" padding hai ($P = (F-1)/2 = 1$), isliye Conv3, Conv4 aur Conv5 ko 13×13 rakhna chahiye. 5×5 filter ke saath padding 2 bhi "same" hai, isliye Conv2 27×27 rakhta hai. Dono match karte hain.
 
 </Box>
 
 </Sum>
 
-**Sum 3: AlexNet ke parameters kahan hain.** Sirf un questions ke liye jo parameters count karne ko bolein.
+**Sum: kitne parameters?** <Cite id="class-dl-m4" loc="p. 60" />
 
 <Sum>
 
 <Given>
 
-table wala single-GPU AlexNet. Conv layer mein har filter ke (filter height × filter width × input channels + 1 bias) parameters hote hain. Fully connected layer mein har unit ke (inputs ki ginti + 1 bias) parameters hote hain.
+upar ki AlexNet layers; convolution layer ke parameters $= (F \cdot F \cdot D + 1) \times K$; fully connected layer ke $=$ inputs $\times$ neurons $+$ neurons.
 
 </Given>
 
 <Find>
 
-conv layers, FC layers aur total mein parameters.
+total learnable parameters.
 
 </Find>
 
 <Steps>
 
-1. **Conv1.** $11 \times 11 \times 3 = 363$ weights + 1 = 364 per filter; $96 \times 364 = 34{,}944$. Input mein 3 colour channels hain.
-2. **Conv2.** $5 \times 5 \times 96 = 2{,}400$ + 1 = 2,401; $256 \times 2{,}401 = 614{,}656$. Iske input mein 96 maps hain.
-3. **Conv3.** $3 \times 3 \times 256 = 2{,}304$ + 1 = 2,305; $384 \times 2{,}305 = 885{,}120$.
-4. **Conv4.** $3 \times 3 \times 384 = 3{,}456$ + 1 = 3,457; $384 \times 3{,}457 = 1{,}327{,}488$.
-5. **Conv5.** Phir se 3,457 per filter (input 384 maps hai); $256 \times 3{,}457 = 884{,}992$.
-6. **Saari conv layers.** Paanchon layers ke totals jodo:
-
-   $$
-   34{,}944 + 614{,}656 + 885{,}120 + 1{,}327{,}488 + 884{,}992 = 3{,}747{,}200
-   $$
-
-   (lagbhag 3.7 million).
-7. **FC6.**
-
-   $$
-   \begin{aligned}
-   4{,}096 \times (9{,}216 + 1) &= 4{,}096 \times 9{,}217 \\
-   &= 37{,}752{,}832
-   \end{aligned}
-   $$
-
-   Har unit Sum 2 ki saari 9,216 values dekhta hai.
-8. **FC7.**
-
-   $$
-   4{,}096 \times (4{,}096 + 1) = 16{,}781{,}312
-   $$
-
-   Har unit ke 4,096 inputs aur ek bias hain.
-9. **FC8.**
-
-   $$
-   1{,}000 \times (4{,}096 + 1) = 4{,}097{,}000
-   $$
-
-   Har output unit ke 4,096 inputs aur ek bias hain.
-10. **Saari FC layers.** Teeno FC totals jodo:
-
-    $$
-    37{,}752{,}832 + 16{,}781{,}312 + 4{,}097{,}000 = 58{,}631{,}144
-    $$
-
-    (lagbhag 58.6 million).
-11. **Total.** Conv aur FC parts jodo, toh poore network ke parameters milte hain:
-
-    $$
-    3{,}747{,}200 + 58{,}631{,}144 = 62{,}378{,}344
-    $$
-
-    (lagbhag 62.4 million).
+1. **Conv1:** $(11 \cdot 11 \cdot 3 + 1) \times 96 = 364 \times 96 = 34{,}944$.
+2. **Conv2:** $(5 \cdot 5 \cdot 96 + 1) \times 256 = 2401 \times 256 = 614{,}656$.
+3. **Conv3:** $(3 \cdot 3 \cdot 256 + 1) \times 384 = 2305 \times 384 = 885{,}120$.
+4. **Conv4:** $(3 \cdot 3 \cdot 384 + 1) \times 384 = 3457 \times 384 = 1{,}327{,}488$.
+5. **Conv5:** $(3 \cdot 3 \cdot 384 + 1) \times 256 = 3457 \times 256 = 884{,}992$.
+6. **FC6:** $9216 \times 4096 + 4096 = 37{,}752{,}832$.
+7. **FC7:** $4096 \times 4096 + 4096 = 16{,}781{,}312$.
+8. **FC8:** $4096 \times 1000 + 1000 = 4{,}097{,}000$.
+9. **Total:** convolutions ke $34{,}944 + 614{,}656 + 885{,}120 + 1{,}327{,}488 + 884{,}992 = 3{,}747{,}200$, aur FC layers ke $37{,}752{,}832 + 16{,}781{,}312 + 4{,}097{,}000 = 58{,}631{,}144$, to lagbhag **62.4 million**.
 
 </Steps>
 
 <Answer>
 
-conv layers lagbhag 3.7 million, FC layers lagbhag 58.6 million, total lagbhag 62.4 million parameters, toh lagbhag 94% ($58.6 / 62.4$) fully connected layers mein hain.
+lagbhag 62.4 million parameters (Module 4 notes "62.3 million learnable parameters" likhte hain). Zyadatar parameters fully connected layers mein hain, isliye wahin dropout lagta hai.
 
 </Answer>
 
 <Box kind="verify">
 
-Weights aur biases alag count karo, phir add karo. Conv weights:
-
-$$
-34{,}848 + 614{,}400 + 884{,}736 + 1{,}327{,}104 + 884{,}736 = 3{,}745{,}824
-$$
-
-conv biases (har filter ka ek): $96 + 256 + 384 + 384 + 256 = 1{,}376$; milke $3{,}747{,}200$, step 6 jaisa hi. FC weights:
-
-$$
-\begin{aligned}
-9{,}216 \times 4{,}096 + 4{,}096 \times 4{,}096 + 4{,}096 \times 1{,}000 &= 37{,}748{,}736 + 16{,}777{,}216 + 4{,}096{,}000 \\
-&= 58{,}621{,}952
-\end{aligned}
-$$
-
-FC biases: $4{,}096 + 4{,}096 + 1{,}000 = 9{,}192$; milke $58{,}631{,}144$, step 10 jaisa hi. Total bhi paper ke "60 million" ke paas hai, jaisa single-GPU version ke liye expected hai.
+$3{,}747{,}200 + 58{,}631{,}144 = 62{,}378{,}344 \approx 62.4$ million, jo class ke lagbhag 60 million se 62.3 million wale figure se match karta hai. Pehli layer ki value 34,944 CNN note ke class sum se match karti hai.
 
 </Box>
 
 </Sum>
 
-Exam mein English mein likho: "Most of AlexNet's parameters (about 58.6 million of 62.4 million) are in the fully connected layers, so dropout is applied there."
+<Img id="class-cnn-architectures-alexnet-learns" caption="AlexNet features kaise seekhta hai: image, edges, shapes, textures, object parts, objects. Early layers simple patterns seekhti hain, deeper layers complex patterns aur objects." />
+
+### AlexNet versus LeNet
+
+<Img id="class-cnn-architectures-lenet-vs-alexnet" caption="LeNet-5 aur AlexNet ko compare karti class table." />
+
+| Feature | LeNet-5 | AlexNet |
+|---|---|---|
+| Year | 1998 | 2012 |
+| Application | Handwritten digits | ImageNet classification |
+| Input | Chhoti grayscale image (32×32) | Badi RGB images (227×227×3) |
+| Depth | Relatively shallow | Bahut deeper |
+| Activation | Tanh / sigmoid | ReLU |
+| Pooling | Subsampling (average) | Max pooling |
+| GPU | Central nahi | Haan (GPU based) |
+| Dropout | Nahi | Haan |
+| Data augmentation | Limited | Haan |
+| Importance | Early successful CNN | Major deep-learning breakthrough |
+
+<Cite id="class-dl-chp4" loc="slide 41" />
+
+**AlexNet ke demerits** (Module 4): pehli aur doosri layers ke neurons dormant ho sakte hain, aur zyada bade filter size ki wajah se trained feature maps mein aliasing artefacts aate hain. <Cite id="class-dl-m4" loc="p. 85" />
+
+## VGG-16 (2014)
+
+**VGG-16** agla bada breakthrough tha: isne bahut deep CNNs ki shuruaat ki. AlexNet jaise pehle ke models pehli layers mein bade filters use karte the; VGG ne ye badla aur **3×3 filters** use kiye. Simonyan aur Zisserman ne banaya, us waqt ka best performing model. <Cite id="class-dl-m4" loc="p. 69" />
+
+<Img id="class-cnn-architectures-vgg-strip" caption="VGG-16: 3×3 convolutions ke paanch blocks (64, 128, 256, 512, 512 filters ke saath 2, 2, 3, 3, 3 convolutions), har block ke end mein 2×2 max pool jo size aadha karta hai, phir FC 4096, FC 4096 aur softmax ke saath FC 1000." />
+
+- **Bahut systematic architecture:** sirf 3×3 convolutions stride 1 ke saath; paanch 2×2 max-pooling layers stride 2 ke saath; jaise-jaise deeper jaate hain **image size aadha hota hai aur channels (filters) double**: 64, 128, 256, 512, 512. <Cite id="class-dl-m4" loc="p. 70" /> <Cite id="class-dl-m4" loc="p. 73" />
+- **Fully connected layers** hamesha same: 4096, 4096, phir 1000-way ImageNet classification ke liye 1000, phir softmax. Saari hidden layers mein ReLU. Pehli do fully connected layers par dropout 0.5. <Cite id="class-dl-m4" loc="p. 71" /> <Cite id="class-dl-m4" loc="p. 74" />
+- **Depth:** configurations sirf depth mein alag hain, 11 weight layers (network A) se 19 (network E) tak. VGG-16 mein 13 convolutional aur 3 fully connected layers hain. <Cite id="class-dl-m4" loc="p. 73" />
+- **Input:** 224 × 224 RGB image; pre-processing mein har pixel se mean RGB value ghatayi jaati hai. <Cite id="class-dl-m4" loc="p. 71" />
+- **Result:** us waqt ILSVRC mein best single-net result (7.0% test error). <Cite id="class-dl-m4" loc="p. 75" />
+- **Drawbacks:** lagbhag **138 million parameters** (us waqt ke dusre models se do guna se zyada), train hone mein hafte, aur trained model 500 MB se bada, isliye slow aur real-time use ke liye kam practical. <Cite id="class-dl-m4" loc="p. 70" /> <Cite id="class-dl-m4" loc="p. 75" />
+
+<Img id="class-cnn-architectures-vgg-table" caption="VGG-16 detailed configuration: Block 1 224×224 (64 filters), Block 2 112×112 (128), Block 3 56×56 (256), Block 4 28×28 (512), Block 5 14×14 (512), har ek ke baad max pool; phir FC6 4096, FC7 4096, FC8 1000." />
+
+<Img id="class-cnn-architectures-vgg-configs" caption="VGG configurations A se E ki Module 4 table. VGG-16 column D hai: 13 convolution layers aur 3 fully connected layers." />
+
+**Sum: VGG-16 ke sizes kyun kaam karte hain.** <Cite id="class-dl-m4" loc="p. 73" />
+
+<Sum>
+
+<Given>
+
+input 224×224×3. 3×3 convolutions ke paanch blocks (stride 1, "same" padding taaki size na ghate) 64, 128, 256, 512, 512 filters ke saath, har ek ke baad 2×2 max pool stride 2 ke saath.
+
+</Given>
+
+<Find>
+
+har block ke baad ka size aur pehli fully connected layer ka input. Layers gino.
+
+</Find>
+
+<Steps>
+
+1. **Block 1:** convolutions 224×224 rakhte hain, pool $(224 - 2)/2 + 1 = 112$ deta hai, to 112×112×64.
+2. **Block 2:** pool 56 deta hai, to 56×56×128.
+3. **Block 3:** pool 28 deta hai, to 28×28×256.
+4. **Block 4:** pool 14 deta hai, to 14×14×512.
+5. **Block 5:** pool 7 deta hai, to 7×7×512.
+6. **FC6 input:** $7 \times 7 \times 512 = 25{,}088$. Phir 4096, 4096, 1000.
+7. **Layers:** convolutions $2 + 2 + 3 + 3 + 3 = 13$, plus 3 fully connected $= 16$.
+
+</Steps>
+
+<Answer>
+
+224 → 112 → 56 → 28 → 14 → 7 channels 64, 128, 256, 512, 512 ke saath; 25,088 values FC6 mein jaati hain; 16 weight layers, isliye "VGG-16".
+
+</Answer>
+
+<Box kind="verify">
+
+Size paanch baar aadha hota hai: $224 / 2^5 = 7$. Channels 64 se 512 tak double hote hain aur phir 512 par rehte hain, jaise class kehti hai. Parameter check: 13 convolution layers ke lagbhag 14.7 million parameters aur 3 FC layers ke lagbhag 123.6 million ($25{,}088 \times 4096$ akela lagbhag 102.8 million), total lagbhag 138.4 million, class ka 138 million figure.
+
+</Box>
+
+</Sum>
+
+## GoogLeNet (Inception v1, 2014)
+
+**GoogLeNet** ko Szegedy et al. ne Inception ke initial version ke roop mein propose kiya; isne ImageNet challenge ILSVRC14 mein state-of-the-art image classification aur detection di aur **pehla sthaan** paaya. Fully connected layers ki jagah ye **global average pooling** use karta hai, aur network ke beech mein **1×1 convolution**. <Cite id="class-dl-m4" loc="p. 62" />
+
+<Img id="class-cnn-architectures-googlenet-strip" caption="GoogLeNet: 224×224×3 input, Conv1 7×7, max pool, Conv2 1×1, Conv3 3×3, max pool, Inception modules jo 28×28×256, 14×14×480 aur 7×7×1024 dete hain, average pool 7×7, dropout, FC 1000 aur softmax." />
+
+Poora network **22 layers deep** hai. Isse computational efficiency dhyan mein rakh kar design kiya gaya, taaki ye kam computational resources wale individual devices par bhi chal sake. Ye 224 × 224 RGB image leta hai aur har convolution ReLU use karta hai. Ismein do auxiliary classifiers bhi hain jo Inception (4a) aur Inception (4d) ke outputs se jude hain. <Cite id="class-dl-m4" loc="p. 66" />
+
+### Inception module
+
+AlexNet jaise purane networks mein har layer mein ek fixed filter size hota hai. Inception module mein **1×1, 3×3, 5×5 convolutions aur ek 3×3 max pooling same input par parallel chalte hain, aur unke outputs ek saath stack hote hain** (depth ke saath concatenate) taaki output bane. Idea: alag-alag size ke filters multiple scales par objects ko behtar handle karte hain. <Cite id="class-dl-m4" loc="p. 64" /> <Cite id="class-dl-m4" loc="p. 63" />
+
+<Img id="class-cnn-architectures-inception-naive" caption="Naive Inception module: previous layer 1×1, 3×3 aur 5×5 convolutions aur 3×3 max pooling ko parallel feed karti hai, aur results filter concatenation se jud jaate hain." />
+
+Neural networks train karne mein time-consuming aur expensive hote hain, isliye authors **3×3 aur 5×5 convolutions se pehle ek extra 1×1 convolution jodkar input channels limit karte hain** (aur max pooling ke baad bhi) taaki dimensions kam hon aur computation tez ho. <Cite id="class-dl-m4" loc="p. 63" />
+
+<Img id="class-cnn-architectures-inception-reduced" caption="Dimension reduction wala Inception module: 3×3 aur 5×5 convolutions se pehle aur max pooling ke baad 1×1 convolutions." />
+
+```mermaid
+%% caption: Inception module. Chaar branches ek hi input ko ek saath dekhti hain; results depth ke saath stack hote hain.
+flowchart TD
+  A["Previous layer"] --> B["1×1 conv"]
+  A --> C["1×1 conv (reduce)"] --> D["3×3 conv"]
+  A --> E["1×1 conv (reduce)"] --> F["5×5 conv"]
+  A --> G["3×3 max pool"] --> H["1×1 conv"]
+  B --> I["Filter concatenation"]
+  D --> I
+  F --> I
+  H --> I
+```
+
+<Img id="class-cnn-architectures-googlenet-module" caption="Filter counts ke saath ek example Inception module, aur ye kyun use hota hai: parallel mein multi-scale features, 1×1 convolutions dimensions kam karte hain (bottleneck), max pooling branch chhote shifts ke prati invariance deti hai, aur outputs depth ke saath concatenate hote hain." />
+
+### GoogLeNet ke aur features
+
+- **1×1 convolution:** architecture ke parameters (aur operations) kam karta hai, isse architecture deeper bhi ban sakta hai. <Cite id="class-dl-m4" loc="p. 67" />
+- **Global average pooling:** AlexNet jaise networks ke end ki fully connected layers mein zyadatar parameters hote hain. GoogLeNet 7×7 feature map ko average karke 1×1 bana deta hai, isliye is layer mein **0 trainable parameters** hain, aur top-1 accuracy 0.6% badhi. <Cite id="class-dl-m4" loc="p. 64" />
+- **Auxiliary classifiers (sirf training mein):** beech ki classifier branches (5×5 average pooling stride 3 ke saath, 128 filters wali 1×1 convolution, do fully connected layers, softmax). Inka loss total loss mein 0.3 weight ke saath jodta hai. Ye vanishing gradient se bachne mein madad karte hain aur regularization ka kaam karte hain. <Cite id="class-dl-m4" loc="p. 65" />
+
+**Sum: 1×1 convolution kaam kaise bachata hai (class ka example).** 14×14×480 input par 48 filters wali 5×5 convolution karo. <Cite id="class-dl-m4" loc="p. 67" />
+
+<Sum>
+
+<Given>
+
+14×14 positions, input depth 480. 1×1 layer ke bina: 48 filters 5×5×480. 1×1 layer ke saath: pehle 1×1×480 ke 16 filters, phir 5×5×16 ke 48 filters.
+
+</Given>
+
+<Find>
+
+dono cases mein operations (multiplications) ki sankhya.
+
+</Find>
+
+<Steps>
+
+1. **1×1 ke bina:** $(14 \times 14 \times 48) \times (5 \times 5 \times 480) = 9408 \times 12000 = 112{,}896{,}000 \approx 112.9$ million.
+2. **1×1 ke saath, pehli layer:** $(14 \times 14 \times 16) \times (1 \times 1 \times 480) = 3136 \times 480 = 1{,}505{,}280 \approx 1.5$ million.
+3. **1×1 ke saath, doosri layer:** $(14 \times 14 \times 48) \times (5 \times 5 \times 16) = 9408 \times 400 = 3{,}763{,}200 \approx 3.8$ million.
+4. **1×1 ke saath total:** $1.5 + 3.8 = 5.3$ million.
+
+</Steps>
+
+<Answer>
+
+1×1 layer ke bina 112.9 million operations, uske saath sirf lagbhag 5.3 million.
+
+</Answer>
+
+<Box kind="verify">
+
+Bachat ka factor $112.9 / 5.3 \approx 21$. Exact: $1{,}505{,}280 + 3{,}763{,}200 = 5{,}268{,}480 \approx 5.3$ million, jo Module mein chhape figures hain.
+
+</Box>
+
+</Sum>
 
 ## ResNet (2015)
 
-**Ye kya hai.** ResNet (residual network), Kaiming He aur unke colleagues ne Microsoft Research mein banaya, ek bahut deep CNN hai jo **residual blocks** se bana hai: layers ke chhote groups jinme ek **skip connection** hota hai jo input ko layers ke around le jaake unke output mein add kar deta hai. <Cite id="he2015" />
+<Box kind="definition">
 
-**Ye kyun zaroori tha: degradation problem.** AlexNet ke baad, deeper networks better hote gaye; 2014 ki best ImageNet entries (VGG aur GoogLeNet) mein lagbhag 16 se 22 layers thi. Phir He aur colleagues ne dikhaya ki jab ek plain network ko deeper banaya jaata hai (jaise 18 se 34 layers), accuracy pehle saturate hoti hai aur phir **kharab** ho jaati hai, aur ye overfitting ki wajah se nahi: **training** error khud badh jaata hai. Isse unhone **degradation problem** kaha.
+**ResNet** is a deep CNN architecture that uses skip connections (shortcut connections) to allow information and gradients to flow more easily through very deep networks. <Cite id="class-dl-chp4" loc="slide 49" />
 
-Ye ajeeb kyun hai? Ek achha shallow network lo aur extra layers add karo jo bas apna input copy karti hain (**identity mapping**). Ye deeper network bilkul same answers dega, toh deeper network kabhi worse nahi hona chahiye. Training ko aisa solution nahi mil paaya, iska matlab plain stacked layers ko "kuch mat karo" seekhna bhi mushkil lagta hai.
+</Box>
 
-**Ye kaise kaam karta hai: sirf change seekho.** Kuch layers se poora desired output seekhne ko kehne ki jagah, ResNet unse sirf **residual** seekhne ko kehta hai (wo correction jo input mein add karna hai), aur phir shortcut se input wapas add kar deta hai. Words mein: output = layers ne jo seekha + original input. Formula ki tarah (har textbook mein hai, toh exam mein likho):
+ResNet ko He et al. (Microsoft Research) ne 2015 mein propose kiya: ek aisa model jo sau se hazaar layers tak use kar sakta tha aur phir bhi compelling performance deta tha. 152 layers (us waqt sabse deep) ke saath isne ILSVRC 2015 classification competition 3.57% top-5 error se jeeti. <Cite id="class-dl-m4" loc="p. 77" />
 
-$$
-y = F(x) + x
-$$
+### ResNet kyun chahiye tha? Degradation problem
 
-$x$ block ka input hai, $F(x)$ block ki layers ka output hai (aam taur pe batch normalization aur ReLU ke saath do 3×3 convolutions), aur $y$ block ka output hai. Agar kuch na karna best hai, toh layers ko bas $F(x)$ ko zero pe push karna hai, jo easy hai. Identity shortcut **koi extra parameters add nahi karta**. <Cite id="he2015" />
+Hum expect karte hain ki deeper = behtar accuracy. Lekin ek certain depth ke baad zyada layers training ko mushkil bana deti hain, accuracy badhna ruk jaati hai ya ghat bhi jaati hai. Ise **degradation problem** kehte hain. Ye sirf overfitting nahi hai: deeper network ka training error bhi zyada ho sakta hai. Layers badhne par information aur gradients ko kai layers se guzarna padta hai (vanishing gradients, learning mushkil). Sawaal: network ko bahut deep kaise banayein bina training ko kharab kiye? ResNet ka jawab: **shortcut connection se kuch layers skip karo.** <Cite id="class-dl-chp4" loc="slide 49" /> <Cite id="class-dl-m4" loc="p. 77" />
 
-**Gradients better kyun flow karte hain (words mein).** Backpropagation ke dauraan gradient shortcut se seedha wapas ja sakta hai, layers se guzre bina, toh agar layers wala gradient bahut chhota bhi ho jaaye, signal ka kuch hissa phir bhi early layers tak pahunchta hai. Isse vanishing-gradient problem kam hoti hai. <Cite id="d2l-resnet" />
+<Img id="class-cnn-architectures-resnet-problem" caption="CNNs ko 10 se 100 layers tak deeper banana: training mushkil ho jaati hai, accuracy badhna ruk jaati hai ya ghat jaati hai (degradation problem). ResNet ka solution shortcut connection hai." />
 
-**Everyday analogy.** Essay improve karne wala editor blank page se dobara nahi likhta. Wo essay ko jaisa hai waise leta hai aur sirf corrections mark karta hai. Agar essay already perfect hai, toh kuch mark nahi karta. Har residual block aisa hi editor hai.
+### Residual ka idea
 
-<Img id="img-dl-n3-residual-block" caption="Left mein ordinary block ko poora output f(x) seekhna padta hai. Right mein residual block input x ko skip connection se wapas add karta hai, isliye uski layers sirf change g(x) seekhti hain." />
+Maan lo desired output $H(x)$ hai. $H(x)$ ko seedha seekhne ki jagah ResNet $F(x) = H(x) - x$ seekhta hai, isliye $H(x) = F(x) + x$. Yahan $x$ input hai, $F(x)$ convolution layers ka seekha **residual** aur $H(x)$ final output. Agli layers ko sirf wo seekhna hai ki kaunsi additional information jodni chahiye. <Cite id="class-dl-chp4" loc="slide 49" />
+
+<Img id="class-cnn-architectures-resnet-residual" caption="Residual kya hai: F(x) = H(x) minus x, isliye H(x) = F(x) + x. Original information x plus newly learned information F(x) = final representation x + F(x)." />
+
+**Roz ki analogy.** Aapke paas apple ki ek rough drawing hai. ResNet sirf wo corrections seekhta hai jo drawing mein jodni hain, poora apple dobara banane ki jagah. <Cite id="class-dl-chp4" loc="slide 49" />
+
+### Residual block
+
+<Img id="class-cnn-architectures-resnet-block" caption="Residual block: input x Conv (W1), ReLU, Conv (W2) se guzarta hai aur shortcut par bhi chalta hai; dono add hote hain, F(x) + x, phir activation. Output y = F(x) + x." />
+
+1. Input $x$ block mein aata hai.
+2. Convolution layers naye features $F(x)$ seekhti hain.
+3. Input $x$ shortcut se chalta hai.
+4. Dono add karo: $F(x) + x$.
+5. Activation (ReLU) lagao. Output $y = F(x) + x$. <Cite id="class-dl-chp4" loc="slide 49" />
 
 ```mermaid
-%% caption: Ek residual block. Input x do weight layers se guzarke F(x) deta hai, aur shortcut pe seedha bhi jump karta hai. Dono add hote hain, phir ReLU se guzarte hain.
+%% caption: Residual block. Skip connection x ko do convolutions ke around le jaata hai aur wapas jod deta hai, isliye block ko sirf ye seekhna hai ki kya badalna hai.
 flowchart TD
-  X["Input x"] --> A["3×3 conv + batch norm"]
-  A --> B["ReLU"]
-  B --> C["3×3 conv + batch norm"]
-  C --> D["Add: F(x) + x"]
-  X -- "shortcut, identity" --> D
-  D --> E["ReLU, output y"]
+  X["Input x"] --> C1["Conv (W1)"]
+  C1 --> R1["ReLU"]
+  R1 --> C2["Conv (W2)"]
+  C2 --> ADD["Add: F(x) + x"]
+  X -->|"skip connection (shortcut)"| ADD
+  ADD --> R2["ReLU"]
+  R2 --> Y["Output y = F(x) + x"]
 ```
 
-<Img id="img-dl-n3-resnet-block" caption="Asli ResNet block, convolutions, batch norm aur ReLU ke saath. Jab size badalta hai, shortcut mein 1×1 convolution lagta hai (right) taaki dono raaste phir bhi add ho sakein." />
+**Jab input aur output ke sizes alag hon.** Agar convolution layers height, width ya channels badal dein to shortcut seedha add nahi ho sakta. **Projection shortcut** (1×1 convolution) use karo taaki dimensions compatible ho jaayein. <Cite id="class-dl-chp4" loc="slide 49" />
 
-**Jab sizes match na karein.** Agar block channels ki ginti badalta hai ya height aur width aadhi karta hai, toh $x$ aur $F(x)$ seedha add nahi ho sakte. Tab shortcut ek **projection** use karta hai: ek 1×1 convolution (size aadha ho to stride 2 ke saath) jo $x$ ko match karne ke liye reshape karta hai. <Cite id="he2015" />
+<Img id="class-cnn-architectures-resnet-projection" caption="Projection shortcut: shortcut par 1×1 convolution dimensions compatible bana deta hai taaki addition ho sake." />
 
-**Poora network (ResNet-34), step by step.**
+**Skip connections important kyun hain.** Shortcut information aur gradients ko network mein zyada seedha raasta deta hai, isliye gradient poore stack mein ghatte bina early layers tak pahunch sakta hai. <Cite id="class-dl-chp4" loc="slide 49" /> <Cite id="class-dl-m4" loc="p. 77" />
 
-1. 7×7 convolution, 64 filters, stride 2 (224 → 112).
-2. 3×3 max pool, stride 2 (112 → 56).
-3. Stage 1: 64 filters wale 3 residual blocks (56×56).
-4. Stage 2: 128 filters wale 4 blocks (28×28). Pehla block size aadha karne ke liye stride 2 use karta hai.
-5. Stage 3: 256 filters wale 6 blocks (14×14).
-6. Stage 4: 512 filters wale 3 blocks (7×7).
-7. Global average pooling, phir 1000 outputs aur softmax wali ek fully connected layer.
+<Img id="class-cnn-architectures-resnet-skip" caption="Skip connection ke bina signal layers 1 se 100 tak ek-ek karke guzarta hai; skip connections ke saath use direct raasta bhi milta hai." />
 
-Layers ginna: $3 + 4 + 6 + 3 = 16$ blocks, har ek mein 2 convolutions, toh 32, plus pehla conv aur last FC: $32 + 1 + 1 = 34$. Simple rule: jab bhi size aadha hota hai, filters ki ginti double hoti hai. Batch normalization har convolution ke turant baad, activation se pehle use hota hai. <Cite id="he2015" /> <Cite id="ioffe2015" />
-
-**Types (variants).** **ResNet-18 aur ResNet-34** upar dikhaya basic two-layer block use karte hain. **ResNet-50, 101 aur 152** ek **bottleneck block** use karte hain: ek 1×1 convolution channels kam karta hai, ek 3×3 convolution chhote block pe kaam karta hai, aur ek aur 1×1 convolution channels wapas badha deta hai. Isme 256 channels pe do full 3×3 convolutions se lagbhag 17 guna kam weights lagte hain (Sum 4), toh bahut deep networks affordable rehte hain.
-
-**Results.** 152 layers tak deep networks, VGG se 8 guna deeper par kam complexity ke saath. Ek ensemble ne **3.57% top-5 error** reach kiya aur **ILSVRC 2015** jeeta. <Cite id="he2015" /> <Cite id="gfg-resnet" />
-
-**Advantages.** Bahut deep networks (100+ layers) trainable ho jaate hain; degradation solve karta hai aur vanishing gradients kam karta hai; shortcuts koi parameters add nahi karte; global average pooling bade FC layers se bachata hai; residual idea lagbhag har baad wali architecture mein reuse hota hai.
-
-**Disadvantages.** Bahut layers matlab lambi training aur chhote devices pe slow inference; bahut deep versions mein kuch layers kam contribute karti hain (near-zero residuals seekhti hain); shapes badalne pe projection shortcuts kuch parameters add karte hain.
-
-**Applications.** Image classification, object detection aur segmentation backbones (jaise Faster R-CNN aur Mask R-CNN mein), face recognition, medical imaging, aur transfer learning. <Cite id="wiki-resnet" />
-
-**Sum 4: bottleneck block sasta kyun hai.** Sirf un questions ke liye jo blocks ki cost compare karne ko bolein.
+**Sum: numbers par ek residual block.**
 
 <Sum>
 
 <Given>
 
-ek block jiske input aur output mein 256 channels hain. Basic version: do 3×3 convolutions, 256 → 256 → 256. Bottleneck version: 1×1 (256 → 64), 3×3 (64 → 64), 1×1 (64 → 256). Ek conv layer ke weights = filter height × filter width × input channels × output channels. Biases chhod diye kyunki ResNet har convolution ke baad unki jagah batch normalization lagata hai.
+input $x = [2,\ 3]$. Do convolution layers $F(x) = [0.5,\ -1]$ deti hain.
 
 </Given>
 
 <Find>
 
-har version ke weights aur bottleneck ko kitne guna kam chahiye.
+block output $y = \text{ReLU}(F(x) + x)$.
 
 </Find>
 
 <Steps>
 
-1. **Ek basic 3×3 layer.**
-
-   $$
-   \begin{aligned}
-   3 \times 3 \times 256 \times 256 &= 9 \times 65{,}536 \\
-   &= 589{,}824
-   \end{aligned}
-   $$
-
-   256 filters mein se har ek 3×3×256 hai.
-2. **Basic block (do layers).** Block mein do aisi layers hain, toh ek ko double karo: $2 \times 589{,}824 = 1{,}179{,}648$.
-3. **Bottleneck 1×1 shrink.**
-
-   $$
-   1 \times 1 \times 256 \times 64 = 16{,}384
-   $$
-
-   1×1 filter sirf channels mix karta hai, isliye sasta hai.
-4. **Bottleneck 3×3 middle.**
-
-   $$
-   \begin{aligned}
-   3 \times 3 \times 64 \times 64 &= 9 \times 4{,}096 \\
-   &= 36{,}864
-   \end{aligned}
-   $$
-
-   Mehnga 3×3 ab sirf 64 channels pe kaam karta hai.
-5. **Bottleneck 1×1 expand.**
-
-   $$
-   1 \times 1 \times 64 \times 256 = 16{,}384
-   $$
-
-   Ye channels wapas 256 karta hai taaki shortcut add kar sake.
-6. **Bottleneck block total.** Teeno layers jodo:
-
-   $$
-   16{,}384 + 36{,}864 + 16{,}384 = 69{,}632
-   $$
-7. **Ratio.** Basic total ko bottleneck total se divide karo: $1{,}179{,}648 / 69{,}632 \approx 16.9$.
+1. **Skip connection add karo:** $F(x) + x = [0.5 + 2,\ -1 + 3] = [2.5,\ 2]$.
+2. **ReLU lagao** (negative 0 ho jaate hain, positive waise hi): $[2.5,\ 2]$.
 
 </Steps>
 
 <Answer>
 
-basic block 1,179,648 weights, bottleneck block 69,632 weights, toh bottleneck ko lagbhag 17 guna kam chahiye.
+$y = [2.5,\ 2]$
 
 </Answer>
 
 <Box kind="verify">
 
-Common factor $64 \times 64 = 4{,}096$ bahar nikalo. Basic:
-
-$$
-\begin{aligned}
-2 \times 9 \times 256 \times 256 &= 4{,}096 \times (2 \times 9 \times 4 \times 4) \\
-&= 4{,}096 \times 288
-\end{aligned}
-$$
-
-Bottleneck:
-
-$$
-4{,}096 \times (4 + 9 + 4) = 4{,}096 \times 17
-$$
-
-Ratio $288 / 17 \approx 16.9$ hai, step 7 jaisa hi. Saath hi $4{,}096 \times 17 = 69{,}632$ aur $4{,}096 \times 288 = 1{,}179{,}648$, steps 6 aur 2 se match.
+Agar block ke paas jodne ko kuch nahi hota ($F(x) = [0, 0]$), to output bilkul $x = [2, 3]$ hota. Ye wo aasaan "kuch mat karo" case hai jo shortcut possible banata hai, isliye extra layers cheezein aasani se kharab nahi kar sakti.
 
 </Box>
 
 </Sum>
 
-## Teeno ka comparison
+### ResNet architecture aur versions
 
-| | LeNet-5 (1998) | AlexNet (2012) | ResNet (2015) |
-|---|---|---|---|
-| Task | Handwritten digits, 32×32 grayscale | ImageNet, 1000 classes, colour | ImageNet, 1000 classes, colour |
-| Depth (weighted layers) | 7 | 8 (5 conv + 3 FC) | 18 se 152 (basic example mein 34) |
-| Size | Lagbhag 60 hazaar parameters | Lagbhag 60 million parameters | Paper cost report karta hai, parameters nahi: ResNet-34 ke liye 3.6 billion FLOPs, VGG-19 ka 18% |
-| Activation | Scaled tanh | ReLU | ReLU |
-| Pooling | Trainable average-like subsampling | Overlapping max pooling 3×3, stride 2 | Shuru mein ek max pool, end mein global average pool |
-| Key new idea | Convolution + weight sharing + backprop | ReLU, dropout, GPUs, augmentation | Skip connections, batch norm, very deep |
-| End of the network | FC layers (120, 84) aur 10 outputs | Teen bade FC layers | Global average pool + ek FC |
-| Main limit | Real photos ke liye bahut chhota | Bade FC layers, memory-hungry | Lambi training, bahut layers |
+<Img id="class-cnn-architectures-resnet18-sizes" caption="ResNet-18 ki class sheet: 224×224×3 input, 64 filters wali 7×7 convolution (112×112×64), 3×3 max pool (56×56×64), 64, 128, 256, 512 channels ke chaar residual block groups (56, 28, 14, 7), global average pooling 1×1×512, FC 1000, softmax." />
 
-<Box kind="pitfall">
+Basic flow: input image → initial convolution → residual blocks (repeated, kai groups) → global average pooling → fully connected layer → softmax → prediction. ResNet alag-alag depths mein aata hai: **ResNet-18, 34, 50, 101, 152.** Number lagbhag layers ki sankhya batata hai. <Cite id="class-dl-chp4" loc="slide 49" /> <Cite id="class-dl-chp4" loc="slide 51" />
 
-"Deeper" ka matlab "zyada parameters" nahi hai. ResNet-152 VGG se 8 guna deeper hai par kam complexity wala, kyunki ye bade fully connected layers ki jagah chhote filters, bottleneck blocks aur global average pooling use karta hai. ResNet paper complexity FLOPs (multiply-adds) mein report karta hai, parameters mein nahi, toh ResNet ka parameter count tab tak quote mat karo jab tak question na de.
+<Img id="class-cnn-architectures-resnet50-strip" caption="ResNet-50 (Module 4): 7×7 convolution, max pool, 3, 4, 6 aur 3 residual blocks ke chaar stages jo 56×56×256, 28×28×512, 14×14×1024 aur 7×7×2048 dete hain, global average pooling aur FC 1000." />
+
+<Img id="class-cnn-architectures-resnet50-table" caption="ResNet-50 summary table: har stage ka output size, layers aur blocks ki sankhya." />
+
+**Sum: ise ResNet-50 kyun kehte hain.** <Cite id="class-dl-m4" loc="p. 76" />
+
+<Sum>
+
+<Given>
+
+ResNet-50: shuru mein ek 7×7 convolution, phir 3, 4, 6 aur 3 residual blocks ke chaar stages. Har block mein 3 convolutions (1×1, 3×3, 1×1). Aakhir mein ek fully connected layer.
+
+</Given>
+
+<Find>
+
+weight layers ki sankhya.
+
+</Find>
+
+<Steps>
+
+1. **Blocks ki convolutions:** $(3 + 4 + 6 + 3) \times 3 = 16 \times 3 = 48$.
+2. **Pehli convolution jodo:** $48 + 1 = 49$.
+3. **Fully connected layer jodo:** $49 + 1 = 50$.
+
+</Steps>
+
+<Answer>
+
+50 layers (49 convolutional + 1 FC), jaise Module kehta hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Block counts Module ke ResNet-101 note se bhi match karte hain: $[3, 4, 23, 3]$ deta hai $(3 + 4 + 23 + 3) \times 3 + 2 = 33 \times 3 + 2 = 101$.
 
 </Box>
 
-<Box kind="exam">
+</Sum>
 
-"Draw and explain any two modern architectures" ke liye AlexNet aur ResNet sabse safe pair hai. Har ek ke liye: kyun banaya, block diagram, layers ki chhoti list, kya naya tha aur kyun help kiya, advantages aur limits. ResNet ke liye hamesha $y = F(x) + x$ likho aur residual block draw karo. Size aur parameter sums sirf tab chahiye jab question unhe maange.
+**ResNet ke advantages:** bahut deep networks (dason se sau layers) allow karta hai; shortcut connections se gradient flow behtar; degradation problem kam; behtar feature learning. Image classification, object detection, image segmentation, face recognition, medical image analysis aur transfer learning mein use hota hai. <Cite id="class-dl-chp4" loc="slide 49" />
+
+<Img id="class-cnn-architectures-resnet-advantages" caption="ResNet ke advantages aur wo kahan use hota hai." />
+
+**ResNeXt (variant).** Xie et al. ne ResNeXt propose kiya. Ye Inception module jaisa dikhta hai (dono split-transform-merge karte hain), lekin alag paths ke outputs **add** hote hain jabki Inception unhe depth ke saath **concatenate** karta hai, aur har path ka structure (topology) same hota hai jabki Inception alag structures use karta hai (1×1, 3×3, 5×5). Isme **cardinality** naam ka hyperparameter hai, paths ki sankhya. <Cite id="class-dl-m4" loc="p. 78" />
+
+<Box kind="key">
+
+**Exam-ready definition (ResNet):** ResNet is a deep CNN architecture that uses residual blocks and skip connections to learn residual mappings and enable efficient training of very deep neural networks. <Cite id="class-dl-chp4" loc="slide 51" />
 
 </Box>
 
-Kuch aur well-known architectures jinhe ek-ek line mein naam de sakte ho: **VGG** (ILSVRC 2014 runner-up, bahut regular design jo sirf 3×3 convolutions aur 2×2 pooling use karta hai, best version mein 16 layers) aur **GoogLeNet** (ILSVRC 2014 winner, "Inception modules" se bana aur sirf lagbhag 4 million parameters). <Cite id="cs231n-cnn" /> <Cite id="ibm-cnn" /> <Cite id="wiki-cnn" />
+## U-Net (2015)
 
-**Conclusion.** LeNet ne dikhaya ki CNN apne features khud seekh sakta hai, AlexNet ne dikhaya ki GPUs pe ReLU aur dropout wala bada CNN real photos pe hand-made features ko hara deta hai, aur ResNet ke skip connections ne 100+ layers wale networks trainable banaye; bahut se modern vision models in ideas pe based hain. <Cite id="nptel-dl" />
+U-Net ko Olaf Ronneberger et al. ne 2015 mein University of Freiburg, Germany mein **biomedical image segmentation** ke liye banaya. Aaj semantic segmentation ke liye ye sabse popular approaches mein se ek hai. Ye ek **fully convolutional neural network** hai jo **kam training samples** se seekhne ke liye design kiya gaya hai, aur Long et al. ke pehle wale FCN (fully convolutional networks) ka improvement hai. <Cite id="class-dl-m4" loc="p. 80" />
 
-Exam mein English mein likho: "LeNet proved CNNs work, AlexNet made them large and fast with ReLU, dropout and GPUs, and ResNet made very deep networks trainable with skip connections."
+**Segmentation kya hai?** **Image segmentation** ek computer vision task hai jisme hum image ke specific regions ko label karte hain. **Semantic image segmentation** ka goal image ke **har pixel** ko us class se label karna hai jo wo represent kar raha hai. Uses: autonomous vehicles aur medical image diagnostics. <Cite id="class-dl-m4" loc="p. 81" />
 
-## Ye kahan poocha gaya
+<Img id="class-cnn-architectures-unet" caption="Module ka U-Net figure. Left: contracting path (do 3×3 convolutions with ReLU ke blocks, phir 2×2 max pooling; channels 64, 128, 256, 512, neeche 1024). Right: expansive path (2×2 up-convolution, left se copy and crop, do 3×3 convolutions; channels 512, 256, 128, 64) aur segmentation map ke liye aakhri 1×1 convolution." />
+
+### Architecture: U-shaped encoder-decoder
+
+U-Net ek U-shaped **encoder-decoder** network hai, chaar encoder blocks aur chaar decoder blocks ek bridge se jude hue. Encoder (contracting path) har encoder block par **spatial dimensions aadhe aur filters ki sankhya double** karta hai; decoder **spatial dimensions double aur feature channels aadhe** karta hai. <Cite id="class-dl-m4" loc="p. 83" />
+
+```mermaid
+%% caption: U-Net U akshar ki tarah draw kiya gaya. Left side picture chhoti karke seekhti hai ki usme kya hai; right side use wapas bada karke batati hai ki kahan hai. Dotted skip connections detail ek side se doosri side le jaate hain.
+flowchart TD
+  I["Input image"] --> E1["Encoder 1: 2× conv 3×3 + ReLU, max pool 2×2"]
+  E1 --> E2["Encoder 2"] --> E3["Encoder 3"] --> E4["Encoder 4"] --> B["Bridge: 2× conv 3×3 + ReLU"]
+  B --> D4["Decoder 4: up-conv 2×2, concatenate, 2× conv"]
+  D4 --> D3["Decoder 3"] --> D2["Decoder 2"] --> D1["Decoder 1"]
+  D1 --> O["1×1 conv + sigmoid: segmentation mask"]
+  E1 -.->|"skip"| D1
+  E2 -.->|"skip"| D2
+  E3 -.->|"skip"| D3
+  E4 -.->|"skip"| D4
+```
+
+- **Encoder network** (contracting path): feature extractor hai; input ka abstract representation seekhta hai. Har encoder block mein **do 3×3 convolutions** hain, har ek ke baad ReLU, phir **2×2 max pooling** jo height aur width aadhi karta hai aur cost kam karta hai. ReLU ka output matching decoder block ke liye **skip connection** ke roop mein rakha jaata hai. <Cite id="class-dl-m4" loc="p. 83" />
+- **Bridge:** encoder aur decoder ko jodta hai; do 3×3 convolutions, har ek ke baad ReLU. <Cite id="class-dl-m4" loc="p. 84" />
+- **Decoder network:** abstract representation leke semantic segmentation mask banata hai. Har decoder block **2×2 transpose convolution** se shuru hota hai, encoder se **matching skip connection ke saath concatenate** hota hai, phir ReLU ke saath do 3×3 convolutions. Aakhri decoder ka output **sigmoid ke saath 1×1 convolution** se guzarta hai, jo pixel-wise classification mask deta hai. <Cite id="class-dl-m4" loc="p. 84" />
+- **Skip connections:** decoder ko extra information dete hain (earlier layers ke features jo depth ki wajah se kho sakte hain), taaki wo behtar semantic features bana sake. Ye shortcut ki tarah bhi kaam karte hain jo backpropagation mein gradients ko earlier layers tak pahunchne mein madad karta hai. <Cite id="class-dl-m4" loc="p. 84" />
+
+**Sum: U-Net figure ke sizes check karo.** Figure bina padding ke 3×3 convolutions use karta hai, isliye har convolution height aur width se 2 ghatata hai. <Cite id="class-dl-m4" loc="p. 82" />
+
+<Sum>
+
+<Given>
+
+input tile 572×572. Har encoder block: do 3×3 convolutions (har ek $-2$), phir 2×2 max pool (÷2). Bridge mein do convolutions. Har decoder block: 2×2 up-convolution (×2), encoder map ka crop aur copy, phir do 3×3 convolutions.
+
+</Given>
+
+<Find>
+
+left path aur U ke neeche ke sizes, aur output size.
+
+</Find>
+
+<Steps>
+
+1. **Level 1:** $572 \to 570 \to 568$, pool: $568 / 2 = 284$.
+2. **Level 2:** $284 \to 282 \to 280$, pool: $140$.
+3. **Level 3:** $140 \to 138 \to 136$, pool: $68$.
+4. **Level 4:** $68 \to 66 \to 64$, pool: $32$.
+5. **Bridge:** $32 \to 30 \to 28$.
+6. **Decoder 4:** up-convolution $28 \times 2 = 56$, phir $56 \to 54 \to 52$ (encoder map 64 ko fit karne ke liye 56 tak crop kiya jaata hai).
+7. **Decoder 3:** $52 \times 2 = 104 \to 102 \to 100$.
+8. **Decoder 2:** $100 \times 2 = 200 \to 198 \to 196$.
+9. **Decoder 1:** $196 \times 2 = 392 \to 390 \to 388$.
+
+</Steps>
+
+<Answer>
+
+left: 572 → 568 → 284 → 280 → 140 → 136 → 68 → 64 → 32 → 28 (neeche); right: 56 → 52 → 104 → 100 → 200 → 196 → 392 → 388. Output segmentation map 388×388 hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Ye bilkul wahi numbers hain jo figure mein chhape hain (572, 570, 568, 284, 282, 280, 140, 138, 136, 68, 66, 64, 32, 30, 28 aur upar jaate hue 56, 54, 52, 104, 102, 100, 200, 198, 196, 392, 390, 388). Channels neeche $1 \to 64 \to 128 \to 256 \to 512 \to 1024$ aur upar $512 \to 256 \to 128 \to 64 \to 2$ jaate hain.
+
+</Box>
+
+</Sum>
+
+## Architectures ki comparison
+
+<Img id="class-cnn-architectures-compare-left" caption="LeNet-5, AlexNet aur VGGNet-16 ki Module 4 comparison: building block, depth, parameters, input, design philosophy, strengths aur limitations." />
+
+<Img id="class-cnn-architectures-compare-right" caption="GoogLeNet, ResNet-50 aur U-Net ki wahi comparison, unke typical applications ke saath." />
+
+| | LeNet-5 | AlexNet | VGG-16 | GoogLeNet | ResNet-50 | U-Net |
+|---|---|---|---|---|---|---|
+| Year | 1998 | 2012 | 2014 | 2014 | 2015 | 2015 |
+| Key building block | Convolution + pooling + FC | Large convolutions, ReLU, dropout | Small 3×3 convolutions | Inception module | Residual block | Encoder-decoder with skip connections |
+| Depth | 5 trainable layers | 8 | 16 | 22 | 50 | about 23 |
+| Parameters (approx.) | 60 thousand | 60 million | 138 million | 6.8 million | 25.6 million | 7 to 30 million |
+| Input | 32×32×1 | 227×227×3 | 224×224×3 | 224×224×3 | 224×224×3 | variable |
+| Strength | Simple, chhote data par fast | Deep CNNs ki power dikhai | High accuracy, simple aur uniform | Efficient, kam parameters mein achhi accuracy | Bahut deep networks train karta hai | Limited data se segmentation |
+| Limitation | Low capacity | Bahut parameters, bada memory | Bahut bada model, slow | Complex modules | Bahut high resolutions par heavy | Plain classification ke liye nahi |
+| Typical use | Digit recognition | ImageNet classification | Classification, transfer learning | Classification, feature extraction | Classification, detection, recognition | Medical, satellite segmentation |
+
+<Cite id="class-dl-m4" loc="p. 86" />
+
+**Evolution summary:** LeNet ki simplicity → AlexNet ka deep learning breakthrough → VGG ki chhote filters ke saath depth → GoogLeNet ka efficient multi-scale design → ResNet ki bahut deep models train karne ki ability → U-Net ki segmentation ke liye specialization. <Cite id="class-dl-m4" loc="p. 86" />
+
+## Ye kahan puchha gaya
 
 | If the question says | What to write | Seen as |
 |---|---|---|
-| "Describe LeNET architecture" | Purpose, sizes ke saath step-by-step layers, diagram, subsampling aur tanh, ~60k parameters, MNIST result, advantages aur limits | <PYQ id="2023-12/q6a" /> |
-| "Explain and analyze the architecture of AlexNet" | Kyun zaroori tha, layer table, diagram, chhe naye ideas aur har ek ne kyun help kiya, parameters kahan hain, advantages aur limits | <PYQ id="2024-12/q2b" /> |
-| "Draw and explain any two modern deep learning architectures" | AlexNet aur ResNet: diagram, layers, key ideas, $y = F(x) + x$, comparison | <PYQ id="2025-05/q3a" /> |
+| "Describe LeNet architecture" | Definition, 32×32×1 input, sizes ke saath layers ki aath rows, ideas, "5" kyun, conclusion | <PYQ id="2023-12/q6a" /> |
+| "Explain and analyze AlexNet" | Definition, kyun important, key features, layer-by-layer sizes, dropout aur augmentation, LeNet se comparison | <PYQ id="2024-12/q2b" /> |
+| "Draw and explain any two modern architectures" | Do chuno (jaise ResNet aur GoogLeNet ya AlexNet): diagram, key idea, features, ek comparison line | <PYQ id="2025-05/q3a" /> |
+| "Discuss and analyse LeNet / AlexNet / GoogLeNet / ResNet and U-Net" | Har ek ka chhota block: diagram, key idea, sizes ya features, strength aur limit | <PYQ id="assignment-2/q4c" /> |
 
 ## Quick revision
 
-- LeNet-5: 32×32 → C1 (6@28×28) → S2 (6@14×14) → C3 (16@10×10) → S4 (16@5×5) → C5 (120) → F6 (84) → 10. Lagbhag 60k trainable parameters, scaled tanh. <Cite id="wiki-lenet" />
-- AlexNet: 227×227×3 → 5 conv (11×11 stride 4 ke 96, 5×5 ke 256, 3×3 ke 384, 384, 256) → FC 4096, 4096, 1000. Lagbhag 60M parameters, zyada tar FC mein. <Cite id="wiki-alexnet" />
-- AlexNet ke naye ideas: ReLU, do GPUs, local response normalization, overlapping max pooling, dropout, data augmentation. Top-5 error 15.3% vs 26.2%.
-- ResNet: degradation problem → residual block $y = F(x) + x$; shapes alag hon to 1×1 projection; 50+ layers ke liye bottleneck blocks; 152 layers tak; 3.57% top-5 error, ILSVRC 2015.
-- Skip connection gradient ko seedha wapas jaane ka raasta deta hai, isliye vanish hone ka chance kam hota hai.
+- LeNet-5 (1998): 32×32×1 → C1 28×28×6 → S2 14×14×6 → C3 10×10×16 → S4 5×5×16 → C5 1×1×120 → F6 84 → 10. Paanch trainable layers, tanh, average pooling, lagbhag 60 hazaar parameters.
+- AlexNet (2012): 227×227×3 → 55×55×96 → 27×27×96 → 27×27×256 → 13×13×256 → 13×13×384 → 13×13×384 → 13×13×256 → 6×6×256 → 9216 → 4096 → 4096 → 1000. ReLU, max pooling, dropout 0.5, augmentation, GPU; lagbhag 60 million parameters.
+- VGG-16 (2014): sirf 3×3 convolutions; size aadha aur channels double (64 se 512); 13 convolution + 3 FC; 138 million parameters; slow.
+- GoogLeNet (2014): Inception module (1×1, 3×3, 5×5, pooling parallel, concatenated); 1×1 convolution kaam kam karta hai (112.9 million se 5.3 million); global average pooling; auxiliary classifiers; 22 layers.
+- ResNet (2015): $y = F(x) + x$; skip connection; degradation fix; 18, 34, 50, 101, 152 layers; projection shortcut = 1×1 convolution.
+- U-Net (2015): U-shaped encoder-decoder, skip connections, sigmoid ke saath 1×1 convolution; segmentation ke liye (har pixel ko label karo).

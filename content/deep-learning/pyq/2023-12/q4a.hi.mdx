@@ -1,60 +1,43 @@
 ---
-references: [gfdl-ch10, d2l-rnn, gfg-rnn, ibm-rnn]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** recurrent neural network (RNN) ek aisa network hai jo order mein aane wale data ke liye bana hai, jaise sentence ke words. Ye ek time pe ek item padhta hai aur ek chalti hui memory rakhta hai, jise hidden state kehte hain. Ye memory har step se agle step ko pass hoti hai.
+**In simple words:** RNN sequence ko ek-ek step mein padhta hai aur jo padha uski memory (hidden state) rakhta hai, taaki current input handle karte waqt pehle ke inputs use kar sake.
 
-**Why it is needed.** Feedforward network ka input size fixed hota hai aur uske paas koi memory nahi hoti, isliye wo pehle ke words use karke baad ke words nahi samajh sakta. RNN ek loop add karta hai jo memory ko aage le jaata hai. Ye story padhne jaisa hai: har nayi line isliye samajh aati hai kyunki pichli lines yaad hain.
+**Definition:** RNN ek type ka neural network hai jisme hidden states hote hain aur jo pichhle outputs ko inputs ki tarah use karne deta hai. <Cite id="class-dl-m5" loc="p. 9" />
 
-**Architecture: the layers**
+**Ye kyun zaroori hai:** feedforward network ke paas pichhle inputs ki memory nahi hoti aur sequence ke har element ke liye alag parameters chahiye. RNN **har time step par same weights** use karta hai, isliye parameters kam hote hain aur wo kisi bhi length ki sequence handle karta hai. <Cite id="class-dl-m5" loc="p. 7" /> <Cite id="class-dl-m5" loc="p. 8" />
 
-- **Input layer** ($x_t$): time step $t$ pe sequence ka ek item, jaise ek word.
-- **Hidden layer** ($h_t$): ye memory hai. Ye naya input input weights $U$ ke through leta hai aur apni pichli value recurrent weights $W$ ke through (yahi loop hai).
-- **Output layer** ($\hat{y}_t$): is step ka answer, jo memory se output weights $V$ ke through banta hai.
-
-**How it works, step by step**
-
-1. Khaali memory se start karo ($h_0 = 0$).
-2. Har step pe naye input ko pichli memory ke saath combine karo, bias add karo aur tanh lagao. Isse nayi memory milti hai.
-3. Nayi memory se output banao (output agar class hai to softmax).
-4. Sequence khatam hone tak **same** weights ke saath repeat karo.
-
-Yahi steps ek formula mein <Cite id="gfdl-ch10" loc="§10.2" />:
-
-$$
-h_t = \tanh\left(W h_{t-1} + U x_t + b\right), \qquad \hat{y}_t = \text{softmax}\left(V h_t + c\right)
-$$
-
-jahan $b$ aur $c$ biases hain. Har step pe same $U$, $W$, $V$ use karna **parameter sharing** kehlata hai: network kisi bhi length ka input padh sakta hai, aur jo ek position pe seekha wo har position pe kaam karta hai.
-
-**Unfolding.** Loop ko ek chain ki tarah draw karte hain, har time step ki ek copy:
+<Img id="class-rnn-unfolding" caption="Unfolded RNN: chaar time steps par same cell, inputs x1 se x4 aur outputs h1 se h4, weights time ke across shared." />
 
 ```mermaid
-%% caption: Teen steps pe unfold kiya hua RNN. Har copy same U, W aur V use karti hai; W wale arrows memory ko aage le jaate hain.
+%% caption: Time mein unfolded RNN ka architecture. Har cell current input aur previous hidden state leta hai, aur new hidden state aur output deta hai.
 flowchart LR
-  H0(("h0")) -- "W" --> H1(("h1"))
-  H1 -- "W" --> H2(("h2"))
-  H2 -- "W" --> H3(("h3"))
-  X1["x1"] -- "U" --> H1
-  X2["x2"] -- "U" --> H2
-  X3["x3"] -- "U" --> H3
-  H1 -- "V" --> Y1["y1"]
-  H2 -- "V" --> Y2["y2"]
-  H3 -- "V" --> Y3["y3"]
+  X1["x1"] --> C1["RNN cell"]
+  C1 -->|"h1"| C2["RNN cell"]
+  X2["x2"] --> C2
+  C2 -->|"h2"| C3["RNN cell"]
+  X3["x3"] --> C3
+  C3 -->|"h3"| C4["RNN cell"]
+  X4["x4"] --> C4
+  C1 -.-> Y1["y1"]
+  C2 -.-> Y2["y2"]
+  C3 -.-> Y3["y3"]
+  C4 -.-> Y4["y4"]
 ```
 
-<Img id="img-dl-n3-rnn-unfold" caption="Hidden state h pe loop wahi network hai jo ek baar draw hua; unfold karne pe ye har time step ki copy ki chain ban jaata hai." />
+**Working, step by step** <Cite id="class-dl-chp5" loc="slide 7" />
 
-**Types.** One-to-many (image captioning), many-to-one (sentiment analysis), many-to-many (translation, har word ko tag karna). **Bidirectional RNN** ek doosra RNN add karta hai jo ulta (backwards) padhta hai, taaki har output past aur future dono dekh sake. RNN layers ko **stack** karke deep RNN bhi bana sakte hain.
+1. Current input $x_t$ aur previous hidden state $h_{t-1}$ lo.
+2. Cell dono ko combine karke new hidden state $h_t = \tanh(U x_t + W h_{t-1} + b)$ aur output $\hat{y}_t = \text{softmax}(V h_t + c)$ deta hai.
+3. Sequence ke har element ke liye repeat karo. $U, W, V, b, c$ har step par same rehte hain.
 
-**Training.** Backpropagation through time (BPTT): chain ko unfold karo, saare steps ke losses jodo, error ko chain mein peeche bhejo, aur shared weights ke gradients saare steps pe jod do. <Cite id="d2l-rnn" />
+**Types:** one to one, one to many (image captioning), many to one (sentiment analysis), many to many (machine translation). <Cite id="class-dl-m5" loc="p. 11" />
 
-**Advantages:** kisi bhi length ka input handle karta hai, sharing ki wajah se kam parameters, past ki memory rakhta hai.
+**Training:** backpropagation through time (BPTT): time mein aage, phir error time mein peeche, aur weights update. <Cite id="class-dl-chp5" loc="slide 10" />
 
-**Disadvantages:** lambe sequences pe vanishing ya exploding gradients (isliye purane inputs bhool jaata hai), aur slow hai kyunki steps ek ke baad ek chalte hain. LSTM aur GRU memory wali problem fix karte hain.
+**Limitations:** vanishing aur exploding gradients, isliye long-term dependencies seekhna mushkil. <Cite id="class-dl-chp5" loc="slide 12" />
 
-**Applications:** text generation, speech recognition, machine translation, time-series forecasting. <Cite id="gfg-rnn" /> <Cite id="ibm-rnn" />
+**Applications:** speech recognition, music generation, translation, video analysis, DNA sequences. <Cite id="class-dl-m5" loc="p. 15" />
 
-**Conclusion:** RNN ek loop wala network hai jo memory ko step se step aage le jaata hai, aur har time step pe same weights use karta hai.
-
-Exam mein English mein likho: "An RNN is a network with a loop that carries memory from step to step, using the same weights at every time step."
+**Conclusion:** RNN = sequential data + previous information + hidden state.

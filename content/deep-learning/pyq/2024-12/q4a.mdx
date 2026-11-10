@@ -1,49 +1,35 @@
 ---
-references: [gfdl-ch10, d2l-rnn, gfg-rnn, keras-simplernn, av-rnn]
+references: [class-dl-chp5, class-dl-m5]
 ---
 
-**In simple words:** a recurrent neural network (RNN) reads a sequence one item at a time and keeps a memory of what it has read so far. Its key components are the input, the hidden state (the memory), three weight sets shared across all time steps, the activations, the output and the loss.
+**In simple words:** an RNN is built from a few parts: the input, the hidden state (memory), the weights, the output, and the loop that repeats the same cell at every time step.
 
-**Why these components.** A sequence model must remember earlier items, accept inputs of any length and do the same job at every step. The hidden state gives the memory, and the shared weights let one network handle every step. <Cite id="gfdl-ch10" loc="§10.2" />
+**Key components of an RNN** <Cite id="class-dl-m5" loc="p. 9" /> <Cite id="class-dl-chp5" loc="slide 7" />
 
-**The components**
+| Component | What it is | Symbol |
+|---|---|---|
+| Input | The element of the sequence at time $t$ | $x_t$ |
+| Hidden state | The memory: information carried from previous time steps | $h_t$ (previous $h_{t-1}$) |
+| Weights and biases | $U$ (input to hidden), $W$ (hidden to hidden), $V$ (hidden to output), $b$, $c$; the **same at every time step** | $U, W, V, b, c$ |
+| Activation | Gives the hidden state its non-linearity (tanh); softmax at the output | $g_1, g_2$ |
+| Output | The prediction at time $t$ | $\hat{y}_t$ |
+| Recurrent connection | The loop that passes $h_t$ to the next step; unfolded it becomes a chain of the same cell | – |
 
-1. **Input $x_t$:** one element of the sequence at time step $t$, for example a word turned into numbers.
-2. **Hidden state $h_t$:** a vector that is the network's memory, a summary of everything seen up to step $t$. It starts as $h_0 = 0$.
-3. **Input weights $U$:** decide how the new input changes the memory.
-4. **Recurrent weights $W$:** connect the previous memory to the new one. This loop is what makes the network "recurrent".
-5. **Output weights $V$:** turn the memory into an output.
-6. **Biases $b$, $c$:** shift the sums, as in any neuron.
-7. **Activations:** tanh in the hidden state (keeps values between $-1$ and $1$); softmax at the output for classes, or none for a number.
-8. **Output $\hat{y}_t$:** produced at every step, or only at the last step (for example in sentiment analysis).
-9. **Loss:** one loss per output step, added up over the sequence.
+Equations: $h_t = \tanh(U x_t + W h_{t-1} + b)$ and $\hat{y}_t = \text{softmax}(V h_t + c)$. <Cite id="class-dl-chp5" loc="slide 14" />
 
-**How they work together.** The new memory is tanh of (W times the old memory, plus U times the input, plus b). The output is softmax of (V times the memory, plus c):
-
-$$
-h_t = \tanh\left(W h_{t-1} + U x_t + b\right), \qquad \hat{y}_t = \text{softmax}\left(V h_t + c\right)
-$$
-
-**Parameter sharing.** The same $U$, $W$, $V$, $b$, $c$ are used at every step, so the network handles any length and the number of weights does not grow with the length. <Cite id="keras-simplernn" />
-
-<Img id="img-dl-n1-rnn-unfold" caption="Left, the RNN drawn with a loop on the hidden state h; right, the same network unfolded over time, one copy per step." />
+<Img id="class-rnn-cell-weights" caption="Inside one RNN cell: the previous activation is multiplied by W aa, the input by W ax, they are added with the bias, passed through g1 to give the new hidden state, which goes through W ya, the bias and g2 to give the output." />
 
 ```mermaid
-%% caption: The components on the unfolded RNN. U brings each input in, W carries the memory forward, V produces each output, and the losses are added.
+%% caption: The components of an RNN in one step. The loop sends the new hidden state back as the memory for the next step.
 flowchart LR
-  H0(("h0")) -- "W" --> H1(("h1")) -- "W" --> H2(("h2")) -- "W" --> H3(("h3"))
-  X1["x1"] -- "U" --> H1
-  X2["x2"] -- "U" --> H2
-  X3["x3"] -- "U" --> H3
-  H1 -- "V" --> Y1["y1, loss L1"]
-  H2 -- "V" --> Y2["y2, loss L2"]
-  H3 -- "V" --> Y3["y3, loss L3"]
+  X["Input x_t"] --> C["RNN cell: weights U, W, bias b, tanh"]
+  H0["Previous hidden state h_(t-1)"] --> C
+  C --> H1["New hidden state h_t"]
+  H1 -->|"recurrent connection to next step"| H0
+  H1 --> O["Output layer: V, c, softmax"]
+  O --> Y["Output y_t"]
 ```
 
-**Training: BPTT.** The RNN is unfolded over time and trained by backpropagation through time. The gradients of the shared weights are added over all steps. <Cite id="d2l-rnn" />
+**Unfolding:** showing the same RNN cell separately at each time step; the weights are shared across all steps. **Learning:** the loss is calculated, BPTT sends the error backward through time, and the weights $U, W, V, b, c$ are updated. <Cite id="class-dl-chp5" loc="slide 12" /> <Cite id="class-dl-chp5" loc="slide 10" />
 
-**Advantages:** any sequence length, few parameters, memory of the past. **Limitations:** vanishing or exploding gradients over long sequences, and slow step-by-step processing. LSTM and GRU reduce the memory problem.
-
-**Applications:** text generation, speech recognition, sentiment analysis, time-series forecasting. <Cite id="gfg-rnn" /> <Cite id="av-rnn" />
-
-**Conclusion:** the hidden state with its recurrent weights, shared across time, is the component that lets an RNN model sequences.
+**Conclusion:** the hidden state and the shared weights are the heart of the RNN; they give memory with few parameters.
