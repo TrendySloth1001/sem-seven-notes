@@ -11,18 +11,18 @@ export const metadata: Metadata = {
 
 export default function SyllabusOverview() {
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="px-4 py-8 sm:px-6 sm:py-12 lg:px-10">
       <p className="font-mono-label text-primary">Semester VII</p>
       <h1 className="mt-2 text-4xl font-bold tracking-tight sm:text-5xl">
         Syllabus
       </h1>
-      <p className="mt-3 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+      <p className="mt-3 max-w-4xl text-lg leading-relaxed text-muted-foreground">
         Five theory subjects. Open one to see every module, its topics and the
         hours it gets. Press <kbd className="font-mono">⌘K</kbd> to search
         across all of them.
       </p>
 
-      <ul className="mt-8 grid gap-4 sm:grid-cols-2">
+      <ul className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {subjects.map((s, i) => (
           <li key={s.slug}>
             <Link

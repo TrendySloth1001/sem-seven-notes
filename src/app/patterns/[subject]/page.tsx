@@ -174,8 +174,8 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
   ];
 
   return (
-    <div className="mx-auto flex max-w-6xl gap-10 px-4 py-8 sm:px-6 sm:py-12">
-      <article className="min-w-0 max-w-3xl flex-1">
+    <div className="flex gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:px-10">
+      <article className="min-w-0 flex-1">
         <SubjectTabs subject={subject} active="patterns" />
         <header>
           <p className="font-mono-label text-primary">{s.name}</p>
@@ -198,7 +198,7 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
             Questions that keep coming back, ranked by how often and how
             recently they were asked. Prepare these first.
           </p>
-          <ol className="mt-4 flex flex-col gap-3">
+          <ol className="mt-4 grid items-start gap-3 2xl:grid-cols-2">
             {likely.map((c, i) => (
               <ClusterCard
                 key={`${c.head.paper.slug}-${c.head.q.id}`}
@@ -247,9 +247,12 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
             Engineering papers count {Math.round(OTHER_BRANCH_WEIGHT * 100)}% of
             yours.
           </p>
-          <ul className="mt-4 flex flex-col divide-y rounded-2xl border">
+          <ul className="mt-4 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
             {stats.map((t) => (
-              <li key={t.slug} className="flex flex-col gap-2 p-4">
+              <li
+                key={t.slug}
+                className="flex flex-col gap-2 rounded-2xl border p-4"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Link
                     href={`/notes/${subject}/${t.slug}`}
@@ -281,7 +284,7 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
             Share of past-paper marks against share of lecture hours. A module
             with more marks than hours pays back more per hour of study.
           </p>
-          <ul className="mt-4 flex flex-col gap-4 rounded-2xl border bg-card p-4">
+          <ul className="mt-4 grid gap-x-8 gap-y-4 rounded-2xl border bg-card p-4 lg:grid-cols-2">
             {modules.map((m) => (
               <li key={m.number} className="flex flex-col gap-1.5">
                 <p className="text-sm font-medium">
@@ -320,7 +323,7 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
           <p className="mt-2 text-muted-foreground">
             {repeated.length} questions were asked in two or more sessions.
           </p>
-          <ol className="mt-4 flex flex-col gap-3">
+          <ol className="mt-4 grid items-start gap-3 2xl:grid-cols-2">
             {repeated.map((c, i) => (
               <ClusterCard
                 key={`all-${c.head.paper.slug}-${c.head.q.id}`}

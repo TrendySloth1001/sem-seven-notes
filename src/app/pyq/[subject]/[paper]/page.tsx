@@ -58,8 +58,8 @@ async function PaperPageContent({
   }));
 
   return (
-    <div className="mx-auto flex max-w-6xl gap-10 px-4 py-8 sm:px-6 sm:py-12">
-      <article className="min-w-0 max-w-3xl flex-1">
+    <div className="flex gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:px-10">
+      <article className="min-w-0 flex-1">
         <SubjectTabs subject={subject} active="pyq" />
         <header>
           <p className="font-mono-label text-primary">{s.name}</p>

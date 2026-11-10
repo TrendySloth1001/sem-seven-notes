@@ -30,7 +30,7 @@ async function PapersIndexContent({ params }: PageProps<"/pyq/[subject]">) {
   if (!s || papers.length === 0) notFound();
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="px-4 py-8 sm:px-6 sm:py-12 lg:px-10">
       <SubjectTabs subject={subject} active="pyq" progress />
       <p className="font-mono-label text-primary">{s.name}</p>
       <h1 className="mt-2 text-4xl font-bold tracking-tight">Past papers</h1>
@@ -59,7 +59,7 @@ async function PapersIndexContent({ params }: PageProps<"/pyq/[subject]">) {
               {g.title}
             </h2>
             <p className="mt-1 text-muted-foreground">{g.blurb}</p>
-            <ul className="mt-4 grid gap-4 sm:grid-cols-2">
+            <ul className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {g.list.map((p) => {
                 const solved = p.questions.filter((q) =>
                   isSolved(subject, p.slug, q.id),

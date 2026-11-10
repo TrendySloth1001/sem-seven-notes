@@ -31,7 +31,7 @@ async function NotesIndexContent({ params }: PageProps<"/notes/[subject]">) {
   const written = listWrittenNotes(subject);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="px-4 py-8 sm:px-6 sm:py-12 lg:px-10">
       <SubjectTabs subject={subject} active="notes" progress />
       <p className="font-mono-label text-primary">{s.name}</p>
       <h1 className="mt-2 text-4xl font-bold tracking-tight">Notes</h1>

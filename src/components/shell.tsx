@@ -205,7 +205,7 @@ export function Shell({
         <ThemeToggle />
       </header>
 
-      <div className="mx-auto flex max-w-[90rem]">
+      <div className="flex">
         <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-72 shrink-0 overflow-y-auto border-r p-3 lg:block">
           <SubjectNav groups={groups} />
         </aside>

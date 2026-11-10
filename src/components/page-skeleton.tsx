@@ -2,7 +2,7 @@
 export function PageSkeleton() {
   return (
     <div
-      className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12"
+      className="px-4 py-8 sm:px-6 sm:py-12 lg:px-10"
       aria-busy="true"
       aria-label="Loading"
     >

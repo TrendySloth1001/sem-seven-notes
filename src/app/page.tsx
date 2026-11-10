@@ -37,9 +37,9 @@ export default function Home() {
   });
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16">
+    <main className="px-4 py-10 sm:px-6 sm:py-16 lg:px-10">
       <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">sem</h1>
-      <p className="mt-3 max-w-2xl text-lg text-muted-foreground">
+      <p className="mt-3 max-w-4xl text-lg text-muted-foreground">
         A platform to prepare for end semester exams. Notes for every topic,
         every past-paper question solved, in English and Hinglish.
       </p>
@@ -48,7 +48,7 @@ export default function Home() {
       </Button>
 
       <h2 className="mt-14 text-2xl font-semibold tracking-tight">Subjects</h2>
-      <ul className="mt-4 grid gap-4 md:grid-cols-2">
+      <ul className="mt-4 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
         {cards.map(({ s, ...c }, i) => (
           <li
             key={s.slug}
