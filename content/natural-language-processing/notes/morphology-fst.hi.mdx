@@ -1,582 +1,290 @@
 ---
-title: "Morphology, finite automata and finite state transducers"
+title: "Morphology, finite state automata and transducers"
 module: 2
-summary: "Morphology ye study hai ki words chhote meaningful parts (stems aur affixes) se kaise bante hain. Is note mein affixes ke types, inflectional vs derivational morphology, morphological analyser ka output kaisa hota hai, aur finite automata (FSA) aur finite state transducers (FST) ye kaam kaise karte hain: FSA check karta hai ki word sahi bana hai ya nahi, aur FST word ki spelling (cats) aur uske analysis (cat +N +PL) ke beech convert karta hai."
+summary: "Module 2 word-level analysis ki theory se shuru hota hai: languages, regular expressions aur unke operations, phir finite state automaton (FSA). Morphology (stem aur affixes se words banana) FSA drawings se dikhayi gayi hai (success, unsuccessful, friend, unfriendly, undoable, preinstallment, deciphered). Phir note affixes, inflectional versus derivational morphology, FSA ka role, finite state transducer (FST) aur morphological analysis ka output (walk + V + Past, cat + N + Pl) cover karta hai."
 keyIdeas:
-  - "Morpheme word ka sabse chhota meaningful part hota hai. Word = stem (main meaning) plus zero ya zyada affixes (prefix, suffix, infix, circumfix)."
-  - "Inflection word ka grammatical form badalta hai (cat se cats, walk se walked) aur part of speech wahi rehta hai. Derivation naya word banata hai, aksar naye part of speech ka (happy se happiness, compute se computation)."
-  - "Morphological analysis surface word ko stem plus tags mein map karta hai, jaise cats se cat +N +PL aur caught se catch +V +PAST."
-  - "Morphological parser ko teen cheezein chahiye: lexicon (stems aur affixes), morphotactics (morphemes kis order mein jud sakte hain) aur orthographic rules (spelling changes jaise fox + s se foxes)."
-  - "Finite state automaton (FSA) string ko accept ya reject karta hai, isliye ye morphotactics model karta hai aur valid words pehchanta hai. Ye ek language (strings ka set) define karta hai."
-  - "Finite state transducer (FST) do tapes wala FSA hai. Ye ek string padhta hai aur doosri likhta hai, isliye ye do string-sets ke beech relation define karta hai. Isi wajah se ye morphological parsing aur generation kar sakta hai."
-  - "Two-level morphology (Koskenniemi) lexical level (cat +N +PL) ko surface level (cats) se FSTs ke through jodta hai. Kai chhote FSTs ko composition se ek bana sakte hain aur inversion se ulta chala sakte hain."
+  - "Computational theory ke teen parts hain: language, automata aur grammar. Regular language sabse chhota set hai, jo context free ke andar, jo context sensitive ke andar, jo recursively enumerable language ke andar hai."
+  - "Alphabet: inputs ka finite set. String: alphabet symbols ka collection. Language: strings ka collection. Regular expression mein operands aur operations hote hain (union +, concatenation, Kleene star)."
+  - "FSA: states Q ka ek finite set jo inputs Sigma ka finite set accept karta hai. Tuples: Q, Sigma, delta (transition function), q0 (start state), F (final states)."
+  - "Morphology: stem (root word) aur affixes (prefix, infix, suffix) se words ka creating ya making."
+  - "Affix: a bound morpheme added to the root or stem of a word to alter its meaning, create a new word, or change its grammatical function."
+  - "Inflectional morphology word ka form badalti hai (school se schools, walk se walked). Derivational morphology naye words banati hai (paint + er se painter)."
+  - "FSA check karta hai ki morphemes ki sequence valid word banati hai ya nahi. FST surface word ko uske analysis se map karta hai: cats ban jaata hai cat + N + Pl, went ban jaata hai go + V + Past."
 references:
-  - morphology-fst-jm-ch3-notes
-  - morphology-fst-kaplan-kay
-  - text-preprocessing-porter1980
-  - morphology-fst-foma
-  - morphology-fst-nltk5
-  - text-preprocessing-nltk-porter
-  - text-preprocessing-nltk-wordnet
-  - morphology-fst-gfg-morph
-  - morphology-fst-gfg-fa
-  - morphology-fst-gfg-mealy
-  - morphology-fst-tp-word
-  - text-preprocessing-gfg-lem
-  - nlp-introduction-wiki-morph
-  - morphology-fst-wiki-morpheme
-  - morphology-fst-wiki-bound
-  - morphology-fst-wiki-affix
-  - morphology-fst-wiki-allomorph
-  - morphology-fst-wiki-reglang
-  - morphology-fst-wiki-infix
-  - morphology-fst-wiki-circumfix
-  - morphology-fst-wiki-inflection
-  - morphology-fst-wiki-derivation
-  - morphology-fst-wiki-stem
-  - morphology-fst-wiki-lemma
-  - morphology-fst-wiki-irregular
-  - morphology-fst-wiki-plurals
-  - morphology-fst-wiki-parsing
-  - morphology-fst-wiki-fsm
-  - morphology-fst-wiki-dfa
-  - morphology-fst-wiki-fst
-  - morphology-fst-wiki-mealy
+  - class-nlp-m2
+  - class-nlp-pyq2
 ---
 
-Naye concepts se pehle purane concepts yaad kar lete hain. Agar aapko pata hai, to seedha next section pe jao.
+Naye ideas se pehle wo purani baatein jo chahiye. Agar aapko pata hai to seedha agle section par jao.
 
-## Pehle basics
+## Basics pehle
 
-- **Word** wo unit hai jo hum spaces ke beech likhte hain, jaise `cats`. **Word form** word ka ek particular shape hai, jaise `cat` ya `cats`.
-- **Morpheme** word ka sabse chhota part hai jisme meaning hoti hai. `cats` mein do hain: `cat` (janwar) aur `-s` (ek se zyada). <Cite id="morphology-fst-wiki-morpheme" />
-- **Stem** (ya root) main morpheme hai jo word ko uski basic meaning deta hai. **Affix** ek chhota morpheme hai jo stem ke saath judta hai aur meaning ya grammatical detail add karta hai. <Cite id="morphology-fst-wiki-stem" /> <Cite id="morphology-fst-wiki-affix" />
-- **Free morpheme** akela word ban sakta hai (`cat`, `walk`). **Bound morpheme** akela nahi reh sakta (`-s`, `-ing`, `un-`). <Cite id="morphology-fst-wiki-bound" />
-- **Lexicon** system ki dictionary hai: stems aur affixes ki list, har ek ke baare mein thodi information ke saath (jaise "fox ek noun stem hai").
-- **State machine** ek simple machine hai jo hamesha kuch **states** mein se exactly ek mein hoti hai, aur input symbol padhne pe doosri state mein jaati hai. **Finite state automaton (FSA)** aisi machine hai jisme ek start state aur kuch final (accepting) states hoti hain. <Cite id="morphology-fst-wiki-fsm" />
-- **Tape** bas wo string hai jo machine padhti (input) ya likhti (output) hai, ek symbol ek baar mein.
+- **Word** chhote meaningful parts se bana hota hai. **Morphology** padhti hai ki kaise.
+- Main part **stem** (root word) hai. Uske saath jude chhote parts **affixes** hain. <Cite id="class-nlp-m2" loc="p. 4" />
+- **Automaton** ek simple machine hai jisme kuch states hote hain, jo input ek symbol ek baar mein padhti hai aur aakhir mein yes ya no bolti hai.
 
-## Morphology kya hai
+## Computational theory, languages aur regular expressions
 
-**Ye kya hai.** Morphology ye study hai ki words chhote meaning-wale units, yaani morphemes, se kaise bante hain. NLP mein **morphological analysis** (ise morphological parsing bhi kehte hain) ka kaam hai word ko uske morphemes mein todna aur unko naam dena. <Cite id="morphology-fst-jm-ch3-notes" loc="slides 2-3" /> <Cite id="nlp-introduction-wiki-morph" /> <Cite id="morphology-fst-gfg-morph" /> Ye syllabus <Syl m="2" />, sections 2.2 aur 2.3 hai.
+Class Module 2 theory se shuru karti hai. Computational theory (C.T.) teen cheezein padhti hai: **Language** (L), **Automata** (A) aur **Grammar** (G). <Cite id="class-nlp-m2" loc="p. 1" />
 
-**Ye kyun zaroori hai.**
+<Img id="class-morphology-fst-chomsky" caption="Computational theory language, automata aur grammar cover karti hai. Circles: regular language context free language ke andar, jo context sensitive language ke andar, jo recursively enumerable language ke andar hai." />
 
-1. **Dictionary har word form list nahi kar sakti.** Language naye forms banati rehti hai (`googled`, `selfies`). Har verb ke liye `walk`, `walks`, `walked`, `walking` list karna space waste karta hai aur naye words phir bhi miss ho jaate hain. Morphological analyser stem ek baar aur rules ek baar store karta hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 2" />
-2. **Search aur stemming.** `foxes` search karne pe `fox` bhi milna chahiye. Iske liye stem chahiye.
-3. **Machine translation aur spell checking** ko word ke andar chhupa tense, number aur part of speech jaanna padta hai. <Cite id="morphology-fst-wiki-parsing" />
-4. **Hindi, Marathi, Turkish aur Finnish jaisi languages** word ke ending mein bahut information daal deti hain, isliye unhe English se bhi zyada morphology chahiye.
+```mermaid
+%% caption: Language ki chaar classes jo class mein circles ke andar circles ki tarah draw ki gayi. Har bada class saare chhote classes ko contain karta hai. Words sabse chhote class, regular languages, se handle hote hain.
+flowchart LR
+  A["Regular language (RL)"] --> B["Context free language (CFL)"]
+  B --> C["Context sensitive language (CSL)"]
+  C --> D["Recursively enumerable language (REL)"]
+```
 
-**Rozmarra ki analogy.** Word ek Lego model jaisa hai. Stem base block hai aur affixes chhote pieces hain jo click karke lagte hain. Morphological analysis model ko kholkar har piece ko naam dena hai. Morphological generation pieces ki list se model dobara banana hai.
+**Language operands** <Cite id="class-nlp-m2" loc="p. 1" />
+
+| Term | Matlab | Example |
+|---|---|---|
+| Symbols | Single characters | a, b, c, d ya 0, 1, 2, 3 |
+| Alphabet | Inputs ka finite set | \{a, b, c\} ya \{0, 1, 2\} |
+| String | Alphabet symbols ka collection | aa, bb |
+| Language | Strings ka collection | \{aa, ab, ba, bb\} |
+
+<Img id="class-morphology-fst-language-operands" caption="Language operands: symbols, alphabets, strings aur language. Regular expression mein operands aur operations hote hain." />
+
+**Regular expression ke operations** <Cite id="class-nlp-m2" loc="p. 2" />
+
+| Symbol | Naam | Matlab |
+|---|---|---|
+| Sigma | Input alphabet | Finite set, jaise Sigma = \{a, b\} ya \{0, 1\} |
+| epsilon | Empty string | Language \{epsilon\} |
+| phi | Empty set | \{ \} |
+| + ya union | Union | a + b matlab either a ya b, yaani \{a, b\} |
+| . | Concatenation | a . b se \{ab\} milta hai |
+| star aur plus | Kleene closure (Kleene star) | `a+` se \{a, aa, aaa, ...\}; `a*` se \{epsilon, a, aa, aaa, ...\} |
+
+<Img id="class-morphology-fst-operations" caption="Operations: sigma, epsilon, phi, union (a + b = {a, b}) aur concatenation (a . b = {ab})." />
+
+<Img id="class-morphology-fst-kleene" caption="Kleene closure: a+ se {a, aa, aaa, ...} aur a* se {epsilon, a, aa, aaa, ...}." />
+
+<Img id="class-morphology-fst-re-table" caption="Regular expressions aur unki regular languages: epsilon, phi, a+b, 0+1, a.b, 0.1, a*, (a+b)* aur (a.b)*." />
+
+**Class ka example.** L = Sigma = \{a, b\} par exactly length 2 wali saari strings ka set. Language \{aa, ab, ba, bb\} hai. Regular expression aa + ab + ba + bb hai, jo (a+b)(a+b) bhi likha ja sakta hai. <Cite id="class-nlp-m2" loc="p. 3" />
+
+**Star se savdhan.** Star apne se theek pehle wale single letter par lagta hai: `ab*` matlab a ke baad koi bhi sankhya mein b, yaani language \{a, ab, abb, ...\}. Language \{epsilon, ab, abab, ...\} `(ab)*` ki hai, jo table ka `(a.b)*` hai. Table mein `(a+b)*` ki list sirf shuruaat hai; asli language mein infinite strings hoti hain.
+
+## Finite state automaton (FSA)
 
 <Box kind="definition">
 
-**Morphology** words ke internal structure ki study hai: wo morphemes (stems aur affixes) se kaise bante hain. **Morphological analysis** `cats` jaise word ko leta hai aur uska stem aur features deta hai, `cat +N +PL`.
+**FSA / FSM:** it comprises a finite set of states (Q) which accepts a finite set of inputs (Sigma). <Cite id="class-nlp-m2" loc="p. 4" />
 
 </Box>
 
-<Img id="img-nlp-n1-morph-tree" caption="'independently' ka structure: depend + -ent se adjective banta hai, in- se adjective hi rehta hai, aur -ly se adverb banta hai. Har piece ek morpheme hai." />
+FSA ke parts ye hain. <Cite id="class-nlp-m2" loc="p. 4" />
+
+| Part | Naam | Matlab |
+|---|---|---|
+| Q | States | States ka finite set |
+| Sigma | Inputs | Input symbols ka finite set |
+| delta | Transition function | delta: Q x Sigma to Q (ek state se, ek symbol par, ek state mein jao) |
+| q0 | Start state | Jahan se padhna shuru hota hai |
+| F | Final states | Machine yahan khatam ho to accept karti hai |
+
+Transition diagram mein har state ek circle hai, har arrow ek transition hai jis par input likha hota hai, start state mein ek arrow aata hai, aur final state double circle se draw hota hai. Machine ka jawab yes ya no (accept ya reject) hota hai.
+
+<Img id="class-morphology-fst-fsa-def" caption="FSM ya FSA ki definition apne tuples ke saath: Q, Sigma, delta, q0 (start state) aur F (final state), aur ek chhota transition drawing." />
+
+## FSA ke saath morphology
+
+Morphology mein FSA words ko create (make) karne ke liye use hota hai. Word = **stem** (root word) + **affixes** (prefix, infix, suffix). <Cite id="class-nlp-m2" loc="p. 4" />
+
+<Img id="class-morphology-fst-stem-affix" caption="Morphology mein FSM ya FSA words banane ke baare mein hai. Morphology stem (root words) aur affixes (prefix, infix, suffix) mein baantti hai." />
+
+```mermaid
+%% caption: Word ke parts. Stem main meaning deta hai; affixes uske pehle (prefix), andar (infix) ya baad (suffix) jode jaate hain.
+flowchart TD
+  A["Morphology: word banana"] --> B["Stem: root word, jaise success"]
+  A --> C["Affixes"]
+  C --> D["Prefix: stem se pehle, jaise un"]
+  C --> E["Infix: stem ke andar"]
+  C --> F["Suffix: stem ke baad, jaise ful"]
+```
+
+Teacher stem se word banane ke har tareeke ke liye ek chhota FSA draw karte hain. <Cite id="class-nlp-m2" loc="p. 5" />
+
+```mermaid
+%% caption: Stem success ka class FSA. un (prefix), success (stem) aur ful (suffix) order mein padhne par final state aa jaati hai, isliye unsuccessful accept hota hai.
+flowchart LR
+  S(("q0")) -- "prefix: un" --> A(("q1"))
+  A -- "stem: success" --> B(("q2"))
+  B -- "suffix: ful" --> C((("q3 final")))
+```
+
+<Img id="class-morphology-fst-success" caption="Stem success: success akela, un + success, success + ful (successful), aur un + success + ful (unsuccessful)." />
+
+<Img id="class-morphology-fst-friend" caption="Stem friend: friend, un + friend (unfriend), friend + ly (friendly), aur un + friend + ly (unfriendly)." />
+
+<Img id="class-morphology-fst-do" caption="Stem do: do, un + do (undo), do + able (doable), aur un + do + able (undoable)." />
+
+<Img id="class-morphology-fst-break" caption="Stem break: break, un + break, break + able, aur un + break + able (unbreakable)." />
+
+<Img id="class-morphology-fst-install" caption="Stem install: install, pre + install (pre-install), install + ment (installment), aur pre + install + ment." />
+
+<Img id="class-morphology-fst-cipher" caption="Stem cipher: de + cipher (decipher), cipher + ed (ciphered), aur de + cipher + ed (deciphered)." />
+
+| Stem | Prefix ke saath | Suffix ke saath | Dono ke saath |
+|---|---|---|---|
+| success | unsuccess | successful | unsuccessful |
+| friend | unfriend | friendly | unfriendly |
+| do | undo | doable | undoable |
+| break | unbreak | breakable | unbreakable |
+| install | preinstall | installment | preinstallment |
+| cipher | decipher | ciphered | deciphered |
+
+<Cite id="class-nlp-m2" loc="p. 5" /> <Cite id="class-nlp-m2" loc="p. 6" /> <Cite id="class-nlp-m2" loc="p. 7" />
+
+Beech ke kuch forms (unsuccess, unbreak) roz ki English ke words nahi hain. Wo sirf dikhate hain ki automaton states mein kaise chalta hai; poore words (unsuccessful, unbreakable) hi asli hain.
 
 ## Affixes aur unke types
 
-**Definition.** **Affix** ek bound morpheme hai jo stem ke saath judkar naya word ya word ka naya form banata hai. <Cite id="morphology-fst-wiki-affix" /> Ye main meaning nahi leta, meaning mein kuch add karta hai.
+<Box kind="definition">
 
-**Affixes ke types** (affix ki position type decide karti hai):
+**Affix:** a bound morpheme added to the root or stem of a word to alter its meaning, create a new word, or change its grammatical function. <Cite id="class-nlp-pyq2" loc="p. 3" />
 
-| Type | Kahan lagta hai | Example | Kya hota hai |
-|---|---|---|---|
-| Prefix | Stem se pehle | `un-` + `happy` = `unhappy`; `re-` + `write` = `rewrite` | Meaning badalta hai (yahan negative). |
-| Suffix | Stem ke baad | `walk` + `-ed` = `walked`; `kind` + `-ness` = `kindness` | Tense, number ya word class badalta hai. |
-| Infix | Stem ke andar | Tagalog `hingi` (borrow) se `humingi`, `-um-` andar daala | English mein lagbhag koi true infix nahi. <Cite id="morphology-fst-wiki-infix" /> |
-| Circumfix | Stem ke charo taraf: ek part pehle, ek baad mein | German `sag-en` (to say) se `ge-sag-t` (said) | Do pieces milke ek affix banate hain. <Cite id="morphology-fst-wiki-circumfix" /> |
+</Box>
 
-<Cite id="morphology-fst-jm-ch3-notes" loc="slide 3" />
+Position ke hisaab se types: <Cite id="class-nlp-pyq2" loc="p. 3" />
 
-**Aur kuch points, ek-ek line mein.**
-
-- Prefixes aur suffixes ko **concatenative** morphology kehte hain kyunki pieces bas ek ke baad ek jod diye jaate hain. Arabic aur Hebrew jaisi languages mein **non-concatenative** (root-and-pattern) morphology bhi hoti hai, jahan vowels ka pattern root ke around fit hota hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 4" />
-- Affixes ko kaam ke hisaab se bhi baanta jaata hai: **inflectional** affixes (`-s`, `-ed`, `-ing`) aur **derivational** affixes (`un-`, `-ness`, `-ation`), jo aage hain. <Cite id="morphology-fst-wiki-affix" />
-- Ek hi affix apna shape badal sakta hai (`-s` ya `-es`; `-ed` teen tareeke se bola jaata hai). Inhe **allomorphs** kehte hain. <Cite id="morphology-fst-wiki-allomorph" />
-
-**Exam answer (5 marks):** affix ki ek line mein definition likho, chaar rows wali table ek-ek example ke saath banao, aur inflectional vs derivational affixes pe ek line add karo. <PYQ id="2022-12-ce/q1b" /> <PYQ id="2025-05/q1a" />
+| Type | Kahan judta hai | Example |
+|---|---|---|
+| Prefix | Root word ki shuruaat mein | unhappy mein un- meaning ko opposite bana deta hai |
+| Suffix | Root word ke end mein | walked mein -ed, happiness mein -ness |
+| Infix | Root word ke andar directly daala jaata hai | English mein rare ya nahi hota, doosri languages mein milta hai |
 
 ## Inflectional aur derivational morphology
 
-Syllabus pehle wale ko "reflectional" morphology likhta hai; standard word **inflectional** hai.
+<Box kind="definition">
 
-**Inflectional morphology.** Inflection word ka form badalta hai taaki koi grammatical detail dikhe, jaise number, tense, person ya possession, lekin word wahi part of speech rehta hai aur uski core meaning nahi badalti. <Cite id="morphology-fst-wiki-inflection" /> English mein sirf nouns, verbs aur kabhi-kabhi adjectives inflect hote hain, aur affixes bahut kam hain. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 5" />
+**Inflectional morphology** is the study of the processes, including affixation and vowel change, that distinguish word forms in certain grammatical categories. **Derivational morphology** is concerned with forming new lexemes, that is, words that differ either in syntactic category (part of speech) or in meaning from their bases. <Cite id="class-nlp-pyq2" loc="p. 3" /> <Cite id="class-nlp-pyq2" loc="p. 4" />
 
-- Noun: plural `-s` (`cat`, `cats`; `box`, `boxes`) aur possessive `'s` (`llama's`).
-- Regular verb: `walk`, `walks` (3rd person singular), `walking` (present participle), `walked` (past aur past participle).
-- Irregular forms: `mouse`, `mice`; `eat`, `ate`, `eaten`. <Cite id="morphology-fst-wiki-irregular" /> <Cite id="morphology-fst-wiki-plurals" />
+</Box>
 
-**Derivational morphology.** Derivation maujooda word se **naya word** banata hai, aam taur pe prefix ya suffix lagakar. Naye word ka part of speech aksar alag hota hai aur nayi meaning ka andaza lagana mushkil ho sakta hai. <Cite id="morphology-fst-wiki-derivation" />
-
-- Verb se noun: `computerize` se `computerization` (`-ation`), `kill` se `killer` (`-er`), `appoint` se `appointee` (`-ee`).
-- Adjective se noun: `fuzzy` se `fuzziness` (`-ness`).
-- Noun se adjective: `computation` se `computational` (`-al`), `clue` se `clueless` (`-less`).
-- Verb se adjective: `embrace` se `embraceable` (`-able`). <Cite id="morphology-fst-jm-ch3-notes" loc="slide 8" />
-
-Derivation inflection se **kam regular** hai. Suffix `-ation` `computerize` pe lag sakta hai lekin har verb pe nahi (`eatation` word nahi hai), aur milte-julte suffixes ki meaning alag hoti hai (`sincerity` bilkul `sincereness` nahi hai). Isliye derivation ke automata bade aur banane mein mushkil hote hain. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 9" />
-
-| Point | Inflectional morphology | Derivational morphology |
+| Point | Inflectional | Derivational |
 |---|---|---|
-| Purpose | Grammatical detail dikhata hai (number, tense, person, case) | Naya word banata hai |
-| Part of speech | Aam taur pe wahi rehta hai (`walk` se `walked`, dono verbs) | Aksar badalta hai (`happy` adjective se `happiness` noun) |
-| Meaning | Core meaning wahi rehti hai | Nayi meaning, kabhi samajhna mushkil |
-| Example | `cat` se `cats`, `play` se `played` | `play` se `player`, `able` se `unable` |
-| Kitne affixes | Chhota, closed set (English mein lagbhag 8) | Bada, open set |
-| Word mein jagah | Aakhir mein: saare derivational affixes ke baad (`nation-al-iz-ation-s`) | Stem ke paas, inflection se pehle |
-| Productivity | Bahut regular, class ke lagbhag har word pe lagta hai | Kam regular, kuch hi words pe lagta hai |
-| Dictionary mein result | Wahi dictionary entry (lemma) | Alag dictionary entry |
+| Kya karti hai | Maujood words mein changes | Naye words ka creation |
+| Result | Wahi word, alag form | Alag word, aksar alag part of speech ya meaning |
+| Categories | Number, tense, person, case, gender | Part of speech ya meaning |
+| Examples | School se schools, walk se walked, man se men, go se going, dog se dogs, call se called, short se shorter aur shortest | paint (verb) + er se painter (noun, jo paint karta hai) |
 
-<Cite id="morphology-fst-wiki-inflection" /> <Cite id="morphology-fst-wiki-derivation" /> <Cite id="morphology-fst-jm-ch3-notes" loc="slides 4-9" />
+English ke inflectional affixes: nouns par plural -s (dog, dogs), verbs par past tense -ed (call, called), third person singular -s, present participle -ing, aur short adjectives par comparative aur superlative ke liye -er aur -est. <Cite id="class-nlp-pyq2" loc="p. 3" />
 
-("Lagbhag 8" English ke inflectional suffixes ki usual textbook ginti hai: plural, possessive, 3rd person singular, past, past participle, present participle, comparative `-er`, superlative `-est`.)
+FSA drawings se: success + ful aur friend + ly (noun se adjective), aur install + ment (verb se noun) derivational hain. <Cite id="class-nlp-m2" loc="p. 5" /> <Cite id="class-nlp-m2" loc="p. 7" />
 
-<Box kind="exam">
+## Morphological analysis mein FSA ka role
 
-**Illustrate inflectional and derivational morphology with an example (10 marks):** dono ki definition likho, upar wali table do, aur ek word dono se guzaaro. Example: `nation` + `-al` = `national` (derivation: noun se adjective), phir `national` + `-ize` = `nationalize` (derivation: adjective se verb), phir `nationalize` + `-s` = `nationalizes` (inflection: sirf person badla, ab bhi verb hai). Likho ki word mein order stem, derivation, phir inflection hota hai. <PYQ id="2024-05-ce/q2a" /> <PYQ id="2025-05/q2b" /> <PYQ id="2025-05-ce/q1a" />
+Finite State Automata (FSA) morphemes se valid words banane ke rules ko represent karke morphological analysis mein important role nibhate hain. States word formation ke alag stages dikhate hain, jabki transitions possible stems, prefixes, suffixes aur grammatical features dikhate hain. Automaton check karta hai ki morphemes ki di gayi sequence valid word banati hai ya nahi. <Cite id="class-nlp-pyq2" loc="p. 6" />
 
-</Box>
+Example: word "cats" ka structure cat + Noun + Plural hai. <Cite id="class-nlp-pyq2" loc="p. 6" />
 
-**Words banane ke aur tareeke (ek-ek line).** *Compounding* do words jodta hai (`black` + `board` = `blackboard`). *Cliticization* ek chhota unstressed word doosre se jodta hai (`I'm`, `llama's`). <Cite id="morphology-fst-wiki-morpheme" />
+<Img id="class-morphology-fst-fsa-cats" caption="Word cats ka FSA: q0 c, a, t padhta hai (stem cat q3 par recognise hota hai) aur phir s (plural suffix) padhkar final state q4 par pahunchta hai." />
 
-## Morphological analysis ka output kaisa dikhta hai
+**Role:** <Cite id="class-nlp-pyq2" loc="p. 6" />
 
-**Analyser kya return karta hai.** Har word ke liye wo **stem** (jise lemma, yaani dictionary form bhi kehte hain) aur uske grammatical features ke **tags** ki list deta hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 10" /> <Cite id="morphology-fst-wiki-lemma" />
+- Valid morphological rules aur word structures represent karta hai.
+- Stems, affixes aur grammatical features pehchaanne mein madad karta hai.
+- Check karta hai ki word valid morphological patterns follow karta hai ya nahi.
+- Morphological analysis aur word generation support karta hai.
+- Ek efficient rule-based approach deta hai, khaaskar rich inflection wali languages ke liye.
 
-Common tags: `+N` noun, `+V` verb, `+SG` singular, `+PL` plural, `+PAST` past tense, `+PAST-PART` past participle, `+PRES-PART` present participle (`-ing` form), `+3SG` third person singular present (verb ka `-s` form). Alag books mein tag names thode alag hote hain, isliye apne answer mein tag name ek baar likh do.
+## Morphological analysis ka output
 
-| Word ka kind | Input (surface form) | Morphological analysis ka output |
+Morphological analysis word ka root ya stem aur uske grammatical features (noun, verb, singular, plural, tense) dhundta hai. Output **lemma (root) + morphological tags** hota hai. <Cite id="class-nlp-pyq2" loc="p. 9" />
+
+| Word type | Input word | Output |
 |---|---|---|
-| Singular noun | `cat` | `cat +N +SG` |
-| Singular noun | `goose` | `goose +N +SG` |
-| Plural noun (regular) | `cats` | `cat +N +PL` |
-| Plural noun (spelling change) | `cities` | `city +N +PL` |
-| Plural noun (irregular) | `geese` | `goose +N +PL` |
-| Plural noun (irregular) | `mice` | `mouse +N +PL` |
-| Regular verb | `walks` | `walk +V +3SG` |
-| Regular verb | `walking` | `walk +V +PRES-PART` |
-| Regular verb | `walked` | `walk +V +PAST` ya `walk +V +PAST-PART` |
-| Irregular verb | `caught` | `catch +V +PAST` ya `catch +V +PAST-PART` |
-| Irregular verb | `sang` | `sing +V +PAST` |
-| Irregular verb | `eaten` | `eat +V +PAST-PART` |
+| Regular verb | walked | walk + V + Past |
+| Irregular verb | went | go + V + Past |
+| Singular noun | cat | cat + N + Sg |
+| Plural noun | cats | cat + N + Pl |
 
-Tags aur pehle examples (`cats`, `cities`, `geese`, `goose`, `caught`) textbook table ko follow karte hain; baaki rows wahi pattern use karti hain. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 10" />
+Went se go kyun: surface form went alag hai, par uska lemma go hai. Isiliye irregular forms ko morphological analyser mein lexical information (dictionary) chahiye. <Cite id="class-nlp-pyq2" loc="p. 9" />
 
-Do points yaad rakho:
+## Finite state transducer (FST)
 
-- **Regular** words rule follow karte hain (`walk` + `-ed`), isliye ek rule sabko handle karta hai. **Irregular** words (`caught`, `geese`) lexicon mein store karne padte hain, kyunki koi rule unhe predict nahi karta.
-- **Ambiguity:** ek surface word ke ek se zyada analysis ho sakte hain. `foxes` `fox +N +PL` (plural noun) ya `fox +V +3SG` (he foxes us) ho sakta hai, aur `caught` past tense ya past participle ho sakta hai. Isliye analyser list return kar sakta hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 29" />
+<Box kind="definition">
 
-<Img id="img-nlp-n1-morfeus" caption="Ek asli morphological analyser (Basque example): har word ke ek ya zyada analyses hote hain, stem plus suffixes aur grammar tags ke saath. Kuch words ke kai analyses hain, jo upar wala ambiguity point hai." />
-
-<Box kind="exam">
-
-**Show the output of morphological analysis for a regular verb, an irregular verb, a singular noun and a plural noun (5 marks):** upar wali table likho, har kind ki ek row, tags ek baar define karo, aur ek line likho ki regular forms rules se aate hain aur irregular forms lexicon se. <PYQ id="2025-05-ce/q1b" /> <PYQ id="2023-05-ce/q2b" />
+**FST:** an extension of a finite state automaton that maps input sequences to output sequences. FSA sirf input accept ya reject karta hai; FST use transform karta hai. <Cite id="class-nlp-pyq2" loc="p. 9" />
 
 </Box>
 
-## Morphological parser ko kya chahiye
+FST ki har transition par ek input symbol aur ek output symbol likha hota hai. FST ko $T = (Q, \Sigma, \Gamma, q_0, F)$ define kiya jaata hai, jahan $Q$ states ka finite set, $\Sigma$ input alphabet, $\Gamma$ output alphabet, $q_0 \in Q$ initial state aur $F \subseteq Q$ final states ka set hai. <Cite id="class-nlp-pyq2" loc="p. 9" /> <Cite id="class-nlp-pyq2" loc="p. 10" />
 
-Morphological parser banane ke liye teen parts chahiye. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 11" />
-
-1. **Lexicon:** stems aur affixes ki list, basic information ke saath (noun stem, verb stem, plural suffix). Simple lexicon har word list karega jo impossible hai, isliye computational lexicon sirf stems aur affixes list karta hai.
-2. **Morphotactics:** **ordering** ka model: kaun si morpheme class kiske baad aa sakti hai. Example: English plural morpheme noun ke baad aata hai, kabhi pehle nahi, isliye `catss` aur `scat` ("plural cat" ke roop mein) nahi bante. Morphotactics model karne ka usual tareeka finite state automaton hai.
-3. **Orthographic (spelling) rules:** jab do morphemes milte hain to spelling badalti hai. Example: `city` + `-s` se `cities` (y badal ke ie), `fox` + `-s` se `foxes` (e add hota hai).
+**Morphological parsing mein FST ka role.** Ye word ke surface form ko uske morphological representation se map karta hai (root ya stem aur noun, verb, singular, plural, tense wagairah): Surface word, phir FST, phir morphological analysis. <Cite id="class-nlp-pyq2" loc="p. 10" />
 
 ```mermaid
-%% caption: Morphological parser ke teen parts. Lexicon mein stems aur affixes hain, morphotactic FSA batata hai kaun sa order allowed hai, aur spelling rules aakhri letters theek karte hain. Generation ke liye upar se padho, analysis ke liye neeche se.
-flowchart TD
-  A["Lexical level: fox +N +PL"] --> B["Lexicon + morphotactics (FST)"]
-  B --> C["Intermediate level: fox^s#"]
-  C --> D["Orthographic rules (FST)"]
-  D --> E["Surface level: foxes"]
-```
-
-<Cite id="morphology-fst-gfg-morph" loc="diagram" /> <Cite id="morphology-fst-jm-ch3-notes" loc="slide 28" />
-
-Picture mein `^` morpheme boundary dikhata hai aur `#` word ka end. Dono helper symbols hain jo sirf beech wali tape pe hote hain aur aakhir mein hata diye jaate hain.
-
-## Finite state automata (FSA)
-
-**Ye kya hai.** Finite state automaton (finite automaton, FSA, FSM) ek simple mathematical machine hai jisme finite number of states hoti hain. Ye input string ko symbol-by-symbol padhta hai, state se state mein jaata hai, aur string khatam hone pe agar final state mein hai to **accept** karta hai, warna **reject**. <Cite id="morphology-fst-wiki-fsm" /> <Cite id="morphology-fst-gfg-fa" />
-
-**Formal definition.** FSA ek 5-tuple $(Q, \Sigma, \delta, q_0, F)$ hai:
-
-- $Q$ states ka finite set hai.
-- $\Sigma$ alphabet hai, input symbols ka set.
-- $\delta$ transition function hai: state aur symbol ke liye next state deta hai.
-- $q_0 \in Q$ start state hai.
-- $F \subseteq Q$ final (accepting) states ka set hai. <Cite id="morphology-fst-tp-word" />
-
-**Types.** **Deterministic** FSA (DFA) mein har state ke paas har symbol ke liye zyada se zyada ek move hota hai, isliye path fixed hota hai. **Non-deterministic** FSA (NFA) mein ek state ke paas ek hi symbol ke liye kai moves ho sakte hain. Dono bilkul same languages accept karte hain, aur har NFA ko DFA mein convert kar sakte hain. <Cite id="morphology-fst-wiki-dfa" />
-
-**Regular expressions se link.** FSA jo strings ke sets accept kar sakta hai unhe regular languages kehte hain. Regular expressions, regular grammars aur finite automata same regular languages ko describe karne ke teen equivalent tareeke hain. <Cite id="morphology-fst-wiki-reglang" /> <Cite id="morphology-fst-tp-word" /> (Regular expressions text preprocessing ke note mein hain.)
-
-<Img id="img-nlp-n1-fsa-banana" caption="Ek chhota FSA. S1 se start. B, a, n padhne par arrows par chalte hain; double circle S3 accepting state hai. Ye Ba, Bana, Banana aadi accept karta hai." />
-
-### Morphological analysis mein FSA ka role
-
-1. **Morphotactics.** FSA likhta hai ki kaun se morpheme orders legal hain (stem, phir suffix).
-2. **Morphological recognition.** Ek string di gayi, yes ya no batao: kya ye legitimate English word hai? Hum har sub-lexicon (ek class ke stems ki list) ko automaton mein plug karte hain aur string chalate hain. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 17" />
-3. **Efficiency.** Ek chhota automaton hazaaron words ko represent karta hai, aur word check karne mein time uski length ke proportional lagta hai.
-4. **Limit.** FSA sirf yes ya no batata hai. Ye stem aur tags output nahi karta, aur spelling theek nahi karta. Uske liye FST chahiye, jo aage hai.
-
-### English nouns ke liye FSA
-
-Neeche ke automaton mein lexicon ke teen groups hain: regular nouns (`fox`, `cat`), irregular singular nouns (`goose`, `mouse`) aur irregular plural nouns (`geese`, `mice`). Sirf regular nouns plural suffix `-s` lete hain. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 12" />
-
-```mermaid
-%% caption: English noun inflection ka FSA. Double circles final states hain. Regular noun stem ruk sakta hai (q1) ya plural -s le sakta hai (q2). Irregular nouns seedha q2 pe jaate hain aur -s nahi le sakte.
+%% caption: Plural noun example ka FST. Ye surface word cats padhta hai aur ek-ek transition mein analysis cat + N + Pl likhta hai.
 flowchart LR
-  S(("q0")) -->|"reg-noun: fox, cat, fog"| Q1((("q1")))
-  S -->|"irreg-sg-noun: goose, mouse"| Q2((("q2")))
-  S -->|"irreg-pl-noun: geese, mice"| Q2
-  Q1 -->|"plural: -s"| Q2
+  A["Surface form: cats"] --> B["FST"]
+  B --> C["cat: stem (root)"]
+  B --> D["N: noun"]
+  B --> E["Pl: plural"]
+  C --> F["Output: cat + N + Pl"]
+  D --> F
+  E --> F
 ```
 
-<Cite id="morphology-fst-jm-ch3-notes" loc="diagram" /> <Cite id="morphology-fst-gfg-morph" loc="diagram" />
+## Exams mein puchhe gaye par class files mein na wale designs
 
-### English verbs ke liye FSA
+Ye teen standard hain; inhe chhota rakha gaya hai aur class ke FSAs ke style mein.
 
-```mermaid
-%% caption: English verb inflection ka FSA. Regular stem ruk sakta hai ya -ed, -ing, -s le sakta hai. Irregular stem sirf -ing ya -s leta hai, kyunki uska past tense alag store kiya hua word hai. Irregular past forms (caught, ate) poore words hain.
-flowchart LR
-  S(("q0")) -->|"reg-verb-stem: walk, fry, talk"| Q1((("q1")))
-  S -->|"irreg-verb-stem: cut, speak, sing"| Q2((("q2")))
-  S -->|"irreg-past-verb-form: caught, ate, sang"| Q3((("q3")))
-  Q1 -->|"-ed, -ing, -s"| Q3
-  Q2 -->|"-ing, -s"| Q3
-```
+**Nouns aur verbs ke liye FSA (stem plus ending).**
 
-<Cite id="morphology-fst-jm-ch3-notes" loc="slide 13" /> <Cite id="morphology-fst-gfg-morph" loc="diagram" />
-
-Ye textbook figure ka simplified version hai: textbook past `-ed`, past participle `-ed`, `-ing` aur `-s` ke liye alag arrows banata hai; yahan unka ek hi label hai.
-
-### Worked example 1: noun FSA chalana
-
-<Sum>
-
-<Given>
-
-Upar wala noun FSA. Input strings morphemes ki sequence ke roop mein likhi hain: (a) `fox` `-s`, (b) `geese`, (c) `geese` `-s`, (d) `-s` `fox`.
-
-</Given>
-
-<Find>
-
-har string accept hoti hai ya nahi.
-
-</Find>
-
-<Steps>
-
-1. (a) q0 se start. `fox` reg-noun hai, to q1 pe jao. `-s` (plural) padho: q1 se q2. String khatam hui aur q2 final hai. *Reason: accept tabhi jab hum final state mein khatam karein.*
-2. (b) q0 se start. `geese` irreg-pl-noun hai, to q2 pe jao. String khatam aur q2 final hai.
-3. (c) q0, phir `geese` se q2. Ab `-s` padho: q2 se koi outgoing arrow nahi. Machine atak gayi, to reject. *Reason: irregular plural pehle se plural hai, isliye doosra plural allowed nahi.*
-4. (d) q0 pe pehla symbol `-s` hai, lekin q0 ke paas `-s` ka arrow nahi. Reject. *Reason: suffix pehle nahi aa sakta.*
-
-</Steps>
-
-<Answer>
-
-(a) accepted, (b) accepted, (c) rejected, (d) rejected.
-
-</Answer>
-
-<Box kind="verify">
-
-Morphotactic rule se cross-check karo: "plural suffix ek baar aata hai, regular noun stem ke baad": (a) rule follow karta hai, (c) rule todta hai (irregular plural ke baad suffix), (d) rule todta hai (stem se pehle suffix). Accepted strings bilkul wahi hain jo rule se match karti hain, aur (b) mein koi suffix hi nahi hai.
-
-</Box>
-
-</Sum>
-
-Dhyan do ki automaton morpheme string `fox` `-s` ko accept kar leta hai lekin ye nahi bata sakta ki uski spelling `foxes` hai. Wo spelling ka kaam orthographic rules ka hai.
-
-### Worked example 2: English numbers 1 se 99 ka FSA design karna
-
-**Idea.** Number words ko teen lists mein baanto: units (`one` se `nine`, 9 words), teens (`ten` se `nineteen`, 10 words) aur tens (`twenty`, `thirty`, `forty`, `fifty`, `sixty`, `seventy`, `eighty`, `ninety`, 8 words). Units aur teens akele bole ja sakte hain. Tens word akela ya uske baad unit ke saath bola ja sakta hai. Input symbols poore words hain, isliye `forty-two` ko `forty` phir `two` padha jaata hai.
-
-```mermaid
-%% caption: English number words 1 se 99 ka FSA. q1 us complete number ke baad aata hai jo unit ya teen word pe khatam hota hai. q2 tens word ke baad aata hai, aur q1, q2 dono final hain. Tens word ke baad unit aa sakta hai, jaise forty two, lekin teen nahi.
-flowchart LR
-  S(("q0")) -->|"one to nine, ten to nineteen (19 words)"| Q1((("q1")))
-  S -->|"twenty to ninety (8 words)"| Q2((("q2")))
-  Q2 -->|"one to nine (9 words)"| Q1
-```
-
-<Cite id="morphology-fst-gfg-fa" loc="diagram" />
-
-<Sum>
-
-<Given>
-
-Upar wala teen-state FSA: start q0, final states q1 aur q2. Input strings: (a) `forty two`, (b) `seventeen`, (c) `twenty ten`, (d) `ninety`, (e) `twelve twelve`.
-
-</Given>
-
-<Find>
-
-har string accept hoti hai ya nahi, aur automaton total kitni alag strings accept karta hai.
-
-</Find>
-
-<Steps>
-
-1. (a) `forty` q0 ko q2 pe le jaata hai (tens word). `two` q2 ko q1 pe le jaata hai (unit). String q1 mein khatam hui, jo final hai: accept.
-2. (b) `seventeen` teens list mein hai, to q0 se q1. Final: accept.
-3. (c) `twenty` q0 se q2. `ten` teen word hai, lekin q2 ke paas sirf units ka arrow hai, to machine atak gayi: reject. *Reason: `twenty-ten` English number nahi hai.*
-4. (d) `ninety` q0 se q2, jo final hai: accept.
-5. (e) `twelve` q0 se q1. q1 ke paas koi outgoing arrow nahi, to doosra `twelve` padha nahi ja sakta: reject.
-6. Accepted strings ko unke path se gino. Units ya teens seedha q0 se q1: $9 + 10 = 19$ strings. Sirf tens word, q2 mein khatam: $8$ strings. Tens word phir unit, q1 mein khatam: $8 \times 9 = 72$ strings.
-7. Jodo: $19 + 8 + 72 = 99$.
-
-</Steps>
-
-<Answer>
-
-(a) accept, (b) accept, (c) reject, (d) accept, (e) reject. Automaton exactly 99 strings accept karta hai.
-
-</Answer>
-
-<Box kind="verify">
-
-1 se 99 tak 99 numbers hain. Doosre tareeke se gino: 1 se 9 mein 9 numbers; 10 se 19 mein 10 numbers; aathon tens (20, 30, ..., 90) mein se har ek 10 numbers deta hai (khud ten aur ten plus 1 se 9), to $8 \times 10 = 80$. Total $9 + 10 + 80 = 99$. Dono counts 99 dete hain, isliye FSA 1 se 99 ka har number accept karta hai aur aur kuch nahi.
-
-</Box>
-
-</Sum>
-
-**"FSA for nouns and verbs plus numbers 1-99" ka exam answer (10 marks):** (1) FSA aur uske 5 parts define karo; (2) noun FSA banao aur ek line mein walk-through do; (3) verb FSA banao; (4) number FSA banao word lists aur 19 + 8 + 72 count ke saath; (5) limit likho (sirf yes ya no). <PYQ id="2023-12-ce/q2a" />
-
-## Finite state transducers (FST)
-
-**Ye kya hai.** Finite state transducer ek finite automaton hai jisme **do tapes** hoti hain, input tape aur output tape. Har arrow pe ek pair `i:o` hota hai, matlab "`i` padho, `o` likho". FSA decide karta hai kaun si strings language mein hain; FST ek string ko doosri string se relate karta hai. <Cite id="morphology-fst-wiki-fst" /> <Cite id="morphology-fst-jm-ch3-notes" loc="slide 19" />
-
-**Ye kyun zaroori hai.** FSA keh sakta hai "haan, `fox` ke baad `-s` legal noun hai", lekin analysis `fox +N +PL` ya spelling `foxes` nahi de sakta. Hume aisi machine chahiye jo ek string ko doosri string mein **convert** kare. Wo machine FST hai.
-
-**Rozmarra ki analogy.** FSA ek gatekeeper hai jo sirf "allowed" ya "not allowed" bolta hai. FST ek translator hai jo ek string sunta hai aur doosri bolta hai.
-
-**Formal definition.** FST ek 5-tuple $(Q, \Sigma, q_0, F, \delta)$ hai jahan $Q$ states ka set hai, $\Sigma$ pairs `i:o` ka set hai (ek input symbol aur ek output symbol, koi bhi empty string $\varepsilon$ ho sakta hai), $q_0$ start state, $F$ final states, aur $\delta(q, i{:}o)$ next state deta hai. Ye Mealy machine ka extension hai, jo padhte waqt output bhi likhti hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 21" /> <Cite id="morphology-fst-wiki-mealy" /> <Cite id="morphology-fst-gfg-mealy" />
-
-**FST ko dekhne ke chaar tareeke.** <Cite id="morphology-fst-jm-ch3-notes" loc="slide 20" />
-
-1. **Recogniser:** strings ka pair leta hai aur accept ya reject batata hai.
-2. **Generator:** language ke strings ke pairs produce karta hai.
-3. **Translator (transducer):** ek string padhta hai aur doosri likhta hai. (Morphology ise aise hi use karti hai.)
-4. **Set relater:** do strings ke sets ke beech relation compute karta hai.
-
-**Useful properties.** FSAs regular languages describe karte hain; FSTs **regular relations** (strings ke pairs ke sets) describe karte hain. FSTs **union**, **inversion** aur **composition** ke under closed hain. <Cite id="morphology-fst-jm-ch3-notes" loc="slides 22-23" />
-
-- **Inversion:** agar $T$ $I$ ko $O$ pe map karta hai to inverse $T^{-1}$ $O$ ko $I$ pe map karta hai. To ek transducer jo parser ke roop mein bana (`cats` se `cat +N +PL`) use bina extra kaam ke ulta karke generator bana sakte hain (`cat +N +PL` se `cats`).
-- **Composition:** series mein chalne wale do transducers ko ek se replace kar sakte hain: $(T_1 \circ T_2)(s) = T_2(T_1(s))$. To lexicon FST aur spelling-rule FST ko ek machine mein jod sakte hain.
-
-| Point | FSA | FST |
+| Word class | Path | Accept karta hai |
 |---|---|---|
-| Tapes | Ek (input) | Do (input aur output) |
-| Arrow label | Ek symbol: `s` | Ek pair: `i:o` |
-| Kya define karta hai | Ek language (strings ka set) | Ek relation (strings ke pairs ka set) |
-| Output | Accept ya reject | Accept ya reject aur ek output string |
-| Morphology mein use | Morphotactics, word recognition | Parsing (analysis) aur generation, spelling rules |
-| Equivalent to | Regular expression | Regular relation, Mealy machine |
+| Noun | q0, phir noun stem se q1 (final), phir plural -s se q2 (final) | cat, cats |
+| Verb | q0, phir verb stem se q1 (final), phir -s, -ed ya -ing se q2 (final) | walk, walks, walked, walking |
 
-<Cite id="morphology-fst-wiki-fst" /> <Cite id="morphology-fst-jm-ch3-notes" loc="slides 19-22" />
+Irregular forms (went, mice) ending rule se handle nahi hote; wo dictionary mein store hote hain.
 
-<Img id="img-nlp-n1-mealy" caption="Mealy machine: har arrow par input/output likha hai, bilkul FST ke i:o pairs jaisa, isliye wo har symbol padhne par ek symbol likhti hai." />
-
-## FST se morphological parsing: two-level morphology
-
-**Do levels.** Two-level morphology (Koskenniemi, 1983) mein word ko do levels pe describe karte hain. **Lexical level** tags ke saath morphemes ka concatenation hai (`cat +N +PL`). **Surface level** asli spelling hai (`cats`). FST dono ke beech kisi bhi direction mein map karta hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 18" /> Kaplan aur Kay ne dikhaya ki spelling aur sound rewrite rules ko finite-state transducers mein compile kar sakte hain. <Cite id="morphology-fst-kaplan-kay" />
-
-Practice mein ek teesra, **intermediate** level use hota hai: morphemes boundary markers ke saath pehle se jude hue (`fox^s#`). Lexicon FST lexical se intermediate jaata hai; spelling-rule FST intermediate se surface. <Cite id="morphology-fst-jm-ch3-notes" loc="slides 25-26" />
+**Regular aur plural nouns ke liye FST.** Har arc input:output likha hai, aur epsilon matlab koi symbol nahi.
 
 ```mermaid
-%% caption: fox ke plural ke liye teen tapes. Lexicon transducer tagged stem ko jude hue morphemes mein badalta hai. Phir spelling-rule transducer e insert karta hai aur boundary markers hataata hai. Parsing ke liye right se left chalao, generation ke liye left se right.
+%% caption: Regular nouns ke liye ek chhota FST. Surface word input side par padha jaata hai aur analysis output side par likha jaata hai. Aakhri arc singular ya plural decide karta hai.
 flowchart LR
-  A["Lexical tape: fox +N +PL"] -->|"lexicon FST"| B["Intermediate tape: fox^s#"]
-  B -->|"e-insertion FST"| C["Surface tape: foxes"]
+  A(("q0")) -- "cat : cat" --> B(("q1"))
+  B -- "epsilon : +N" --> C(("q2"))
+  C -- "epsilon : +Sg" --> D((("q3 final")))
+  C -- "s : +Pl" --> D
 ```
 
-<Cite id="morphology-fst-jm-ch3-notes" loc="diagram" /> <Cite id="morphology-fst-wiki-parsing" loc="diagram" />
+To cat se cat + N + Sg milta hai aur cats se cat + N + Pl. Mice jaise irregular plural ke liye ek extra arc mice padhta hai aur mouse +N +Pl likhta hai.
 
-### Regular aur irregular plural nouns ke liye FST
-
-Number inflection ka transducer, jise textbook mein $T_{num}$ kehte hain, teen kind ke stems pe kaam karta hai. Har arrow `lexical:intermediate` padha jaata hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 23" />
-
-- **Regular noun stem** (`fox`, `cat`, `fog`): letters ko jaisa hai waisa copy karo (`f:f o:o x:x`). Phir `+N:ε` (noun tag kuch nahi likhta), aur ya to `+SG:#` (singular: bas word khatam) ya `+PL:^s#` (plural: boundary, `s` aur end marker likho).
-- **Irregular singular noun** (`goose`, `sheep`, `mouse`): letters copy karo, phir `+N:ε` aur `+SG:#`.
-- **Irregular plural noun** (`geese`, `mice`): lexical side pe singular stem hota hai aur arrows letters badalte hain: `goose` se `geese` ke liye `g o:e o:e s e`, aur `mouse` se `mice` ke liye `m o:i u:ε s:c e`. Phir `+N:ε` aur `+PL:#`, `-s` ke bina.
+**English numbers 1 se 99 ke liye FSA.**
 
 ```mermaid
-%% caption: Number-inflection transducer ka ek hissa. Arrows lexical:intermediate dikhate hain. Regular noun letters copy karta hai aur plural ke liye ^s# add karta hai. Irregular plural apne hi letters badalta hai (o:e o:e) aur kuch add nahi karta.
+%% caption: Number words 1 se 99 ke liye FSA. Units aur teens ek word hain; tens word (twenty se ninety) ke baad ek unit aa sakta hai.
 flowchart LR
-  S(("q0")) -->|"fox: letters copied"| R["q1: regular stem read"]
-  R -->|"+N:eps"| N["q2"]
-  N -->|"+SG:#"| F((("q3")))
-  N -->|"+PL:^s#"| F
-  S -->|"g o:e o:e s e"| I["q4: irregular stem read"]
-  I -->|"+N:eps then +PL:#"| F
+  S(("q0")) -- "one ... nine, ten ... nineteen" --> U((("q1 final")))
+  S -- "twenty, thirty ... ninety" --> T((("q2 final")))
+  T -- "one ... nine" --> U
 ```
 
-<Cite id="morphology-fst-jm-ch3-notes" loc="diagram" /> <Cite id="morphology-fst-wiki-fst" loc="diagram" />
+Ye seven, thirteen, twenty aur forty two accept karta hai, aur twenty thirteen reject karta hai.
 
-(Diagram mein `eps` empty string $\varepsilon$ ke liye hai. State q3 final hai.)
+## Ye kahan puchha gaya
 
-**Exam answer: "Design an FST for regular and plural nouns" (10 marks).** FST define karo, lexicon classes list karo (regular, irregular singular, irregular plural), upar wala diagram banao, har arrow ek line mein samjhao, phir e-insertion rule aur ek traced example (neeche) add karo. <PYQ id="2024-12-ce/q2a" />
-
-### Orthographic (spelling) rules
-
-Jab morphemes milte hain to spelling aksar badalti hai. Har rule ek chhota FST hai jo intermediate string leta hai aur thodi badli hui string deta hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 26" />
-
-| Rule | Kya kehta hai | Example |
+| Agar question kehta hai | Kya likhna hai | Kab aaya |
 |---|---|---|
-| Consonant doubling | Ek-letter consonant `-ing` ya `-ed` se pehle double hota hai | `beg` se `begging` |
-| E deletion | Silent `e` `-ing` ya `-ed` se pehle hat jaata hai | `make` se `making` |
-| E insertion | `s`, `z`, `x`, `ch`, `sh` ke baad `-s` se pehle `e` add hota hai | `watch` se `watches`, `fox` se `foxes` |
-| Y replacement | `-y` `-s` se pehle `-ie` ban jaata hai, aur `-ed` se pehle `-i` | `try` se `tries`, `tried` |
-| K insertion | Vowel + `c` pe khatam hone wale verbs `k` add karte hain | `panic` se `panicked` |
+| "Role of FSA in morphological analysis" | Class ka answer, cats FSA, roles ki list | <PYQ id="2022-12-ce/q2a" /> <PYQ id="assignment-1/q2f" /> |
+| "Output of morphological analysis for regular verb, irregular verb, singular noun, plural noun, and role of FST" | Chaar-row table, phir FST definition aur role | <PYQ id="2023-05-ce/q2b" /> <PYQ id="2025-05-ce/q1b" /> |
+| "Define affixes, types of affixes" | Definition aur prefix, suffix, infix | <PYQ id="2022-12-ce/q1b" /> <PYQ id="2025-05/q1a" /> |
+| "Inflectional and derivational morphology" | Definitions, comparison table, examples | <PYQ id="2024-05-ce/q2a" /> <PYQ id="2025-05/q2b" /> <PYQ id="2025-05-ce/q1a" /> |
+| "FSA for nouns and verbs; FSA for numbers 1 to 99" | Upar ke do designs | <PYQ id="2023-12-ce/q2a" /> |
+| "Design FST for regular and plural nouns" | Upar ka FST | <PYQ id="2024-12-ce/q2a" /> |
 
-E-insertion rule aise likha jaata hai: $\varepsilon \rightarrow e \;/\; \{x, s, z\}\,\hat{}\;\_\;s\#$. Isse aise padho: "`e` insert karo (kuch nahi se `e`) jab wo `x`, `s` ya `z` ke baad, phir morpheme boundary `^`, aur `s#` se pehle ho." Rule `a → b / c _ d` ka matlab hai "a ko b likho c aur d ke beech." <Cite id="morphology-fst-jm-ch3-notes" loc="slide 27" />
+## Quick revision
 
-Ek rule ka transducer sirf us rule ka constraint batata hai aur baaki har symbol ko jaisa hai waisa guzarne deta hai.
+- Language strings ka collection hai; alphabet inputs ka finite set. Regular expression operations: union (+), concatenation (.), Kleene star (`a*` matlab epsilon, a, aa, ...).
+- FSA tuples: Q, Sigma, delta, q0, F. Ye accept ya reject karta hai.
+- Morphology = stem + affixes (prefix, infix, suffix). Examples: unsuccessful, unfriendly, undoable, deciphered.
+- Inflectional: same word ka naya form (school se schools). Derivational: naya word (paint se painter).
+- FST surface ko analysis se map karta hai: cats se cat + N + Pl, went se go + V + Past.
 
-### Worked example 3: foxes, cats aur cities generate karna
-
-<Sum>
-
-<Given>
-
-Lexical inputs: (a) `fox +N +PL`, (b) `cat +N +PL`, (c) `city +N +PL`. Lexicon FST use karo (stem letters copy, `+N:ε`, `+PL:^s#`), phir spelling rules e-insertion aur y-replacement, phir `^` aur `#` hata do.
-
-</Given>
-
-<Find>
-
-har ka surface form.
-
-</Find>
-
-<Steps>
-
-1. (a) ke liye lexicon FST: `fox` copy, `+N` kuch nahi likhta, `+PL` `^s#` likhta hai. Intermediate: `fox^s#`. *Reason: plural ko boundary marker, phir `s`, phir end marker ke roop mein likha jaata hai.*
-2. (a) ke liye spelling rule: `^` se pehle ka letter `x` hai aur next morpheme `s#` hai, to e-insertion `^` aur `s` ke beech `e` likhta hai: `fox^es#`. `^` aur `#` hatao: `foxes`.
-3. (b): intermediate `cat^s#`. `^` se pehle ka letter `t` hai, jo `s`, `x` ya `z` nahi hai, to e-insertion fire nahi hota. `^` aur `#` hatao: `cats`.
-4. (c): intermediate `city^s#`. Y-replacement `^s` se pehle ke `y` ko `ie` bana deta hai: `citie^s#`. Markers hatao: `cities`. *Reason: plural `-s` se pehle `-y` badal ke `-ie` ho jaata hai.*
-
-</Steps>
-
-<Answer>
-
-(a) `foxes`, (b) `cats`, (c) `cities`.
-
-</Answer>
-
-<Box kind="verify">
-
-Ek case ko ulta chalao (inversion): `foxes` ka stem `fox` hai, to inserted `e` hatane se `fox^s#` milta hai, jise lexicon FST `fox +N +PL` padhta hai. Letter counts bhi match karte hain: `fox` (3) + `es` (2) = `foxes` mein 5 letters; `cat` (3) + `s` (1) = `cats` mein 4 letters; `cit` (3) + `ies` (3) = `cities` mein 6 letters.
-
-</Box>
-
-</Sum>
-
-### Worked example 4: irregular plurals, letter by letter
-
-<Sum>
-
-<Given>
-
-`goose` ke liye irregular-plural arrows `g o:e o:e s e`, aur `mouse` ke liye `m o:i u:ε s:c e`. Har pair `lexical:surface` hai; akela likha letter matlab dono taraf wahi letter.
-
-</Given>
-
-<Find>
-
-har lexical stem ke liye bani surface string.
-
-</Find>
-
-<Steps>
-
-1. `goose`, pair by pair: `g:g`, `o:e`, `o:e`, `s:s`, `e:e`. Output letters: g, e, e, s, e.
-2. Jodo: `geese`.
-3. `mouse`, pair by pair: `m:m`, `o:i`, `u:ε`, `s:c`, `e:e`. Output letters: m, i, (kuch nahi), c, e.
-4. Jodo: `mice`. *Reason: `u:ε` `u` ko delete karta hai, isliye paanch input letters se output mein chaar letters aate hain.*
-
-</Steps>
-
-<Answer>
-
-`goose +N +PL` se `geese`, aur `mouse +N +PL` se `mice`.
-
-</Answer>
-
-<Box kind="verify">
-
-Letters gino: `goose` mein 5 letters, 5 pairs, 5 output letters, aur `geese` mein 5 letters. `mouse` mein 5 letters, 5 pairs, lekin ek output empty hai, to 4 output letters, aur `mice` mein 4 letters. Pairs ulte padhne (inversion) se `geese` se `goose` aur `mice` se `mouse` milta hai.
-
-</Box>
-
-</Sum>
-
-### Morphological parsing mein FST ka role, example ke saath
-
-**Parsing** (analysis) ke liye hum machines ulti chalate hain: surface word se lexical analysis tak.
-
-1. Input `foxes`.
-2. Spelling-rule FST (inverted): `foxes` `fox^s#` ho sakta hai (`e` insert hua tha), ya `foxe^s#`, ya bina suffix ke `foxes#`. Kai guesses.
-3. Lexicon FST (inverted): `fox^s#` stem `fox` + plural `^s#` se match karta hai, aur `fox +N +PL` deta hai. Baaki guesses (`foxe`) lexicon mein nahi hain, to hata diye jaate hain.
-4. Output: `fox +N +PL`. `fox` verb bhi hai, to analyser `fox +V +3SG` bhi return karta hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slides 28-29" />
-
-To FST paanch kaam karta hai: **analyse** karta hai (word se stem aur tags), **generate** karta hai (stem aur tags se word), **spelling rules lagata hai**, lexicon ke saath **lookup** ki tarah kaam karta hai, aur **fast** hai kyunki saare rules composition se ek machine mein compile ho jaate hain. <Cite id="morphology-fst-wiki-parsing" /> Foma aur Xerox tools jaise real toolkits aise machines rule files se compile karte hain. <Cite id="morphology-fst-foma" />
-
-<Box kind="exam">
-
-**Explain the role of FST in morphological parsing with an example (10 marks):** (1) FST aur surface vs lexical level define karo; (2) teen-tape diagram banao; (3) lexicon FST aur ek spelling rule dikhao; (4) `cats` se `cat +N +PL` aur `foxes` se `fox +N +PL` trace karo; (5) advantages aur limits do. <PYQ id="2023-05-ce/q2b" />
-
-</Box>
-
-**Exam answer: "Explain the role of FSA in morphological analysis" (10 marks).** Upar FSA wala section use karo: morphotactics, recognition, noun aur verb automata, aur limit ki FSA sirf yes ya no deta hai. <PYQ id="2022-12-ce/q2a" />
-
-## Advantages, limits aur applications
-
-**Finite-state approach ke advantages.**
-
-- Fast (time word ki length ke saath badhta hai) aur memory mein chhota.
-- Bidirectional: wahi machine analyse aur generate karti hai (inversion).
-- Modular: lexicon aur har spelling rule alag machines hain, composition se jude hue.
-- Rule based hai, isliye kam training data wali languages ke liye kaam karta hai. <Cite id="morphology-fst-wiki-parsing" />
-
-**Limitations.**
-
-- Lexicon aur rules haath se likhne padte hain, jo dheema kaam hai, aur har irregular word list karna padta hai.
-- Naye, unseen stems ko handle nahi karta jab tak guessing rules add na hon.
-- Ambiguity (`foxes`) return hoti hai, solve nahi hoti. Sahi analysis chunne ke liye sentence context chahiye (part-of-speech tagging).
-- Derivational morphology ko model karna inflection se mushkil hai. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 14" />
-- Non-concatenative morphology (Arabic roots aur patterns) ko extra techniques chahiye.
-- Neural models ne un languages ke liye hand-built FSTs kam kar diye hain jinke paas bahut training data hai, halaki morphologically rich, low-resource languages ke liye ye ab bhi use hote hain. <Cite id="morphology-fst-wiki-parsing" />
-
-**Applications.** Search aur stemming, spell checking, machine translation, text-to-speech, part-of-speech tagging aur lemmatization. <Cite id="morphology-fst-wiki-parsing" /> <Cite id="morphology-fst-jm-ch3-notes" loc="slide 2" />
-
-## Related methods: stemming aur lemmatization
-
-FST-based analyser ko lexicon chahiye. **Stemmers** bina lexicon ke thoda kaccha kaam karte hain: **Porter stemmer** simple rewrite rules ka cascade hai (jaise `ATIONAL` se `ATE`, to `relational` se `relate`) aur ise lexicon-free FST ki tarah dekha ja sakta hai. Ye suffixes kaat deta hai, isliye result real word hona zaroori nahi. <Cite id="morphology-fst-jm-ch3-notes" loc="slide 30" /> <Cite id="text-preprocessing-porter1980" /> <Cite id="text-preprocessing-nltk-porter" /> **Lemmatizer** lexicon use karke asli dictionary form (lemma) deta hai, jaise `caught` se `catch`, jo stemmer nahi kar sakta. <Cite id="morphology-fst-wiki-lemma" /> <Cite id="text-preprocessing-nltk-wordnet" /> <Cite id="text-preprocessing-gfg-lem" />
-
-| Point | Morphological analysis (FST) | Stemming | Lemmatization |
-|---|---|---|---|
-| Output | Stem plus tags (`cat +N +PL`) | Ek stem (`cat`, kabhi word nahi) | Dictionary word (`cat`) |
-| Lexicon use karta hai | Haan | Nahi (sirf rules) | Haan |
-| Irregular words handle karta hai | Haan (`geese` se `goose`) | Aam taur pe nahi | Haan |
-| Speed | Fast | Sabse fast | Fast |
-
-Stemmer aur uske sums Porter stemmer ke note mein hain; tokenization aur edit distance text preprocessing ke note mein hain. Words ko tag karne ke NLTK tools NLTK book mein hain. <Cite id="morphology-fst-nltk5" />
-
-<Box kind="key">
-
-Yaad rakhne ka tareeka: **FSA yes ya no bolta hai. FST translate karta hai.** Morphology ko teen cheezein chahiye: lexicon, morphotactics (FSA), spelling rules (FST). Inflection word class wahi rakhta hai, derivation aksar badal deta hai.
-
-</Box>
-
-**Conclusion.** Morphology word ko stem aur affixes mein todti hai. Inflection aur derivation words banane ke do tareeke hain. Finite automaton check karta hai ki pieces legal order mein hain, aur finite state transducer surface word ko uske analysis mein aur wapas badalta hai, lexicon aur spelling rules ko ek machine mein jodkar.
+**Conclusion.** FSA check karta hai ki stem aur affixes milkar valid word banate hain, aur FST aage jaakar word ko jaisa likha hai aur uske stem-plus-tags analysis ke beech convert karta hai. <Cite id="class-nlp-pyq2" loc="p. 6" />

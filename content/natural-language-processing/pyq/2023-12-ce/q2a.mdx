@@ -1,56 +1,47 @@
 ---
-references: [morphology-fst-jm-ch3-notes, morphology-fst-gfg-fa, morphology-fst-wiki-fsm, morphology-fst-tp-word]
+references: [class-nlp-pyq2, class-nlp-m2]
 ---
 
-**In simple words:** a finite state automaton (FSA) is a machine with a few states and arrows. It reads a word one piece at a time and moves along the arrows. If it stops in a **final** (accepting) state, the word is valid; otherwise it is rejected. In NLP an FSA checks whether a string is a legal word. <Cite id="morphology-fst-gfg-fa" /> <Cite id="morphology-fst-wiki-fsm" />
+**In simple words:** an FSA for nouns and verbs reads a stem and then an optional ending; an FSA for numbers reads number words in the allowed order.
 
-**Part 1: FSA for nouns.** A noun is a stem, and a regular noun may take the plural *-s*. Irregular nouns (*mice*, *goose*) are listed whole. <Cite id="morphology-fst-jm-ch3-notes" />
+**FSA in morphology:** states are stages of word formation, transitions are stems and affixes, and the FSA accepts a valid sequence. <Cite id="class-nlp-pyq2" loc="p. 6" /> <Cite id="class-nlp-m2" loc="p. 5" />
 
-```mermaid
-%% caption: Noun FSA. A regular noun can stop at q1 (singular) or add -s to reach q2 (plural); irregular nouns go straight to q2.
-flowchart LR
-  S(("q0")) -- "reg-noun" --> A(("q1"))
-  S -- "irreg-sg-noun, irreg-pl-noun" --> B(("q2"))
-  A -- "plural -s" --> B
-```
-
-q1 and q2 are final states. It accepts *cat*, *cats*, *goose*, *mice* but rejects *mices* (irregular plural cannot take -s).
-
-**Part 2: FSA for verbs.** A regular verb stem takes -s, -ed, -ing (*walk, walks, walked, walking*); an irregular stem takes only -s and -ing; irregular past forms (*ate*) are listed whole.
+**FSA for nouns** (stem plus plural -s). The class FSAs have the same shape: stem, then suffix. <Cite id="class-nlp-m2" loc="p. 5" />
 
 ```mermaid
-%% caption: Verb FSA. Stems lead to q1 or q2; the endings -s, -ed, -ing lead to q3.
+%% caption: FSA for nouns. A noun stem is a word; adding the plural suffix s also gives a word (cat, cats).
 flowchart LR
-  S(("q0")) -- "reg-verb-stem" --> A(("q1"))
-  S -- "irreg-verb-stem" --> B(("q2"))
-  S -- "irreg-past-form" --> C(("q3"))
-  A -- "-s, -ed, -ing" --> C
-  B -- "-s, -ing" --> C
+  A(("q0")) -- "noun stem: cat, dog" --> B((("q1 final")))
+  B -- "suffix: s" --> C((("q2 final")))
 ```
 
-q1, q2 and q3 are final. It accepts *walked* and *eating*, rejects *eated*.
-
-**Part 3: FSA for English numbers 1 to 99.** Group the words: **digits** (one to nine), **teens** (ten to nineteen, standing alone) and **tens** (twenty, thirty, ..., ninety). A tens word may be followed by one digit (*twenty-one*).
+**FSA for verbs** (stem plus -s, -ed or -ing).
 
 ```mermaid
-%% caption: Number FSA. Digits and teens finish at q1. A tens word reaches q2, which is final too and may add one digit to reach q1.
+%% caption: FSA for verbs. A verb stem is a word; one ending from s, ed or ing may follow (walk, walks, walked, walking).
 flowchart LR
-  S(("q0")) -- "one ... nine" --> A(("q1"))
-  S -- "ten ... nineteen" --> A
-  S -- "twenty ... ninety" --> B(("q2"))
-  B -- "one ... nine" --> A
+  A(("q0")) -- "verb stem: walk, play" --> B((("q1 final")))
+  B -- "suffix: s, ed, ing" --> C((("q2 final")))
 ```
 
-Final states: q1 and q2. Accepted: *fifteen*, *forty*, *seventy-four*. Rejected: *twenty-ten* (a teen cannot follow a tens word) and *five-six* (q1 has no outgoing arrow).
+Irregular forms (went, mice) are stored in the lexicon, because the ending rule cannot make them. <Cite id="class-nlp-pyq2" loc="p. 9" />
 
-| Path | Words accepted |
-|---|---|
-| q0 to q1 by a digit | 9 |
-| q0 to q1 by ten to nineteen | 10 |
-| q0 to q2 by a tens word (twenty to ninety, 8 words) | 8 |
-| q0 to q2 to q1 (8 tens times 9 digits) | 72 |
-| Total | 99 |
+**FSA for the English numbers 1 to 99** (a standard design; the class files do not show it).
 
-The total $9 + 10 + 8 + 72 = 99$ matches the 99 numbers from 1 to 99.
+```mermaid
+%% caption: FSA for the number words 1 to 99. Units and teens are single words; a tens word may be followed by a unit.
+flowchart LR
+  S(("q0")) -- "one ... nine, ten ... nineteen" --> U((("q1 final")))
+  S -- "twenty, thirty ... ninety" --> T((("q2 final")))
+  T -- "one ... nine" --> U
+```
 
-**Conclusion:** the same small machine idea checks nouns, verbs and number words, because each is a regular pattern of pieces.
+| Input | Path | Result |
+|---|---|---|
+| seven | q0 to q1 | accepted |
+| thirteen | q0 to q1 | accepted |
+| twenty | q0 to q2 | accepted |
+| forty two | q0 to q2 to q1 | accepted |
+| twenty thirteen | no arc from q2 on thirteen | rejected |
+
+**Conclusion:** both automata follow the same idea: start state, read the allowed words in order, accept in a final state.

@@ -1,63 +1,56 @@
 ---
-references: [cfg-parsing-gfg-sr, cfg-parsing-wiki-sr, ambiguity-challenges-nltk-ch8, cfg-parsing-tp-syn]
+references: [class-nlp-pyq3]
 ---
 
-**In simple words:** a shift-reduce parser is a **bottom-up** parser. It reads the words left to right, keeps a **stack**, and builds the parse tree from the words up to S. <Cite id="cfg-parsing-wiki-sr" /> <Cite id="cfg-parsing-gfg-sr" /> <Cite id="ambiguity-challenges-nltk-ch8" loc="§4.2" />
+**In simple words:** a shift-reduce parser is a bottom-up parser. It reads the words from left to right, puts them on a stack, and whenever the top of the stack matches the right side of a rule, it replaces it by the left side. If it ends with only S on the stack, the sentence is accepted. <Cite id="class-nlp-pyq3" loc="p. 6" />
 
-**Parts:** a stack (starts empty), an input buffer (the sentence), and a grammar.
+Bottom-up parsing tries to reduce the input string to the start symbol of the grammar (rightmost derivation, in reverse). The shift-reduce parser is the class example of a bottom-up parser. <Cite id="class-nlp-pyq3" loc="p. 6" />
 
-**Actions:**
+*(The class files name the parser but give no steps; the trace below is the standard method.)*
 
-1. **Shift:** move the next word from the input to the stack.
-2. **Reduce:** if the top of the stack matches the right side of a rule, replace it with the left side.
-3. **Accept:** input empty and the stack is only S.
-4. **Error:** neither shift nor reduce is possible.
+**Parts:** a **stack**, an **input buffer** with the remaining words, and four actions:
+
+1. **Shift:** move the next word from the input onto the stack.
+2. **Reduce:** replace the right side of a rule on top of the stack by its left side.
+3. **Accept:** the stack holds only S and the input is empty.
+4. **Error / backtrack:** no action works; go back and try another choice.
+
+**Example.** Grammar: S → NP VP, NP → Det N | N, VP → V NP, Det → The | this, N → man | book, V → read (the class grammar). Sentence: "The man read this book". <Cite id="class-nlp-pyq3" loc="p. 8" />
+
+| Step | Stack | Remaining input | Action |
+|---|---|---|---|
+| 1 | | The man read this book | Shift |
+| 2 | The | man read this book | Reduce Det → The |
+| 3 | Det | man read this book | Shift |
+| 4 | Det man | read this book | Reduce N → man |
+| 5 | Det N | read this book | Reduce NP → Det N |
+| 6 | NP | read this book | Shift |
+| 7 | NP read | this book | Reduce V → read |
+| 8 | NP V | this book | Shift |
+| 9 | NP V this | book | Reduce Det → this |
+| 10 | NP V Det | book | Shift |
+| 11 | NP V Det book | | Reduce N → book |
+| 12 | NP V Det N | | Reduce NP → Det N |
+| 13 | NP V NP | | Reduce VP → V NP |
+| 14 | NP VP | | Reduce S → NP VP |
+| 15 | S | | Accept |
 
 ```mermaid
-%% caption: The shift-reduce loop. Reduce when the top of the stack matches a rule, otherwise shift. Accept when only S is left.
+%% caption: The shift-reduce loop.
 flowchart TD
-  A["Empty stack, all words in input"] --> B{"Top of stack matches a rule?"}
-  B -->|"yes"| C["Reduce"]
-  B -->|"no"| D{"Words left?"}
-  D -->|"yes"| E["Shift next word"]
-  D -->|"no"| F{"Stack is only S?"}
-  F -->|"yes"| G["Accept"]
-  F -->|"no"| H["Error"]
+  A["Start: empty stack, all words in input"] --> B{"Can the top of the stack be reduced?"}
+  B -->|"Yes"| C["Reduce"]
+  B -->|"No"| D{"Any input left?"}
+  D -->|"Yes"| E["Shift next word"]
+  D -->|"No"| F{"Stack is only S?"}
+  F -->|"Yes"| G["Accept"]
+  F -->|"No"| H["Error: backtrack"]
   C --> B
   E --> B
 ```
 
-<Cite id="cfg-parsing-gfg-sr" loc="diagram" />
+**Conflicts:** at step 5 the top symbol N could also be reduced alone by NP → N, leaving Det NP, which no rule can reduce. The parser must then backtrack or use a look-ahead. Choosing between actions is the main difficulty of shift-reduce parsing.
 
-**Example.** Grammar: S → NP VP, NP → Det NOM, NOM → Noun, VP → Verb NP, Det → the | this, Noun → man | book, Verb → read. Sentence: *the man read this book*.
+**Advantage:** simple, fast, works bottom-up from the words. **Disadvantage:** conflicts between actions.
 
-| Step | Stack | Input left | Action |
-|---|---|---|---|
-| 1 | (empty) | the man read this book | shift |
-| 2 | the | man read this book | reduce Det → the |
-| 3 | Det | man read this book | shift |
-| 4 | Det man | read this book | reduce Noun → man |
-| 5 | Det Noun | read this book | reduce NOM → Noun |
-| 6 | Det NOM | read this book | reduce NP → Det NOM |
-| 7 | NP | read this book | shift |
-| 8 | NP read | this book | reduce Verb → read |
-| 9 | NP Verb | this book | shift |
-| 10 | NP Verb this | book | reduce Det → this |
-| 11 | NP Verb Det | book | shift |
-| 12 | NP Verb Det book | (empty) | reduce Noun → book |
-| 13 | NP Verb Det Noun | (empty) | reduce NOM → Noun |
-| 14 | NP Verb Det NOM | (empty) | reduce NP → Det NOM |
-| 15 | NP Verb NP | (empty) | reduce VP → Verb NP |
-| 16 | NP VP | (empty) | reduce S → NP VP |
-| 17 | S | (empty) | accept |
-
-The sentence is accepted in 17 steps: 5 shifts, 11 reduces, 1 accept. The 11 reduces build the 11 non-word nodes of the parse tree (S, NP, VP, Det, NOM, Noun, Verb and so on).
-
-**Conflicts and limits:** if the grammar also had VP → Verb, step 9 would allow reduce or shift (shift-reduce conflict), and two rules may match the same top (reduce-reduce conflict). The basic parser picks one choice and **never backtracks**, so it can miss a valid parse. Real parsers use lookahead tables or a trained classifier.
-
-| Advantages | Disadvantages |
-|---|---|
-| One pass, fast, small memory | Conflicts, no backtracking |
-| Easy to implement with a stack | Gives only one parse |
-
-**Conclusion:** shift-reduce parsing builds the tree bottom-up by shifting words and reducing them by grammar rules until S remains.
+**Conclusion:** shift-reduce parses by shifting words and reducing them until only S is left.

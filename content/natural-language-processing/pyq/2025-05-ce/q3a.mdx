@@ -1,39 +1,26 @@
 ---
-references: [word-sense-disambiguation-slp3-I, word-sense-disambiguation-slp3-B, word-sense-disambiguation-gfg-wsd, word-sense-disambiguation-tp-wsd]
+references: [class-nlp-pyq4]
 ---
 
-**In simple words:** many words have more than one meaning (*bank* = money place or river side). **Word sense disambiguation (WSD)** picks the meaning that fits the sentence. <Cite id="word-sense-disambiguation-slp3-I" loc="§I.4" /> <Cite id="word-sense-disambiguation-gfg-wsd" />
+**In simple words:** WSD is needed because one word can have several meanings, and Naive Bayes picks the meaning that is most probable given the words around it.
 
-**i) Why WSD is needed**
+**(i) Need of WSD:** many words are ambiguous, so their meaning changes with the context ("deposited money in the bank" versus "the river bank"). WSD lets an NLP system analyze the surrounding words and find the intended sense, which improves language understanding and reduces ambiguity. <Cite id="class-nlp-pyq4" loc="p. 5" />
 
-- **Machine translation:** *bank* has different words in Hindi for the two senses, so the wrong sense gives a wrong translation.
-- **Search and question answering:** "bass fishing" must not return music pages.
-- **Text-to-speech and classification:** *bass* is read in two ways; the sense also decides the topic.
-- **Chatbots and information extraction** need the right meaning to act correctly. <Cite id="word-sense-disambiguation-tp-wsd" />
+**(ii) Naive Bayes supervised algorithm** *(the class files do not cover Naive Bayes; this is the standard short explanation)*
 
-**ii) Naive Bayes supervised algorithm**
+It is a supervised method: it learns from sentences in which the sense is already marked. For a word with senses $s_1, s_2, \ldots$ and context words $c_1, c_2, \ldots, c_n$ it chooses the sense
 
-*Idea:* learn from sentences already labelled with the right sense, and use the neighbouring words as clues. Pick the sense $s$ with the highest
+$$
+\hat{s} = \arg\max_{s} \; P(s) \prod_{j=1}^{n} P(c_j \mid s)
+$$
 
-$$\hat{s} = \arg\max_s \; P(s) \prod_{j} P(w_j \mid s)$$
-
-$P(s)$ is how common the sense is (prior). $P(w_j \mid s)$ is how often context word $w_j$ appears with that sense (likelihood). "Naive" means the context words are treated as independent given the sense. Add-one smoothing: $P(w \mid s) = \frac{C(w,s)+1}{N_s + |V|}$, where $N_s$ is the total word count of sense $s$ and $|V|$ the vocabulary size. <Cite id="word-sense-disambiguation-slp3-B" />
-
-```mermaid
-%% caption: Naive Bayes WSD. Training only counts; testing multiplies the prior by the likelihood of each context word.
-flowchart LR
-  A["Sense-tagged sentences"] --> B["Count senses and context words"]
-  B --> C["P(s) and P(w given s) with smoothing"]
-  D["New sentence: context words"] --> E["Score each sense: P(s) x product of P(w given s)"]
-  C --> E
-  E --> F["Highest score = chosen sense"]
-```
+$P(s)$ is how often the sense occurs in the training data, and $P(c_j \mid s)$ is how often the context word $c_j$ appears with that sense. "Naive" means that the context words are treated as independent of each other. Both are found by counting.
 
 <Sum>
 
 <Given>
 
-Word *bank*, with made-up practice counts: 6 money-sense (FIN) and 4 river-sense (RIV) training sentences; $|V| = 6$. Word counts: FIN has money 5, water 1, river 0 (total 13); RIV has money 1, water 3, river 4 (total 10). Context: *river, water, money*.
+word *bank* with senses s1 (finance) and s2 (river). From a labelled corpus: $P(s_1) = 0.6$, $P(s_2) = 0.4$; $P(\text{money} \mid s_1) = 0.3$, $P(\text{money} \mid s_2) = 0.05$; $P(\text{deposit} \mid s_1) = 0.2$, $P(\text{deposit} \mid s_2) = 0.02$. Context: *money*, *deposit*.
 
 </Given>
 
@@ -45,27 +32,35 @@ the sense of *bank*.
 
 <Steps>
 
-1. Priors: $P(FIN) = 0.6$, $P(RIV) = 0.4$.
-2. FIN: $\frac{1}{19} \cdot \frac{2}{19} \cdot \frac{6}{19} = \frac{12}{6859}$, times 0.6 gives $0.00105$.
-3. RIV: $\frac{5}{16} \cdot \frac{4}{16} \cdot \frac{2}{16} = \frac{40}{4096}$, times 0.4 gives $0.00391$.
-4. $0.00391 > 0.00105$, so choose RIV.
+1. Score for s1 $= 0.6 \times 0.3 \times 0.2 = 0.036$.
+2. Score for s2 $= 0.4 \times 0.05 \times 0.02 = 0.0004$.
+3. Compare: $0.036 > 0.0004$, so choose s1.
 
 </Steps>
 
 <Answer>
 
-*bank* = river side (RIV).
+*bank* = finance sense (s1).
 
 </Answer>
 
 <Box kind="verify">
 
-Without smoothing FIN would be 0 because `river` never occurred with FIN; with smoothing it stays small but not zero. RIV wins because two of the three clues (river, water) belong to it.
+Normalize: $0.036 / (0.036 + 0.0004) = 0.989$, so s1 has about 99 percent probability, and the two probabilities add to 1. The context words *money* and *deposit* are far more common with the finance sense, so the answer makes sense.
 
 </Box>
 
 </Sum>
 
-**Advantages:** simple, fast, accurate with enough data. **Disadvantage:** needs costly sense-tagged data, and the independence assumption is not true. <Cite id="word-sense-disambiguation-gfg-wsd" />
+```mermaid
+%% caption: Naive Bayes WSD: multiply the sense probability by the probability of each context word, for every sense.
+flowchart LR
+  A["Context words"] --> B["Score s1 = P(s1) x P(words | s1)"]
+  A --> C["Score s2 = P(s2) x P(words | s2)"]
+  B --> D["Pick the larger score"]
+  C --> D
+```
 
-**Conclusion:** WSD is needed for correct translation and search; Naive Bayes chooses the sense with the largest prior times likelihood.
+**Advantage:** simple and fast. **Disadvantage:** needs a sense-labelled corpus, and the independence assumption is not strictly true.
+
+**Conclusion:** Naive Bayes chooses the sense with the highest $P(s) \prod P(c_j \mid s)$.

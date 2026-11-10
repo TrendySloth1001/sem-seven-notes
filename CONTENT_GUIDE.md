@@ -148,3 +148,11 @@ Deep Learning notes and solutions follow the teachers' class files, because the 
 - **Diagrams are the teacher's.** Use the teacher's figures as `<Img>` (at least 3 per note, one per 10-mark architecture or process answer), and redraw any other teacher diagram as mermaid. Crop one clear panel from a dense slide rather than showing the whole sheet, so it reads at phone width. Publish with the figure helper into `public/class/deep-learning/<name>.jpg` and add the record to `images/class-<topic>.json`:
   `{ "id": "class-cnn-filter-steps", "src": "/class/deep-learning/cnn-filter-steps.jpg", "width": 590, "height": 380, "alt": "...", "author": "Deep Learning faculty", "source": "DL_CHP 4, slide 10", "license": "Used with permission" }`
   Use `"author": "Prof. Karishma Raut"` for Module PDF figures. Remove the Wikimedia Commons and d2l.ai images from the topic you rewrite.
+
+## Natural Language Processing: teacher material
+
+NLP follows its class files the same way, under the same rules as the Deep Learning section above, with these differences. The files sit in `classroom/NLP/` (git-ignored): handwritten lecture notes for Modules 1 and 2, typed solved PYQs for Modules 2, 3 and 4 and an assignment solution for Modules 5 and 6 by Apurva Jadhav, the Module 6 slides and the two assignment question banks. `NLP EXP4.pdf` is a student's lab write-up and is not a source.
+
+- Cite only `class-nlp-*` ids from `references/class.json`, with `loc="p. 4"` or `loc="slide 12"`.
+- Figures go to `public/class/natural-language-processing/` with records in `images/class-<topic>.json` (ids `class-<topic>-...`). Use `"author": "NLP faculty"` for the handwritten notes and `"Apurva Jadhav"` for the typed answers and slides; `source` names the file and page, like `"Module 2 handwritten notes, p. 5"` or `"Module 6 slides, slide 10"`.
+- The class files have few printed diagrams, so crop clear panels from the handwritten pages and redraw the rest as mermaid. Every note and every 10-mark answer still needs diagrams.

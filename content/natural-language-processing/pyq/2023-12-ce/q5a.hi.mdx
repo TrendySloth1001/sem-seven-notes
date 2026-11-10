@@ -1,86 +1,32 @@
 ---
-references: [porter-stemmer-def, porter-stemmer-gfg-stemming, porter-stemmer-nltk-stem, porter-stemmer-wiki-stem]
+references: [class-nlp-m2, class-nlp-pyq2]
 ---
 
-**In simple words:** **stemmer** words ke endings kaat deta hai taaki *connect, connected, connecting, connection* sab ek stem, *connect*, ban jayen. **Porter stemmer** (M. F. Porter, 1980) ye suffix-stripping rules ki fixed list se karta hai, jo paanch ordered steps mein lagti hai. Ye dictionary use nahi karta, aur stem real word hona zaroori nahi (*happy* ka *happi* ban jata hai). <Cite id="porter-stemmer-def" /> <Cite id="porter-stemmer-gfg-stemming" />
+**In simple words:** Porter stemmer chhote rules ke set se word endings kaat deta hai, isliye connect, connected aur connecting sab ban jaate hain connect.
 
-**Ye kyun zaroori hai:** search engines aur text classifiers chahte hain ki related word forms ek hi word ginein, isse vocabulary chhoti hoti hai aur recall badhta hai.
+**Definition:** stemming is a simplified form of morphological analysis used to find the root word. Porter stemmer is a simple rule-based algorithm for stemming, jisme 5 sets of rules hain, aur wo speed aur simplicity ke liye jaana jaata hai. Ye English words se suffixes hataata hai, jo information retrieval mein terms ki sankhya kam karta hai (space aur time bachta hai). Ise Martin F. Porter ne banaya. <Cite id="class-nlp-m2" loc="p. 19" /> <Cite id="class-nlp-pyq2" loc="p. 2" />
 
-**Basic idea: measure $m$.** Word ko `[C](VC)^m[V]` ki tarah likho, jahan C consonants ka run aur V vowels ka run hai (Porter ke rule mein consonant ke baad *y* vowel gina jata hai). $m$ VC pairs ginta hai aur batata hai stem kitna lamba hai. Rule tabhi lagta hai jab kaatne ke baad bacha stem kaafi lamba ho.
+**Consonants aur vowels:** consonant wo letter hai jo a, e, i, o, u nahi hai aur wo y nahi hai jo consonant ke baad aaya ho; baaki har letter vowel hai. C matlab consonants ki string aur V vowels ki string. <Cite id="class-nlp-pyq2" loc="p. 2" />
 
-| $m$ | Examples |
-|---|---|
-| 0 | tr, ee, tree, by |
-| 1 | trouble, oats, trees, ivy |
-| 2 | troubles, private, oaten, orrery |
+**Form aur measure:** har word $[C](VC)^m[V]$ hota hai, aur $m$ (measure) VC pairs ki sankhya hai. TREE ka m = 0, TROUBLE aur TRAP ka m = 1, TROUBLES aur PRIVATE ka m = 2, RELATIONAL ka m = 4. <Cite id="class-nlp-m2" loc="p. 20" /> <Cite id="class-nlp-m2" loc="p. 21" />
 
-Conditions: `*v*` (stem mein vowel hai), `*d` (double consonant pe khatam), `*o` (consonant-vowel-consonant pe khatam, last w, x ya y nahi).
+<Img id="class-porter-stemmer-private-relational" caption="PRIVATE (m = 2) aur RELATIONAL (m = 4) consonant aur vowel groups mein." />
+
+**Rule form:** (condition) S1 to S2. Agar word S1 par khatam ho aur S1 se pehle ka stem condition poori kare, to S1 ko S2 se badlo. Example: (m > 1) EMENT to nothing se REPLACEMENT ban jaata hai REPLAC, kyunki REPLAC ka m = 2 hai. <Cite id="class-nlp-pyq2" loc="p. 3" />
 
 ```mermaid
-%% caption: Word paanch ordered steps se guzarta hai; har step apna ek rule lagata hai, wo bhi tabhi jab measure condition poori ho.
+%% caption: Porter stemmer ke paanch steps. Har step ke rules tabhi fire hote hain jab stem par condition sach ho.
 flowchart LR
-  A["Word"] --> B["1a: plurals"]
-  B --> C["1b, 1c: -ed, -ing, -y"]
-  C --> D["2: long suffixes to short, m>0"]
-  D --> E["3: -ical, -ful, -ness, m>0"]
-  E --> F["4: remove suffix, m>1"]
-  F --> G["5: tidy final -e and -ll"]
-  G --> H["Stem"]
+  A["Word"] --> B["1: plurals, -ed, -ing"]
+  B --> C["2: lambe suffixes"]
+  C --> D["3: aur suffixes"]
+  D --> E["4: suffixes hatao"]
+  E --> F["5: aakhri e, ll tidy"]
+  F --> G["Stem"]
 ```
 
-**Steps aur sample rules:**
+**Main rules** (standard; class files sirf rule form deti hain): 1a SSES to SS, IES to I, S to nothing (caresses se caress, ponies se poni, cats se cat); 1b (stem has a vowel) ED ya ING to nothing (motoring se motor); 2 (m > 0) ATIONAL to ATE (relational se relate); 3 (m > 0) FUL to nothing (hopeful se hope); 4 (m > 1) EMENT, MENT, AL aur doosre to nothing (replacement se replac); 5 (m > 1) E to nothing (relate se relat).
 
-| Step | Job | Sample rules | Example |
-|---|---|---|---|
-| 1a | plurals | SSES to SS; IES to I; S removed | caresses to caress; ponies to poni |
-| 1b | -ed, -ing (stem mein vowel chahiye) | ED, ING removed; phir AT to ATE, ya double letters theek | motoring to motor; hopping to hop; filing to file |
-| 1c | y to i (stem mein vowel) | Y to I | happy to happi |
-| 2 | double suffixes, $m>0$ | ATIONAL to ATE; IZATION to IZE; FULNESS to FUL | relational to relate |
-| 3 | $m>0$ | ALIZE to AL; FUL, NESS removed; ICATE to IC | hopeful to hope |
-| 4 | suffix hatao, $m>1$ | AL, ANCE, ER, IC, ABLE, MENT, ION, ISM, ATE, IVE, IZE removed | general to gener |
-| 5 | final e agar $m>1$ (ya $m=1$ aur `*o` nahi); -ll to -l agar $m>1$ | E removed | relate to relat |
+**Example:** generalizations: 1a se generalization, 2 (IZATION to IZE) se generalize, 3 (ALIZE to AL) se general, 4 (AL to nothing) se **gener**.
 
-<Sum>
-
-<Given>
-
-words *generalizations* aur *hopefulness*.
-
-</Given>
-
-<Find>
-
-unke Porter stems, step by step.
-
-</Find>
-
-<Steps>
-
-1. ***generalizations*, step 1a:** S pe khatam, to hata do: *generalization*.
-2. **Step 2:** IZATION to IZE, stem *general* ka $m = 3 > 0$: *generalize*.
-3. **Step 3:** ALIZE to AL, stem *gener* ka $m = 2 > 0$: *general*.
-4. **Step 4:** AL hata, stem *gener* ka $m = 2 > 1$: *gener*. Step 5 ko kuch nahi karna.
-5. ***hopefulness*, step 1a:** SS pe khatam, jo SS hi rehta hai. Steps 1b aur 1c nahi lagte.
-6. **Step 2:** FULNESS to FUL, stem *hope* ka $m = 1 > 0$: *hopeful*.
-7. **Step 3:** FUL hata, stem *hope* ka $m = 1 > 0$: *hope*.
-8. **Step 5a:** stem *hop* ka $m = 1$ aur consonant-vowel-consonant (`*o`) pe khatam, isliye final E rehta hai: *hope*.
-
-</Steps>
-
-<Answer>
-
-*generalizations* ka *gener*; *hopefulness* ka *hope*.
-
-</Answer>
-
-<Box kind="verify">
-
-NLTK ka original Porter algorithm <Cite id="porter-stemmer-nltk-stem" /> in dono words ke liye *gener* aur *hope* deta hai. Measure check: *gener* = g-e-n-e-r yani C V C V C, to (VC)(VC) aur $m = 2$.
-
-</Box>
-
-</Sum>
-
-**Advantages:** fast, simple, dictionary nahi chahiye, bahut use hota hai. **Disadvantages:** over-stemming (*university* aur *universe* dono *univers* ban jaate hain), under-stemming, aur stems non-words hote hain. Iski jagah lemmatization ya Snowball stemmer use ho sakta hai.
-
-**Conclusion:** Porter ka stemmer paanch rule steps mein suffix kaat-ta hai, measure $m$ ki guard ke saath, taaki related words ek stem mein aa jayein.
+**Conclusion:** Porter stemmer fast aur simple hai, par crude hai: stem dictionary word hona zaroori nahi (happy ban jaata hai happi).

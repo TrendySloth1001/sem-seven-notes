@@ -1,65 +1,32 @@
 ---
-references: [text-preprocessing-porter1980, porter-stemmer-def, porter-stemmer-gfg-stemming, porter-stemmer-nltk-stem]
+references: [class-nlp-m2, class-nlp-pyq2]
 ---
 
-**In simple words:** stemming cuts the ending off a word so that *connect, connected, connecting, connection* all become one stem, *connect*. The Porter stemmer (Martin Porter, 1980) does this with a short list of suffix rules applied in five steps, and it needs no dictionary. <Cite id="text-preprocessing-porter1980" /> <Cite id="porter-stemmer-gfg-stemming" />
+**In simple words:** the Porter stemmer cuts word endings with a small set of rules, so connect, connected and connecting all become connect.
 
-**Why it is needed:** a search for *connect* should also find *connected* and *connections*, and one stem makes the vocabulary smaller. The stem need not be a real word (*happy* becomes *happi*). <Cite id="porter-stemmer-def" loc="§1" />
+**Definition:** stemming is a simplified form of morphological analysis used to find the root word. The Porter stemmer is a simple rule-based algorithm for stemming, with 5 sets of rules, known for its speed and simplicity. It removes suffixes from English words, which helps information retrieval by reducing the number of terms (saving space and time). Developed by Martin F. Porter. <Cite id="class-nlp-m2" loc="p. 19" /> <Cite id="class-nlp-pyq2" loc="p. 2" />
 
-**Main idea.** Long endings are removed bit by bit over several steps. A rule is written as (condition) S1 to S2: if the word ends in S1 and the part before it passes the condition, replace S1 by S2. The condition often uses the **measure m**, the number of vowel-consonant groups in the stem (*tree* m=0, *trouble* m=1, *private* m=2). This stops silly cuts: *-ate* goes from *activate* but not from *rate*. When several rules fit, the longest suffix wins. <Cite id="porter-stemmer-def" loc="§2" />
+**Consonants and vowels:** a consonant is a letter other than a, e, i, o, u and other than y preceded by a consonant; every other letter is a vowel. C means a string of consonants and V a string of vowels. <Cite id="class-nlp-pyq2" loc="p. 2" />
+
+**Form and measure:** every word is $[C](VC)^m[V]$, and $m$ (the measure) is the number of VC pairs. TREE has m = 0, TROUBLE and TRAP m = 1, TROUBLES and PRIVATE m = 2, RELATIONAL m = 4. <Cite id="class-nlp-m2" loc="p. 20" /> <Cite id="class-nlp-m2" loc="p. 21" />
+
+<Img id="class-porter-stemmer-private-relational" caption="PRIVATE (m = 2) and RELATIONAL (m = 4) split into consonant and vowel groups." />
+
+**Rule form:** (condition) S1 to S2. If the word ends with S1 and the stem before S1 meets the condition, replace S1 with S2. Example: (m > 1) EMENT to nothing makes REPLACEMENT into REPLAC, since REPLAC has m = 2. <Cite id="class-nlp-pyq2" loc="p. 3" />
 
 ```mermaid
-%% caption: The five Porter steps run in order on every word. Each step may change the word or leave it as it is.
+%% caption: The five steps of the Porter stemmer. Rules in each step fire only if the condition on the stem is true.
 flowchart LR
-  W["Word"] --> S1["Step 1: plurals, -ed, -ing, y to i"]
-  S1 --> S2["Step 2: long suffixes, -ational to -ate"]
-  S2 --> S3["Step 3: -icate, -ful, -ness"]
-  S3 --> S4["Step 4: remove -al, -ment, -ion ... if m>1"]
-  S4 --> S5["Step 5: tidy final e and ll"]
-  S5 --> R["Stem"]
+  A["Word"] --> B["1: plurals, -ed, -ing"]
+  B --> C["2: long suffixes"]
+  C --> D["3: more suffixes"]
+  D --> E["4: remove suffixes"]
+  E --> F["5: tidy up final e, ll"]
+  F --> G["Stem"]
 ```
 
-<Cite id="porter-stemmer-def" loc="steps" />
+**Main rules** (standard; the class files give only the rule form): 1a SSES to SS, IES to I, S to nothing (caresses becomes caress, ponies becomes poni, cats becomes cat); 1b (stem has a vowel) ED or ING to nothing (motoring becomes motor); 2 (m > 0) ATIONAL to ATE (relational becomes relate); 3 (m > 0) FUL to nothing (hopeful becomes hope); 4 (m > 1) EMENT, MENT, AL and others to nothing (replacement becomes replac); 5 (m > 1) E to nothing (relate becomes relat).
 
-<Sum>
+**Example:** generalizations: 1a gives generalization, 2 (IZATION to IZE) gives generalize, 3 (ALIZE to AL) gives general, 4 (AL to nothing) gives **gener**.
 
-<Given>
-
-the words *caresses, ponies, motoring, hopping, happy, relational*.
-
-</Given>
-
-<Find>
-
-the Porter stem of each word, step by step.
-
-</Find>
-
-<Steps>
-
-1. **caresses.** Step 1a: SSES to SS gives *caress*. Nothing else applies.
-2. **ponies.** Step 1a: IES to I gives *poni*.
-3. **motoring.** Step 1b: ING is removed because *motor* has a vowel. Result *motor*.
-4. **hopping.** Step 1b: remove ING to get *hopp*. Clean-up: a double consonant (not l, s, z) becomes single, so *hop*.
-5. **happy.** Step 1c: Y becomes I because *happ* has a vowel. Result *happi*.
-6. **relational.** Step 2: ATIONAL to ATE since *rel* has $m=1>0$, giving *relate*. Step 4 cannot drop ATE ($m$ of *rel* is 1, not above 1). Step 5a: *relat* has $m=2>1$, so the final E goes. Result *relat*. *Reason: each rule needs its measure condition.*
-
-</Steps>
-
-<Answer>
-
-caress, poni, motor, hop, happi, relat.
-
-</Answer>
-
-<Box kind="verify">
-
-Recomputed with NLTK's original-algorithm Porter stemmer: all six match. The first five rules and the step 2 change for *relational* also appear as examples in Porter's paper. Count of *relat*: r-e-l-a-t is C V C V C, so $m=2$. Note that *happi* and *relat* are not real words, which is expected.
-
-</Box>
-
-</Sum>
-
-**Advantages:** fast, simple, no dictionary, good for search. **Disadvantages:** over-stemming (*university* and *universe* both give *univers*), under-stemming (*alumni* and *alumnus* stay apart), English only. <Cite id="porter-stemmer-nltk-stem" />
-
-**Conclusion:** Porter's stemmer strips suffixes in five conditional steps to give a common stem.
+**Conclusion:** the Porter stemmer is fast and simple, but it is crude: the stem need not be a dictionary word (happy becomes happi).

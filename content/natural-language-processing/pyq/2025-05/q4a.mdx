@@ -1,75 +1,42 @@
 ---
-references: [hmm-maxent-crf-slp3-appA, pos-tagging-gfg-hmm, hmm-maxent-crf-gfg-hmm-ml, pos-tagging-wiki-viterbi]
+references: [class-nlp-pyq3]
 ---
 
-**In simple words:** a Hidden Markov Model (HMM) tagger treats the tags as a hidden chain and the words as what we see. It finds the tag sequence that is most probable for the sentence. <Cite id="hmm-maxent-crf-slp3-appA" /> <Cite id="pos-tagging-gfg-hmm" />
+**In simple words:** an HMM guesses what is going on behind the scenes from what we can see. For POS tagging, the tags are hidden and the words are what we see, so the HMM finds the most likely tags for the words. <Cite id="class-nlp-pyq3" loc="p. 2" />
 
-**Why it is needed:** many words have several tags (`book` is a noun or a verb). Looking at the neighbouring tags and the word's usual tag together resolves this.
+**Definition:** a Hidden Markov Model is a statistical model used to understand systems where the actual states are not directly visible, but we can see outcomes that depend on those hidden states. <Cite id="class-nlp-pyq3" loc="p. 2" />
 
-**Parts of the model:**
+**Everyday analogy:** you cannot look outside to see the weather, but you watch what people do (walk, shop, clean). Those actions give clues about the hidden weather.
 
-- **States** = POS tags (hidden), **observations** = words (visible).
-- **Transition probability** $P(t_i \mid t_{i-1})$: how likely a tag follows the previous tag (a determiner is often followed by a noun).
-- **Emission probability** $P(w_i \mid t_i)$: how likely a tag is to produce this word.
-- Both are estimated by counting in a tagged corpus: $P(t_i\mid t_{i-1}) = C(t_{i-1},t_i)/C(t_{i-1})$ and $P(w_i\mid t_i) = C(t_i,w_i)/C(t_i)$.
+<Img id="class-hmm-maxent-crf-weather-hmm" caption="The class example: hidden states Rainy, Sunny and Cloudy with transition probabilities between them, and emission probabilities to the visible activities walk, shop and clean." />
 
-<Img id="img-nlp-2025-05-hmm-states" caption="Circles X1 to X3 are the hidden tags and squares y1 to y4 are the words we see. Arrows a between circles are transition probabilities; arrows b down to squares are emission probabilities." />
+**Components** <Cite id="class-nlp-pyq3" loc="p. 3" />
 
-**Tagging rule.** By Bayes' rule, with two assumptions (a word depends only on its own tag; a tag depends only on the previous tag), the best tags are
+1. **States:** the hidden conditions (in POS tagging, the tags).
+2. **Observations:** the signals we can see (the words).
+3. **Transition probabilities:** how likely it is to move from one hidden state to another (tag to next tag).
+4. **Emission probabilities:** how likely a state is to produce an observation (tag to word). In the example, when the weather is Rainy: walk 0.1, shop 0.4, clean 0.5.
+5. **Initial state probabilities:** how likely the system is to start in each state.
+
+**HMM for POS tagging:** the model is learned by counting in a tagged corpus. <Cite id="class-nlp-pyq3" loc="p. 7" />
 
 $$
-\hat{t}_{1..n} = \arg\max_{t_{1..n}} \prod_{i=1}^{n} P(w_i \mid t_i)\,P(t_i \mid t_{i-1})
+P(t_j \mid t_i) = \frac{\text{Count}(t_i \to t_j)}{\text{Count}(t_i)}, \qquad P(\text{word} \mid \text{tag}) = \frac{\text{Count}(\text{word}, \text{tag})}{\text{Count}(\text{tag})}
 $$
 
-Trying every tag sequence is too slow, so the **Viterbi algorithm** (dynamic programming) keeps the best score for each tag at each word and traces back the best path. <Cite id="pos-tagging-wiki-viterbi" />
+Then the **Viterbi algorithm** finds the tag sequence with the highest probability: $\delta_t(j)$ is the best probability of any tag path that reaches tag $j$ at word $t$, with a back-pointer to the previous tag. At the end we follow the back-pointers to read the tags. <Cite id="class-nlp-pyq3" loc="p. 7" />
 
 ```mermaid
-%% caption: Tags are hidden states linked by transition probabilities. Each tag emits the word we see, with an emission probability.
+%% caption: HMM tagging: learn two tables by counting, then decode with Viterbi.
 flowchart LR
-  S["start"] --> T1["DT"]
-  T1 -->|"transition"| T2["NN"]
-  T2 -->|"transition"| T3["VBZ"]
-  T1 -.->|"emits"| W1["the"]
-  T2 -.->|"emits"| W2["dog"]
-  T3 -.->|"emits"| W3["barks"]
+  A["Tagged corpus"] --> B["Count: transition matrix"]
+  A --> C["Count: emission matrix"]
+  B --> D["Viterbi decoding"]
+  C --> D
+  E["New sentence"] --> D
+  D --> F["Best tag sequence"]
 ```
 
-<Sum>
+**Limitation:** it assumes the next tag depends only on the current tag, and cannot easily use extra clues. <Cite id="class-nlp-pyq3" loc="p. 5" />
 
-<Given>
-
-after `to`, the word `book`. Assumed values: $P(VB\mid TO)=0.8$, $P(NN\mid TO)=0.1$, $P(book\mid VB)=0.002$, $P(book\mid NN)=0.001$.
-
-</Given>
-
-<Find>
-
-the better tag for `book`.
-
-</Find>
-
-<Steps>
-
-1. Score for VB $= 0.8 \times 0.002 = 0.0016$. *Reason: transition times emission.*
-2. Score for NN $= 0.1 \times 0.001 = 0.0001$.
-3. Compare: $0.0016 > 0.0001$, so VB.
-
-</Steps>
-
-<Answer>
-
-`book` is tagged VB (verb), 16 times more likely than NN.
-
-</Answer>
-
-<Box kind="verify">
-
-Ratio: $0.0016 / 0.0001 = 16$. Recomputed the other way: $(0.8/0.1)\times(0.002/0.001) = 8 \times 2 = 16$.
-
-</Box>
-
-</Sum>
-
-**Advantages:** simple, fast, about 95 percent accuracy with enough data, works with Viterbi. **Limitations:** needs a tagged corpus, unknown words get poor emission estimates, sees only the previous tag, and cannot use rich features such as suffixes (MaxEnt and CRF can).
-
-**Conclusion:** an HMM tagger picks the tag sequence with the largest product of transition and emission probabilities, found efficiently by Viterbi.
+**Conclusion:** an HMM tagger uses transition and emission probabilities, learned by counting, and Viterbi to pick the best tags.

@@ -1,80 +1,83 @@
 ---
-references: [cfg-parsing-gfg-cyk, cfg-parsing-wiki-cyk, cfg-parsing-slp3-19, cfg-parsing-gfg-cnf]
+references: [class-nlp-pyq3]
 ---
 
-**In simple words:** CYK (Cocke-Younger-Kasami) ek bottom-up table-filling parser hai. Ise grammar **Chomsky normal form (CNF)** mein chahiye, jahan har rule $A \rightarrow B\,C$ ya $A \rightarrow word$ hota hai. Ye sentence ke saare spans ka table bharta hai, sabse chhote pehle. <Cite id="cfg-parsing-gfg-cyk" /> <Cite id="cfg-parsing-wiki-cyk" /> <Cite id="cfg-parsing-slp3-19" loc="§19.4" />
+**In simple words:** CYK (CKY) algorithm ek table bharkar check karta hai ki grammar sentence bana sakti hai ya nahi. Cell $(i, j)$ mein wo symbols hote hain jo word $i$ se $j$ tak ke words bana sakte hain. Agar top cell mein S ho to sentence accept hota hai. <Cite id="class-nlp-pyq3" loc="p. 8" />
+
+**Algorithm (class jaisa):** <Cite id="class-nlp-pyq3" loc="p. 8" />
+
+1. Diagonal $(i = j)$ ko un productions se bharo jo har word banati hain.
+2. Span length $L = 2$ se $n$ tak, har cell $(i, j)$ ke liye ($j = i + L - 1$) aur har split point $k$ ($i \le k < j$) ke liye: agar production $A \to B\,C$ ho jahan $B$ table$[i][k]$ mein aur $C$ table$[k+1][j]$ mein ho, to $A$ ko table$[i][j]$ mein daalo.
+3. Agar $S$ table$[1][n]$ mein hai, to grammar string generate karti hai.
+
+CYK Chomsky Normal Form (har rule $A \to B\,C$ ya $A \to$ ek word) wali grammar par kaam karta hai, isliye pehle grammar convert hoti hai.
 
 <Sum>
 
 <Given>
 
-Question ka grammar aur sentence *the man read this book* (words 1 se 5).
+sentence "The man read this book" (5 words) aur question wali grammar.
 
 </Given>
 
 <Find>
 
-sentence accept hota hai ya nahi, aur uska parse tree.
+grammar sentence ko accept karti hai ya nahi, aur uska parse tree.
 
 </Find>
 
 <Steps>
 
-1. **CNF mein badlo.** `S → Aux NP VP` ko `S → X1 VP` aur `X1 → Aux NP` mein todo. Unit rules (right side mein ek hi symbol) hatao: `NOM → Noun` ban jaata hai `NOM → book | flight | meal | man`; `VP → Verb` ban jaata hai `VP → book | include | read`; `S → VP` ban jaata hai `S → Verb NP` plus `S → book | include | read`. *Reason: CYK mein right side par sirf do symbols ya ek word allowed hai.*
+1. **CNF mein convert karo.** `S → Aux NP VP` mein 3 symbols hain, isliye todo: `S → Aux X1`, `X1 → NP VP`. Unit rules `S → VP`, `NOM → Noun` aur `VP → Verb` ko words se replace karo: `S → Verb NP | book | include | read`, `NOM → book | flight | meal | man`, `VP → book | include | read`. Baaki rules (`S → NP VP`, `NP → Det NOM`, `NOM → Noun NOM`, `VP → Verb NP`) pehle se CNF mein hain.
+2. **Words (diagonal).** the = Det; man = Noun, NOM; read = Verb, VP, S; this = Det; book = Noun, NOM, Verb, VP, S.
+3. **Lambe spans.** Har span ke liye har split point try karo aur aisa rule $A \to B\,C$ dhundho jisme $B$ left cell mein ho aur $C$ right cell mein. Row = start word, column = end word; `·` matlab empty.
 
-   CNF rules: `S → NP VP | X1 VP | Verb NP | book | include | read`; `X1 → Aux NP`; `NP → Det NOM`; `NOM → Noun NOM | book | flight | meal | man`; `VP → Verb NP | book | include | read`; plus lexicon.
-
-2. **Length 1** (ek-ek word): *the* = Det; *man* = Noun, NOM; *read* = Verb, VP, S; *this* = Det; *book* = Noun, Verb, NOM, VP, S. *Reason: har word ko lexicon aur CNF word rules mein dhundo.*
-3. **Length 2:** *the man* = Det + NOM se **NP**. *man read*: koi rule nahi. *read this*: koi rule nahi. *this book* = Det + NOM se **NP**.
-4. **Length 3:** *the man read* = NP + VP se **S**. *man read this*: none. *read this book* = Verb + NP se **VP, S**.
-5. **Length 4:** *the man read this*: none. *man read this book*: none.
-6. **Length 5:** *the man read this book*: word 2 ke baad split = NP (the man) + VP (read this book) se **S**.
-
-| Span | 1 the | 2 man | 3 read | 4 this | 5 book |
+| | the | man | read | this | book |
 |---|---|---|---|---|---|
-| length 1 | Det | Noun, NOM | Verb, VP, S | Det | Noun, Verb, NOM, VP, S |
-| length 2 | NP | none | none | NP | |
-| length 3 | S | none | S, VP | | |
-| length 4 | none | none | | | |
-| length 5 | **S** | | | | |
+| **the** | Det | NP | S, X1 | · | **S, X1** |
+| **man** | | Noun, NOM | · | · | · |
+| **read** | | | Verb, VP, S | · | VP, S |
+| **this** | | | | Det | NP |
+| **book** | | | | | Noun, NOM, Verb, VP, S |
 
-(Cell us word ke neeche likha hai jahan se span shuru hota hai.)
+- *the man* = Det + NOM se NP (`NP → Det NOM`).
+- *this book* = Det + NOM se NP.
+- *read this book* = Verb + NP se VP aur S (`VP → Verb NP`, `S → Verb NP`).
+- *the man read* = NP + VP se S (`S → NP VP`) aur X1 (`X1 → NP VP`).
+- *man read*, *read this*, *man read this*, *the man read this*, *man read this book* ke liye koi rule nahi, isliye empty rehte hain.
+- Poora sentence: *man* ke baad split: NP (the man) + VP (read this book) se **S** (`S → NP VP`). X1 bhi aata hai, par wo conversion ka sirf helper symbol hai.
 
 </Steps>
 
 <Answer>
 
-Top cell mein S hai, to sentence **accepted** hai. Parse tree: [S [NP [Det the] [NOM [Noun man]]] [VP [Verb read] [NP [Det this] [NOM [Noun book]]]]].
+top cell mein **S** hai (aur helper X1), isliye sentence accept hota hai. Parse: [S [NP [Det the] [NOM [Noun man]]] [VP [Verb read] [NP [Det this] [NOM [Noun book]]]]].
 
 </Answer>
 
 <Box kind="verify">
 
-Top-down se check: S → NP VP; NP → Det NOM → the man; VP → Verb NP → read, phir NP → Det NOM → this book. Ye saare rules grammar mein hain aur theek paanch words order mein dete hain. Table mein cell (1,5) NP (1,2) aur VP (3,5) se bana, wahi split.
+Tree ko original rules se top-down padho: S → NP VP; NP → Det NOM → the NOM; NOM → Noun → man; VP → Verb NP → read NP; NP → Det NOM → this NOM; NOM → Noun → book. Isse "the man read this book" milta hai, aur har rule given grammar mein hai. 5 words ke liye table mein 15 cells hain (5 + 4 + 3 + 2 + 1), aur top cell ka sirf ek split kaam karta hai, isliye sirf ek parse hai.
 
 </Box>
 
 </Sum>
 
 ```mermaid
-%% caption: CYK se mila parse tree 'the man read this book'.
+%% caption: CYK se mila parse tree. Har box ek grammar symbol hai aur leaves words hain.
 flowchart TD
   S["S"] --> NP1["NP"]
   S --> VP["VP"]
   NP1 --> D1["Det: the"]
-  NP1 --> N1["NOM"]
-  N1 --> NN1["Noun: man"]
+  NP1 --> NOM1["NOM"]
+  NOM1 --> N1["Noun: man"]
   VP --> V["Verb: read"]
   VP --> NP2["NP"]
   NP2 --> D2["Det: this"]
-  NP2 --> N2["NOM"]
-  N2 --> NN2["Noun: book"]
+  NP2 --> NOM2["NOM"]
+  NOM2 --> N2["Noun: book"]
 ```
 
-<Cite id="cfg-parsing-gfg-cyk" loc="diagram" />
+<Img id="class-cfg-parsing-cyk-tree" caption="Isi sentence ka class answer wala parse tree (class grammar mein N hai, jahan is question mein NOM hai)." />
 
-**Complexity:** $n$ words ke liye $O(n^3 \cdot |G|)$ time. **Advantage:** saare parses milte hain. **Disadvantage:** CNF chahiye.
-
-**Conclusion:** sentence grammatical hai, kyunki CYK table ke top cell mein S aaya.
-
-Exam mein English mein likho: "CYK fills a table of spans bottom-up; the sentence is accepted if S is in the top cell."
+**Conclusion:** CYK table ko bottom-up bharta hai, top cell mein S milta hai, isliye "The man read this book" accept hota hai.

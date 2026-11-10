@@ -1,78 +1,83 @@
 ---
-references: [cfg-parsing-gfg-cyk, cfg-parsing-wiki-cyk, cfg-parsing-slp3-19, cfg-parsing-gfg-cnf]
+references: [class-nlp-pyq3]
 ---
 
-**In simple words:** CYK (Cocke-Younger-Kasami) is a bottom-up table-filling parser. It needs the grammar in **Chomsky normal form (CNF)**, where each rule is $A \rightarrow B\,C$ or $A \rightarrow word$. It fills a table of all spans of the sentence, shortest first. <Cite id="cfg-parsing-gfg-cyk" /> <Cite id="cfg-parsing-wiki-cyk" /> <Cite id="cfg-parsing-slp3-19" loc="§19.4" />
+**In simple words:** the CYK (CKY) algorithm checks whether a grammar can produce a sentence by filling a table. Cell $(i, j)$ holds the symbols that can generate the words from $i$ to $j$. The sentence is accepted if S is in the top cell. <Cite id="class-nlp-pyq3" loc="p. 8" />
+
+**Algorithm (as in class):** <Cite id="class-nlp-pyq3" loc="p. 8" />
+
+1. Fill the diagonal $(i = j)$ using the productions that produce each word.
+2. For spans of length $L = 2$ to $n$, for each cell $(i, j)$ with $j = i + L - 1$ and every split point $k$ ($i \le k < j$): if there is a production $A \to B\,C$ with $B$ in table$[i][k]$ and $C$ in table$[k+1][j]$, add $A$ to table$[i][j]$.
+3. If $S$ is in table$[1][n]$, the grammar generates the string.
+
+CYK works on a grammar in Chomsky Normal Form (every rule is $A \to B\,C$ or $A \to$ a word), so the grammar is first converted.
 
 <Sum>
 
 <Given>
 
-The grammar in the question and the sentence *the man read this book* (words 1 to 5).
+sentence "The man read this book" (5 words) and the grammar in the question.
 
 </Given>
 
 <Find>
 
-whether the sentence is accepted, and its parse tree.
+whether the grammar accepts the sentence, and its parse tree.
 
 </Find>
 
 <Steps>
 
-1. **Convert to CNF.** Split `S → Aux NP VP` into `S → X1 VP` and `X1 → Aux NP`. Remove the unit rules (one symbol on the right): `NOM → Noun` becomes `NOM → book | flight | meal | man`; `VP → Verb` becomes `VP → book | include | read`; `S → VP` becomes `S → Verb NP` plus `S → book | include | read`. *Reason: CYK allows only two symbols or one word on the right.*
+1. **Convert to CNF.** `S → Aux NP VP` has 3 symbols, so split it: `S → Aux X1`, `X1 → NP VP`. The unit rules `S → VP`, `NOM → Noun` and `VP → Verb` are replaced by the words themselves: `S → Verb NP | book | include | read`, `NOM → book | flight | meal | man`, `VP → book | include | read`. The other rules (`S → NP VP`, `NP → Det NOM`, `NOM → Noun NOM`, `VP → Verb NP`) are already in CNF.
+2. **Words (diagonal).** the = Det; man = Noun, NOM; read = Verb, VP, S; this = Det; book = Noun, NOM, Verb, VP, S.
+3. **Longer spans.** For each span, try every split point and look for a rule $A \to B\,C$ with $B$ in the left cell and $C$ in the right cell. Row = start word, column = end word; `·` means empty.
 
-   CNF rules: `S → NP VP | X1 VP | Verb NP | book | include | read`; `X1 → Aux NP`; `NP → Det NOM`; `NOM → Noun NOM | book | flight | meal | man`; `VP → Verb NP | book | include | read`; plus the lexicon.
-
-2. **Length 1** (one word each): *the* = Det; *man* = Noun, NOM; *read* = Verb, VP, S; *this* = Det; *book* = Noun, Verb, NOM, VP, S. *Reason: look each word up in the lexicon and the CNF word rules.*
-3. **Length 2:** *the man* = Det + NOM gives **NP**. *man read*: no rule. *read this*: no rule. *this book* = Det + NOM gives **NP**.
-4. **Length 3:** *the man read* = NP + VP gives **S**. *man read this*: none. *read this book* = Verb + NP gives **VP, S**.
-5. **Length 4:** *the man read this*: none. *man read this book*: none.
-6. **Length 5:** *the man read this book*: split after word 2 = NP (the man) + VP (read this book) gives **S**.
-
-| Span | 1 the | 2 man | 3 read | 4 this | 5 book |
+| | the | man | read | this | book |
 |---|---|---|---|---|---|
-| length 1 | Det | Noun, NOM | Verb, VP, S | Det | Noun, Verb, NOM, VP, S |
-| length 2 | NP | none | none | NP | |
-| length 3 | S | none | S, VP | | |
-| length 4 | none | none | | | |
-| length 5 | **S** | | | | |
+| **the** | Det | NP | S, X1 | · | **S, X1** |
+| **man** | | Noun, NOM | · | · | · |
+| **read** | | | Verb, VP, S | · | VP, S |
+| **this** | | | | Det | NP |
+| **book** | | | | | Noun, NOM, Verb, VP, S |
 
-(A cell is listed under the word where its span starts.)
+- *the man* = Det + NOM gives NP (`NP → Det NOM`).
+- *this book* = Det + NOM gives NP.
+- *read this book* = Verb + NP gives VP and S (`VP → Verb NP`, `S → Verb NP`).
+- *the man read* = NP + VP gives S (`S → NP VP`) and X1 (`X1 → NP VP`).
+- *man read*, *read this*, *man read this*, *the man read this*, *man read this book* have no rule, so they stay empty.
+- Whole sentence: split after *man*: NP (the man) + VP (read this book) gives **S** (`S → NP VP`). X1 also appears, but it is only a helper symbol made in the conversion.
 
 </Steps>
 
 <Answer>
 
-S is in the top cell, so the sentence is **accepted**. Parse tree: [S [NP [Det the] [NOM [Noun man]]] [VP [Verb read] [NP [Det this] [NOM [Noun book]]]]].
+the top cell contains **S** (and the helper X1), so the sentence is accepted. Parse: [S [NP [Det the] [NOM [Noun man]]] [VP [Verb read] [NP [Det this] [NOM [Noun book]]]]].
 
 </Answer>
 
 <Box kind="verify">
 
-Check by top-down: S → NP VP; NP → Det NOM → the man; VP → Verb NP → read, then NP → Det NOM → this book. These rules are all in the grammar and give exactly the five words in order. In the table, the entry in cell (1,5) came from NP (1,2) and VP (3,5), the same split.
+Read the tree top-down with the original rules: S → NP VP; NP → Det NOM → the NOM; NOM → Noun → man; VP → Verb NP → read NP; NP → Det NOM → this NOM; NOM → Noun → book. This gives "the man read this book", and each rule is in the given grammar. The table has 15 cells for 5 words (5 + 4 + 3 + 2 + 1), and only one split of the top cell works, so there is just one parse.
 
 </Box>
 
 </Sum>
 
 ```mermaid
-%% caption: Parse tree found by CYK for 'the man read this book'.
+%% caption: The parse tree found by CYK. Each box is a grammar symbol and the leaves are the words.
 flowchart TD
   S["S"] --> NP1["NP"]
   S --> VP["VP"]
   NP1 --> D1["Det: the"]
-  NP1 --> N1["NOM"]
-  N1 --> NN1["Noun: man"]
+  NP1 --> NOM1["NOM"]
+  NOM1 --> N1["Noun: man"]
   VP --> V["Verb: read"]
   VP --> NP2["NP"]
   NP2 --> D2["Det: this"]
-  NP2 --> N2["NOM"]
-  N2 --> NN2["Noun: book"]
+  NP2 --> NOM2["NOM"]
+  NOM2 --> N2["Noun: book"]
 ```
 
-<Cite id="cfg-parsing-gfg-cyk" loc="diagram" />
+<Img id="class-cfg-parsing-cyk-tree" caption="The class answer's parse tree for the same sentence (the class grammar uses N where this question uses NOM)." />
 
-**Complexity:** $O(n^3 \cdot |G|)$ time for $n$ words. **Advantage:** finds all parses. **Disadvantage:** needs CNF.
-
-**Conclusion:** the sentence is grammatical, since S fills the top cell of the CYK table.
+**Conclusion:** CYK fills the table bottom-up, finds S in the top cell, and so accepts "The man read this book".

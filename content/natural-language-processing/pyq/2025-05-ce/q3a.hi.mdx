@@ -1,39 +1,26 @@
 ---
-references: [word-sense-disambiguation-slp3-I, word-sense-disambiguation-slp3-B, word-sense-disambiguation-gfg-wsd, word-sense-disambiguation-tp-wsd]
+references: [class-nlp-pyq4]
 ---
 
-**In simple words:** bahut se words ke ek se zyada meaning hote hain (*bank* = paise ki jagah ya nadi ka kinara). **Word sense disambiguation (WSD)** wo meaning chunta hai jo sentence mein fit hota hai. <Cite id="word-sense-disambiguation-slp3-I" loc="§I.4" /> <Cite id="word-sense-disambiguation-gfg-wsd" />
+**In simple words:** WSD isliye chahiye kyunki ek word ke kai meanings ho sakte hain, aur Naive Bayes wo meaning chunta hai jo aas-paas ke words ko dekhte hue sabse probable ho.
 
-**i) WSD ki zaroorat kyun**
+**(i) WSD ki zaroorat:** bahut se words ambiguous hote hain, isliye context ke saath meaning badalti hai ("deposited money in the bank" versus "the river bank"). WSD NLP system ko aas-paas ke words analyze karke intended sense dhundhne deta hai, jisse language understanding behtar hoti hai aur ambiguity kam hoti hai. <Cite id="class-nlp-pyq4" loc="p. 5" />
 
-- **Machine translation:** *bank* ke do senses ke liye Hindi mein alag words hain, galat sense se galat translation aata hai.
-- **Search aur question answering:** "bass fishing" ke liye music pages nahi aane chahiye.
-- **Text-to-speech aur classification:** *bass* do tarah se padha jaata hai; sense se topic bhi decide hota hai.
-- **Chatbots aur information extraction** ko sahi action ke liye sahi meaning chahiye. <Cite id="word-sense-disambiguation-tp-wsd" />
+**(ii) Naive Bayes supervised algorithm** *(class files mein Naive Bayes nahi hai; ye standard short explanation hai)*
 
-**ii) Naive Bayes supervised algorithm**
+Ye supervised method hai: ye un sentences se seekhta hai jinme sense pehle se mark hai. Senses $s_1, s_2, \ldots$ wale word aur context words $c_1, c_2, \ldots, c_n$ ke liye ye wo sense chunta hai
 
-*Idea:* un sentences se seekho jinpe sahi sense pehle se laga hai, aur paas ke words ko clue ki tarah use karo. Wo sense $s$ chuno jiska score sabse zyada ho:
+$$
+\hat{s} = \arg\max_{s} \; P(s) \prod_{j=1}^{n} P(c_j \mid s)
+$$
 
-$$\hat{s} = \arg\max_s \; P(s) \prod_{j} P(w_j \mid s)$$
-
-$P(s)$ batata hai sense kitna common hai (prior). $P(w_j \mid s)$ batata hai context word $w_j$ us sense ke saath kitni baar aata hai (likelihood). "Naive" matlab sense pata hone par context words ko independent maante hain. Add-one smoothing: $P(w \mid s) = \frac{C(w,s)+1}{N_s + |V|}$, jahan $N_s$ sense $s$ ke total words aur $|V|$ vocabulary size hai. <Cite id="word-sense-disambiguation-slp3-B" />
-
-```mermaid
-%% caption: Naive Bayes WSD. Training mein sirf counting; testing mein prior ko har context word ki likelihood se multiply karte hain.
-flowchart LR
-  A["Sense-tagged sentences"] --> B["Count senses and context words"]
-  B --> C["P(s) and P(w given s) with smoothing"]
-  D["New sentence: context words"] --> E["Score each sense: P(s) x product of P(w given s)"]
-  C --> E
-  E --> F["Highest score = chosen sense"]
-```
+$P(s)$ batata hai ki training data mein sense kitni baar aata hai, aur $P(c_j \mid s)$ batata hai ki context word $c_j$ us sense ke saath kitni baar aata hai. "Naive" ka matlab hai ki context words ko ek doosre se independent maana jaata hai. Dono counting se milte hain.
 
 <Sum>
 
 <Given>
 
-Word *bank*, practice ke liye banaye hue counts: 6 money-sense (FIN) aur 4 river-sense (RIV) training sentences; $|V| = 6$. Word counts: FIN mein money 5, water 1, river 0 (total 13); RIV mein money 1, water 3, river 4 (total 10). Context: *river, water, money*.
+word *bank* ke senses s1 (finance) aur s2 (river). Labelled corpus se: $P(s_1) = 0.6$, $P(s_2) = 0.4$; $P(\text{money} \mid s_1) = 0.3$, $P(\text{money} \mid s_2) = 0.05$; $P(\text{deposit} \mid s_1) = 0.2$, $P(\text{deposit} \mid s_2) = 0.02$. Context: *money*, *deposit*.
 
 </Given>
 
@@ -45,29 +32,35 @@ Word *bank*, practice ke liye banaye hue counts: 6 money-sense (FIN) aur 4 river
 
 <Steps>
 
-1. Priors: $P(FIN) = 0.6$, $P(RIV) = 0.4$.
-2. FIN: $\frac{1}{19} \cdot \frac{2}{19} \cdot \frac{6}{19} = \frac{12}{6859}$, 0.6 se multiply karne par $0.00105$.
-3. RIV: $\frac{5}{16} \cdot \frac{4}{16} \cdot \frac{2}{16} = \frac{40}{4096}$, 0.4 se multiply karne par $0.00391$.
-4. $0.00391 > 0.00105$, to RIV chuno.
+1. s1 ka score $= 0.6 \times 0.3 \times 0.2 = 0.036$.
+2. s2 ka score $= 0.4 \times 0.05 \times 0.02 = 0.0004$.
+3. Compare: $0.036 > 0.0004$, isliye s1 chuno.
 
 </Steps>
 
 <Answer>
 
-*bank* = river side (RIV).
+*bank* = finance sense (s1).
 
 </Answer>
 
 <Box kind="verify">
 
-Smoothing ke bina FIN 0 hota kyunki `river` FIN ke saath kabhi nahi aaya; smoothing se wo chhota rehta hai par 0 nahi. RIV isliye jeetta hai kyunki teen mein se do clues (river, water) uske hain.
+Normalize karo: $0.036 / (0.036 + 0.0004) = 0.989$, yaani s1 ki probability lagbhag 99 percent hai, aur dono probabilities ka sum 1 hai. Context words *money* aur *deposit* finance sense ke saath bahut zyaada common hain, isliye answer samajh mein aata hai.
 
 </Box>
 
 </Sum>
 
-**Advantages:** simple, fast, kaafi data ho to accurate. **Disadvantage:** sense-tagged data banana mehenga hai, aur independence assumption sach nahi hota. <Cite id="word-sense-disambiguation-gfg-wsd" />
+```mermaid
+%% caption: Naive Bayes WSD: har sense ke liye sense ki probability ko har context word ki probability se multiply karo.
+flowchart LR
+  A["Context words"] --> B["Score s1 = P(s1) x P(words | s1)"]
+  A --> C["Score s2 = P(s2) x P(words | s2)"]
+  B --> D["Bada score chuno"]
+  C --> D
+```
 
-**Conclusion:** sahi translation aur search ke liye WSD zaroori hai; Naive Bayes wo sense chunta hai jiska prior times likelihood sabse bada ho.
+**Advantage:** simple aur tez. **Disadvantage:** sense-labelled corpus chahiye, aur independence assumption poori tarah sach nahi.
 
-Exam mein English mein likho: "Naive Bayes picks the sense that maximises P(s) times the product of P(w | s) over the context words."
+**Conclusion:** Naive Bayes sabse bada $P(s) \prod P(c_j \mid s)$ wala sense chunta hai.

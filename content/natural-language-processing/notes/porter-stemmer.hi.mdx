@@ -1,682 +1,289 @@
 ---
 title: "Stemming and the Porter stemmer"
 module: 2
-summary: "Stemming words ke ending kaat deta hai taaki related forms (connect, connected, connecting, connection) ek hi stem (connect) ban jaayein. Porter stemmer ye kaam lagbhag 60 chhote rules se paanch steps mein karta hai; har rule tabhi chalta hai jab bacha hua part kaafi lamba ho, jo m (vowel-consonant groups ki ginti) se naapa jaata hai. Is note mein idea, har rule, teen poore traces, stemming ki galtiyan, aur Porter ka Lovins, Snowball aur Lancaster se comparison hai."
+summary: "Stemming word ka ending kaat kar uska root dhundta hai. Porter stemmer ek simple rule-based algorithm hai jisme paanch sets of rules hain, aur wo speed aur simplicity ke liye jaana jaata hai. Har rule (condition) S1 to S2 form mein hota hai, aur condition mostly word ke measure m ka hota hai, jo word ko consonants (C) aur vowels (V) mein likhkar nikalte hain. Class consonants, vowels, form [C](VC)^m[V], measure aur rule form padhati hai; note standard rule steps (chhote rakhe gaye) aur teen poore traces jodta hai."
 keyIdeas:
-  - "Stemming rules se suffix kaatkar stem tak pahunchta hai; stem real word hona zaroori nahi (happy se happi ban jaata hai)."
-  - "Ye isliye use hota hai ki 'connect' search karne par 'connected', 'connecting' aur 'connections' bhi mil jaayein, aur vocabulary chhoti ho jaaye."
-  - "Lemmatization alag hai: ye dictionary aur part of speech use karke real word deta hai (better se good); stemming tez hai lekin kaccha."
-  - "Porter (1980) paanch steps mein kaam karta hai (1 plurals aur -ed/-ing, 2 aur 3 lambe derivational suffixes, 4 suffix removal, 5 tidy-up); lambe suffixes ek saath nahi, thoda-thoda karke hatte hain."
-  - "Rules ka form (condition) S1 to S2 hota hai; ek group mein sirf sabse lamba matching S1 wala rule try hota hai, aur condition aam taur par stem ke measure m ko test karti hai."
-  - "Measure m stem ke vowel-consonant (VC) groups ginta hai: tree ka m = 0, trouble ka m = 1, private ka m = 2. Suffix tabhi hatta hai jab bacha hua stem bahut chhota na ho."
-  - "Stemming do tarah ki galti karta hai: over-stemming (universe, university aur universal sab univers ban jaate hain) aur under-stemming (alumni aur alumna alag rehte hain)."
-  - "Lovins pehla stemmer hai, Snowball (Porter2) Porter ka sudhra hua version hai, aur Lancaster (Paice/Husk) sabse aggressive hai."
+  - "Stemming is a simplified form of morphological analysis which is basically used to find the root word."
+  - "Porter stemmer is a simple rule-based algorithm for stemming. It consists of 5 sets of rules and is known for its speed and simplicity."
+  - "Consonant: a letter other than a, e, i, o, u and other than y preceded by a consonant. Baaki sab vowel hai."
+  - "Har word ka form [C](VC)^m[V] hota hai. C one or more consonants ki string, V one or more vowels ki string, aur m, measure, VC pairs ginta hai."
+  - "Measure ke examples: TREE m = 0, TROUBLE m = 1, TRAP m = 1, TROUBLES m = 2, PRIVATE m = 2, RELATIONAL m = 4."
+  - "Rule ka form (condition) S1 to S2: agar word S1 par khatam ho aur S1 se pehle ka stem condition poori kare to S1 ko S2 se badlo. Example: (m > 1) EMENT to nothing, isliye REPLACEMENT ban jaata hai REPLAC."
+  - "Information retrieval mein use hota hai: terms ki sankhya kam hoti hai, isse space aur time bachta hai."
 references:
-  - porter-stemmer-def
-  - text-preprocessing-porter1980
-  - porter-stemmer-snowball
-  - porter-stemmer-snowball-porter2
-  - text-preprocessing-nltk-porter
-  - porter-stemmer-nltk-stem
-  - porter-stemmer-nltk-snowball
-  - porter-stemmer-nltk-lancaster
-  - text-preprocessing-nltk-book3
-  - porter-stemmer-wiki-stem
-  - text-preprocessing-wiki-lem
-  - text-preprocessing-ibm-stemlem
-  - porter-stemmer-gfg-stemming
-  - porter-stemmer-gfg-stem-nltk
-  - porter-stemmer-av-stemming
+  - class-nlp-m2
+  - class-nlp-pyq2
+  - class-nlp-asol
 ---
 
-Naye ideas se pehle, ye purane ideas chahiye honge. Agar pehle se aate hain, to agle section pe jao.
+Naye ideas se pehle wo purani baatein jo chahiye. Agar aapko pata hai to seedha agle section par jao.
 
-## Pehle basics
+## Basics pehle
 
-- **Word form** woh word hai jaisa likha jaata hai: *connect*, *connected*, *connecting*. **Suffix** word ke end mein judne wale letters ka group hai: *-ed*, *-ing*, *-ion*, *-s*. **Prefix** shuru mein judta hai (*un-*, *re-*).
-- **Stem** suffix hatane ke baad bacha main part hai. **Root** ya **lemma** word ka dictionary form hai (*running* ke liye *run*, *better* ke liye *good*).
-- **Inflection** word ko sirf grammar ke hisaab se badalta hai aur basic meaning wahi rehta hai (*cat*, *cats*; *walk*, *walked*). **Derivation** naya word banata hai, aksar nayi class ka (*happy*, *happiness*; *act*, *action*). Details <Syl m="2" /> "Morphology, finite automata and finite state transducers" mein hain.
-- **Vowel** a, e, i, o ya u hai; baaki har letter **consonant** hai. (Porter ka y ke baare mein ek chhota rule hai, neeche diya hai.)
-- **Information retrieval (IR)** matlab query se match karte documents dhoondhna, jaise search engine karta hai. **Vocabulary** text ke collection ke alag-alag words ki list hai. **Tokenization** text ko pehle words mein todta hai; stemming un tokens par chalta hai (topic <Syl m="2" /> "Text pre-processing" dekho).
+- **Vowel** a, e, i, o, u hain. **Consonant** baaki har letter hai. (y ke liye ek special case neeche hai.)
+- **Stem** word ka main part hai jab uska ending kaat diya jaye. Ending **suffix** hai: -ing, -ed, -s, -ment. <Cite id="class-nlp-m2" loc="p. 19" />
+- **Information retrieval (IR)** matlab search ke liye documents dhundna. Agar aap "connect" search karte ho to "connected" aur "connecting" bhi chahiye.
 
-## Stemming kya hai
-
-**Ye kya hai.** Stemming kisi word ko uske ending kaatkar (aur kabhi-kabhi kuch chhote repair rules lagakar) stem tak ghatane ka process hai. *connect, connected, connecting, connection, connections* jaise related forms sab ek stem *connect* ban jaate hain. <Cite id="porter-stemmer-def" loc="§1" /> <Cite id="porter-stemmer-wiki-stem" /> <Cite id="porter-stemmer-gfg-stemming" />
-
-**Stem real word hona zaroori nahi.** Stem sirf words ke group ka label hai. Porter stemmer *happy* ko *happi* aur *troubled* ko *troubl* bana deta hai. Isse fark nahi padta, bas har related word ko wahi label mile. <Cite id="porter-stemmer-av-stemming" />
-
-**Rozmarra ki misaal.** Ek library socho jo ek author ki saari books ek shelf pe rakhti hai. Shelf ka label poora sentence hona zaroori nahi. Bas har book ke liye same hona chahiye. Stem words ke parivaar ka shelf label hai.
+## Stemming kya hai?
 
 <Box kind="definition">
 
-**Stemming** ek kaccha, rule-based tarika hai jisse kisi word ke alag-alag forms ko suffix hatakar ek common base form (stem) mein badla jaata hai, taaki program unhe ek hi term maane.
+**Stemming** is a simplified form of morphological analysis which is basically used to find the root word. <Cite id="class-nlp-m2" loc="p. 19" />
 
 </Box>
 
-<Img id="img-nlp-n1-morph-tree" caption="Word = stem + affixes. 'independently' ka stem 'depend' hai; prefix 'in-' aur suffixes '-ent', '-ly' upar se jode gaye hain. Suffix-stripping stemmer inhe ulte order mein hataata hai." />
+**Porter stemmer** stemming ke liye ek simple rule-based algorithm hai. Ismein 5 sets of rules order mein lagte hain, aur wo apni speed aur simplicity ke liye jaana jaata hai. <Cite id="class-nlp-m2" loc="p. 19" /> Ye English word se suffixes hatakar stem nikalta hai, jo IR mein kaam aata hai: system kam terms rakhta hai, isse space aur time dono bachte hain. Ise British computer scientist Martin F. Porter ne banaya. <Cite id="class-nlp-pyq2" loc="p. 2" />
 
-## Stemming kyun zaroori hai
+<Img id="class-porter-stemmer-intro" caption="Teacher ke notes: stemming root word dhundta hai; Porter stemmer rule-based hai, 5 sets of rules hain, aur speed aur simplicity ke liye jaana jaata hai. Consonant ki definition yahan se shuru hoti hai." />
 
-1. **Behtar search.** Jo user *connect* search karta hai wo *connected* ya *connections* wale pages bhi chahta hai. Agar har form alag term ho to search unhe miss kar deta hai. Porter ne apna algorithm isi kaam ke liye likha tha. <Cite id="porter-stemmer-def" loc="§1" />
-2. **Chhoti vocabulary.** Kai forms ek ho jaate hain, to index aur models chhote ho jaate hain. Porter ke test mein 10,000 words ki vocabulary stemming se lagbhag ek-tihai ghat gayi (6,370 alag stems). <Cite id="porter-stemmer-def" />
-3. **Simple pre-processing.** Words gin-ne, text classify karne ya topic modelling se pehle ye ek tez normalization step hai. <Cite id="porter-stemmer-av-stemming" /> <Cite id="text-preprocessing-ibm-stemlem" />
-
-<Img id="img-nlp-n1-heaps" caption="Chhota vocabulary kyun accha hai: text badhne par alag words ki ginti badhti rehti hai. Stemming ek word ke forms ko milaakar ye ginti kam karta hai." />
-
-## Stemming versus lemmatization
-
-**Lemmatizer** word ko dictionary mein dekhta hai (aur uska part of speech use karta hai) aur real word, yaani lemma, deta hai. Stemmer sirf spelling rules follow karta hai aur sentence kabhi nahi dekhta. <Cite id="text-preprocessing-wiki-lem" /> <Cite id="text-preprocessing-ibm-stemlem" />
-
-| Point | Stemming | Lemmatization |
-|---|---|---|
-| Method | Rules se suffix kaatna | Dictionary lookup plus part of speech |
-| Output | Stem, aksar word nahi (*studies* se *studi*) | Real word, lemma (*studies* se *study*) |
-| Irregular forms | Nahi sambhaal paata (*went* *went* hi rehta hai) | Sambhaalta hai (*went* se *go*, *better* se *good*) |
-| Context | Koi nahi; ek time pe ek word | Part of speech use karta hai (*meeting* noun ya verb) |
-| Speed | Tez aur simple | Dheema; WordNet jaisi dictionary chahiye |
-| Typical use | Search aur indexing | Vocabulary banana, meaning-sensitive tasks |
-
-NLTK book real text par fark dikhati hai: Porter stemmer *lying* ko *lie* banata hai aur *women* waisa hi rehta hai, jabki WordNet lemmatizer *women* ko *woman* banata hai. <Cite id="text-preprocessing-nltk-book3" loc="§3.6" />
-
-<Img id="img-nlp-n1-eustagger" caption="Lemmatizer ka use (Basque example): har word ke neeche uska lemma aur category tag hai. Stemmer sirf kata hua string deta, tag nahi." />
-
-## Stemmers ke types
-
-| Stemmer | Idea | Remark |
-|---|---|---|
-| Lovins (1968) | Ek pass; lambi list se sabse lamba matching suffix hatao, phir recoding rules se stem theek karo | Pehla published stemmer. <Cite id="porter-stemmer-wiki-stem" /> |
-| Porter (1980) | Chhote rules ke paanch steps, har ek ki stem par condition | English ke liye de facto standard; ye note. <Cite id="text-preprocessing-porter1980" /> |
-| Snowball / Porter2 | Porter ka khud ka sudhra hua version, Snowball language mein likha | Original ki galtiyan theek karta hai; Porter practical kaam ke liye ise recommend karte hain. <Cite id="porter-stemmer-snowball-porter2" /> <Cite id="porter-stemmer-nltk-snowball" /> |
-| Lancaster (Paice/Husk) | Rules ki ek table baar-baar lagti hai | Sabse aggressive; stems aksar bahut chhote ho jaate hain. <Cite id="porter-stemmer-nltk-lancaster" /> <Cite id="porter-stemmer-av-stemming" /> |
-
-## Porter stemmer: main idea
-
-Martin Porter ne ye algorithm 1980 mein information retrieval ke liye publish kiya. Ismein dictionary nahi hai. Ismein suffix rules ki list hai aur har suffix ke liye ek condition, jisme use hatana allowed hai. <Cite id="text-preprocessing-porter1980" /> <Cite id="porter-stemmer-def" loc="§1" />
-
-Do ideas isse chalate hain:
-
-- **Complex suffixes thoda-thoda karke hatte hain.** *-ization* jaisa lamba ending ek hi rule mein nahi hai. Step 2 *-ization* ko *-ize* banata hai, Step 3 *-alize* ko *-al* banata hai, aur Step 4 *-al* hata deta hai. Har step chhota hai, isliye rule list chhoti rehti hai. <Cite id="porter-stemmer-def" loc="§2" />
-- **Suffix tabhi hatta hai jab bacha hua stem kaafi lamba ho.** Ye **measure m** se naapa jaata hai (agla section). Isse bekaar cuts rukte hain: *activate* se *-ate* hat jaata hai (*activ* milta hai) lekin *rate* se nahi.
+Example: connect, connected, connecting, connection aur connections sab ban jaate hain **connect**, isliye ek search sabko dhundh leta hai. Ye syllabus <Syl m="2" /> hai.
 
 ```mermaid
-%% caption: Porter stemmer ke paanch steps. Word har step se order mein guzarta hai; har step use badal bhi sakta hai ya chhod bhi sakta hai. Shuru ke steps plurals aur -ed/-ing sambhaalte hain; beech ke steps lambe derivational endings chhote karte hain; aakhri step tidy-up karta hai.
+%% caption: Porter stemmer ek picture mein. Paanch steps ke rules ek ke baad ek lagte hain aur suffix tabhi kaatte hain jab stem par condition sach ho.
 flowchart LR
-  W["Word"] --> S1["Step 1: plurals, -ed, -ing, y to i"]
-  S1 --> S2["Step 2: long suffixes, e.g. -ational to -ate"]
-  S2 --> S3["Step 3: -icate, -ful, -ness, ..."]
-  S3 --> S4["Step 4: remove -al, -ance, -ment, -ion, ..."]
-  S4 --> S5["Step 5: drop final e, double l"]
-  S5 --> R["Stem"]
+  A["Word, jaise generalizations"] --> B["Step 1: plurals, -ed, -ing"]
+  B --> C["Step 2: lambe suffixes"]
+  C --> D["Step 3: aur suffixes"]
+  D --> E["Step 4: suffixes hatao"]
+  E --> F["Step 5: aakhri e aur ll tidy"]
+  F --> G["Stem: gener"]
 ```
 
-<Cite id="porter-stemmer-snowball" loc="the steps" />
+## Consonants aur vowels
 
-## Consonants, vowels aur measure m
+Class exact rule deti hai. <Cite id="class-nlp-m2" loc="p. 19" /> <Cite id="class-nlp-pyq2" loc="p. 2" />
 
-**Consonant aur vowel.** Letter **vowel** hai agar wo a, e, i, o ya u hai, ya **y jo consonant ke baad aaye**. Baaki har letter **consonant** hai. To *toy* mein consonants t aur y hain (y vowel o ke baad hai), lekin *by* aur *syzygy* mein consonant ke baad aane wala y vowel ginta hai. <Cite id="porter-stemmer-def" loc="§2" />
+- **Consonant** wo letter hai jo vowels a, e, i, o, u nahi hai aur wo y nahi hai jo consonant ke baad aaya ho.
+- Jo letter consonant nahi hai wo **vowel** hai. To y vowel hota hai jab wo consonant ke baad aaye, aur consonant hota hai jab vowel ke baad aaye.
+- TOY mein consonants T aur Y hain (Y vowel O ke baad hai). SYZYGY mein S, Z aur G hain (har Y consonant ke baad hai, isliye wo Y vowel hain).
+- One or more consonants ki string **C** likhi jaati hai; one or more vowels ki string **V**.
 
-**Word ki shape.** Consonant ke liye c aur vowel ke liye v likho, aur repeats ko merge karo (consonants ka run ek **C**, vowels ka run ek **V**). Tab har word ka form ye hota hai
+## Measure m
 
-$$
-[C](VC)^m[V]
-$$
+Kisi bhi word ke chaar forms mein se ek hota hai. <Cite id="class-nlp-pyq2" loc="p. 2" />
 
-jahan square brackets ka matlab hai ki wo part absent ho sakta hai. Number $m$ **measure** hai: word mein kitne VC groups hain. $m = 0$ ka matlab word mein koi vowel-consonant pair nahi.
+| Form | Example |
+|---|---|
+| C V C V ... C | collection, management |
+| C V C V ... V | conclude, revise |
+| V C V C ... C | entertainment, illumination |
+| V C V C ... V | illustrate, abundance |
 
-**m kaise nikaalte hain, step by step.**
+Sab ek formula mein fit hote hain. <Cite id="class-nlp-m2" loc="p. 20" />
 
-1. Har letter ko v ya c mark karo (y rule yaad rakho).
-2. Repeated letters merge karo: *ccvv* se C V.
-3. V ke baad C ke pairs gino. Wahi $m$ hai.
+<Box kind="definition">
 
-| m | Examples (Porter se) | Shape |
-|---|---|---|
-| 0 | tr, ee, tree, y, by | C, V, CV, V, CV |
-| 1 | trouble, oats, trees, ivy | CVCV, VC, CVC, VCV |
-| 2 | troubles, private, oaten, orrery | CVCVC, CVCVCV, VCVC, VCVCV |
-
-<Sum>
-
-<Given>
-
-words *tree*, *oats*, *trouble*, *private*, *orrery*.
-
-</Given>
-
-<Find>
-
-har word ka measure $m$.
-
-</Find>
-
-<Steps>
-
-1. **tree.** Letters: t=c, r=c, e=v, e=v. Merged: C V. V ke baad C nahi, to $m = 0$. *Reason: ek consonant group ke baad vowel group par khatam hone wale word mein koi VC pair nahi hota.*
-2. **oats.** Letters: o=v, a=v, t=c, s=c. Merged: V C. Ek VC pair, to $m = 1$.
-3. **trouble.** t,r = c; o,u = v; b = c; l = c; e = v. Merged: C V C V. Pairs: V ke baad C ek baar (ou phir bl). Aakhri V ke baad koi C nahi. To $m = 1$.
-4. **private.** p,r = c; i = v; v = c; a = v; t = c; e = v. Merged: C V C V C V. Pairs: (i,v) aur (a,t), to $m = 2$.
-5. **orrery.** o = v; r,r = c; e = v; r = c; consonant ke baad y = v. Merged: V C V C V. Pairs: (o,rr) aur (e,r), to $m = 2$.
-
-</Steps>
-
-<Answer>
-
-tree 0, oats 1, trouble 1, private 2, orrery 2.
-
-</Answer>
-
-<Box kind="verify">
-
-Ye paanchon values Porter ke paper mein chhapi lists se milti hain (tree $m=0$; oats aur trouble $m=1$; private aur orrery $m=2$). Dusra check: un vowel groups ko gino jinke baad consonant aata hai: private mein v se pehle "i" aur t se pehle "a" hai, yaani do. <Cite id="porter-stemmer-def" loc="§2" />
+**Form of a word:** $[C](VC)^m[V]$, jahan $C$ one or more consonants ki string hai, $V$ one or more vowels ki string, aur $m$ word ya word part ka **measure** hai, yaani $VC$ pairs ki sankhya. <Cite id="class-nlp-m2" loc="p. 20" />
 
 </Box>
 
-</Sum>
+<Img id="class-porter-stemmer-form-measure" caption="Form [C][VC]^m[V] apne parts ke naam ke saath. (Notes ki pehli line mein y preceded by vowels likha hai, par sahi rule y preceded by a consonant hai, jaise pichhle page aur typed answers mein hai.)" />
 
-## Rules mein use hone wali conditions
+**m kaise nikaalein (teen steps).**
 
-Rules **(condition) S1 to S2** form mein likhe hote hain: agar word S1 pe khatam hota hai aur S1 se pehle ka stem condition poori karta hai, to S1 ko S2 se badal do. Jaise `(m>1) EMENT` ko nothing se badalna *replacement* ko *replac* bana deta hai, kyunki *replac* ka $m = 2$ hai. <Cite id="porter-stemmer-def" loc="§2" />
+1. Har consonant letter ke liye C aur har vowel letter ke liye V likho.
+2. Barabar letters ke run ko ek mein merge karo: CC ban jaata hai C, VV ban jaata hai V.
+3. Ginti karo ki V ke baad kitni baar C aata hai. Wahi m hai.
 
-| Symbol | Matlab | Example |
-|---|---|---|
-| `m>0`, `m>1`, `m=1` | Stem ka measure | `m>1` *replac* ke liye true, *rel* ke liye false |
-| `*v*` | Stem mein vowel hai | *plastered* mein *plaster*; *bled* mein *bl* ke liye false |
-| `*d` | Stem double consonant par khatam hota hai | *-tt*, *-ss* |
-| `*o` | Stem consonant-vowel-consonant par khatam hota hai, aur aakhri consonant w, x ya y nahi | *-wil*, *-hop* |
-| `*S`, `*T`, `*L` | Stem us letter par khatam hota hai | Step 4 aur 5 mein use |
+<Img id="class-porter-stemmer-tree-trouble" caption="TREE: C V, isliye m = 0. TROUBLE: C V C V, jo [C](VC)[V] likha jaata hai, isliye m = 1." />
 
-**Longest-match rule.** Ek ke neeche ek likhe rules ke group mein sirf ek rule chalta hai: jiska S1 word ke saath **sabse lamba match** hai. Agar us rule ki condition fail ho jaaye, to us group se word waisa hi rehta hai; chhota rule try nahi hota. Example: `SSES to SS`, `IES to I`, `SS to SS`, `S to nothing` ke saath *caresses* SSES (sabse lamba) match karta hai aur *caress* ban jaata hai; *caress* SS match karta hai aur waisa hi rehta hai; *cares* S match karta hai aur *care* ban jaata hai. <Cite id="porter-stemmer-def" loc="§2" />
+<Img id="class-porter-stemmer-trap-troubles" caption="TRAP: C V C se m = 1. TROUBLES: C V C V C se [C](VC)(VC), isliye m = 2." />
 
-## Rules, step by step
+<Img id="class-porter-stemmer-private-relational" caption="PRIVATE: C VC VC V, isliye m = 2. RELATIONAL: C VC VC VC VC, isliye m = 4." />
 
-Neeche ke rules bilkul Porter ke 1980 ke paper wale hain. <Cite id="porter-stemmer-def" loc="§2" /> <Cite id="text-preprocessing-porter1980" />
-
-### Step 1a: plurals
-
-| Rule | Example |
-|---|---|
-| SSES to SS | caresses to caress |
-| IES to I | ponies to poni, ties to ti |
-| SS to SS | caress to caress |
-| S to (nothing) | cats to cat |
-
-### Step 1b: past tense aur -ing
-
-| Rule | Example |
-|---|---|
-| (m>0) EED to EE | agreed to agree; feed feed hi rehta hai |
-| (`*v*`) ED to (nothing) | plastered to plaster; bled bled hi rehta hai |
-| (`*v*`) ING to (nothing) | motoring to motor; sing sing hi rehta hai |
-
-Agar **doosra ya teesra** rule chala (ED ya ING hata), to result par **clean-up** hota hai:
-
-| Clean-up rule | Example |
-|---|---|
-| AT to ATE | conflat(ed) to conflate |
-| BL to BLE | troubl(ed) to trouble |
-| IZ to IZE | siz(ed) to size |
-| (`*d` and not `*L`, `*S`, `*Z`) to a single letter | hopp(ing) to hop; tann(ed) to tan; lekin fall(ing), hiss(ing), fizz(ed) waise hi rehte hain |
-| (m=1 and `*o`) to add E | fil(ing) to file; lekin fail(ing) fail hi rehta hai |
+<Img id="class-porter-stemmer-measure-typed" caption="Typed class figure: TREE (m = 0), TROUBLE (m = 1) aur TROUBLES (m = 2) form [C](VC)^m[V] ke saath." />
 
 ```mermaid
-%% caption: Step 1b decision flow ke roop mein. Pehle EED rule check hota hai. ED aur ING rules ko bachi hui cheez mein vowel chahiye, aur jab ye chalte hain to clean-up rules stem ko theek karte hain.
+%% caption: Word ka measure m nikaalna. Har letter mark karo, runs merge karo, phir V-ke-baad-C pairs gino.
 flowchart TD
-  A["Word ends in EED?"] -->|"yes and m>0"| B["Change EED to EE"]
-  A -->|"no"| C["Ends in ED or ING, and stem has a vowel?"]
-  C -->|"no"| F["Leave the word"]
-  C -->|"yes"| D["Remove ED or ING"]
-  D --> E["Clean-up: AT/BL/IZ add E, double letter loses one, m=1 and cvc add E"]
+  A["Word, jaise PRIVATE"] --> B["Letters mark karo: C C V C V C V"]
+  B --> C["Runs merge karo: C V C V C V"]
+  C --> D["[C](VC)^m[V] mein likho: C (VC)(VC) V"]
+  D --> E["m = VC pairs ki sankhya = 2"]
 ```
 
-<Cite id="porter-stemmer-def" loc="Step 1b" />
-
-### Step 1c: y to i
-
-| Rule | Example |
+| m | Examples (class) |
 |---|---|
-| (`*v*`) Y to I | happy to happi; sky sky hi rehta hai |
+| 0 | TREE, TR, EE, Y, BY |
+| 1 | TROUBLE, OATS, TREES, IVY, TRAP |
+| 2 | TROUBLES, PRIVATE, OATEN, ROBBERY |
+| 4 | RELATIONAL |
 
-Step 1 plurals aur past participles sambhaalta hai. Baad ke steps zyada seedhe hain. <Cite id="porter-stemmer-def" loc="Step 1c" />
+<Cite id="class-nlp-pyq2" loc="p. 2" /> <Cite id="class-nlp-m2" loc="p. 21" />
 
-### Step 2: double suffixes se single (sab ke liye m>0)
+## Rule ka form
 
-| Rule | Example | Rule | Example |
-|---|---|---|---|
-| ATIONAL to ATE | relational to relate | ALISM to AL | feudalism to feudal |
-| TIONAL to TION | conditional to condition | IVENESS to IVE | decisiveness to decisive |
-| ENCI to ENCE | valenci to valence | FULNESS to FUL | hopefulness to hopeful |
-| ANCI to ANCE | hesitanci to hesitance | OUSNESS to OUS | callousness to callous |
-| IZER to IZE | digitizer to digitize | ALITI to AL | formaliti to formal |
-| ABLI to ABLE | conformabli to conformable | IVITI to IVE | sensitiviti to sensitive |
-| ALLI to AL | radicalli to radical | BILITI to BLE | sensibiliti to sensible |
-| ENTLI to ENT | differentli to different | IZATION to IZE | vietnamization to vietnamize |
-| ELI to E | vileli to vile | ATION to ATE | predication to predicate |
-| OUSLI to OUS | analogousli to analogous | ATOR to ATE | operator to operate |
+Suffix replace ya remove karne ka rule (condition) S1 to S2 likha jaata hai. <Cite id="class-nlp-pyq2" loc="p. 2" /> <Cite id="class-nlp-pyq2" loc="p. 3" />
 
-### Step 3: (sab ke liye m>0)
+> Agar word suffix S1 par khatam hota hai, aur S1 se pehle ka stem di gayi condition poori karta hai, to S1 ko S2 se badal diya jaata hai.
 
-| Rule | Example |
-|---|---|
-| ICATE to IC | triplicate to triplic |
-| ATIVE to (nothing) | formative to form |
-| ALIZE to AL | formalize to formal |
-| ICITI to IC | electriciti to electric |
-| ICAL to IC | electrical to electric |
-| FUL to (nothing) | hopeful to hope |
-| NESS to (nothing) | goodness to good |
-
-### Step 4: suffix hatao (m>1 chahiye)
-
-AL, ANCE, ENCE, ER, IC, ABLE, IBLE, ANT, EMENT, MENT, ENT, OU, ISM, ATE, ITI, OUS, IVE aur IZE tab hatte hain jab stem ka $m > 1$ ho. ION tab hatta hai jab stem ka $m > 1$ ho **aur** stem S ya T par khatam ho. <Cite id="porter-stemmer-def" loc="Step 4" />
-
-| Example | Result | Example | Result |
-|---|---|---|---|
-| revival | reviv | dependent | depend |
-| allowance | allow | adoption (ION) | adopt |
-| inference | infer | communism | commun |
-| airliner | airlin | activate | activ |
-| gyroscopic | gyroscop | angulariti | angular |
-| adjustable | adjust | effective | effect |
-| irritant | irrit | bowdlerize | bowdler |
-| replacement | replac | adjustment | adjust |
-
-### Step 5: tidy up
-
-| Rule | Example |
-|---|---|
-| 5a: (m>1) E to (nothing) | probate to probat; rate rate hi rehta hai |
-| 5a: (m=1 and not `*o`) E to (nothing) | cease to ceas |
-| 5b: (m>1 and `*d` and `*L`) to a single letter | controll to control; roll roll hi rehta hai |
-
-**m-conditions kyun zaroori hain.** *-ate* ko lo. *activate* mein stem *activ* ka $m = 2$ hai, to *-ate* hat jaata hai. *rate* mein stem *r* ka $m = 0$ hai, to wo rehta hai. Porter ki lists dikhati hain ki *relate*, *probate*, *pirate* apna *-ate* rakhte hain jabki *derivate*, *demonstrate*, *renovate* use kho dete hain. <Cite id="porter-stemmer-def" loc="§2" />
-
-## Worked examples
-
-Neeche ke saare traces 1980 ke rules follow karte hain. Maine har ek ko haath se dobara nikaala aur NLTK ke Porter stemmer ke `ORIGINAL_ALGORITHM` mode se check kiya. <Cite id="text-preprocessing-nltk-porter" />
-
-### Example 1: plurals par Step 1a
-
-<Sum>
-
-<Given>
-
-words *caresses*, *ponies*, *ties*, *caress*, *cats*.
-
-</Given>
-
-<Find>
-
-har word ke liye Step 1a ka result.
-
-</Find>
-
-<Steps>
-
-1. **caresses** SSES pe khatam hota hai, aur SSES sabse lamba match hai (S se lamba). Rule SSES to SS se *caress* milta hai. *Reason: longest match jeetta hai.*
-2. **ponies** IES pe khatam hota hai. IES to I se *poni* milta hai.
-3. **ties** IES pe khatam hota hai. IES to I se *ti* milta hai (chhota, ajeeb result, lekin rule yahi hai).
-4. **caress** SS pe khatam hota hai. SS to SS se *caress* waisa hi rehta hai. *Reason: ye rule isliye hai ki seedha S wala rule caress ko cares na bana de.*
-5. **cats** sirf S pe khatam hota hai. S to nothing se *cat* milta hai.
-
-</Steps>
-
-<Answer>
-
-caress, poni, ti, caress, cat.
-
-</Answer>
-
-<Box kind="verify">
-
-Ye paanchon outputs Porter ke paper mein Step 1a ke example column se milte hain. Dusra check: *cares* par longest-match rule *care* deta hai (rule S), jisse dikhta hai ki SSES ko S se pehle try karna kyun zaroori hai.
-
-</Box>
-
-</Sum>
-
-### Example 2: Step 1b aur 1c
-
-<Sum>
-
-<Given>
-
-words *agreed*, *feed*, *plastered*, *bled*, *motoring*, *sing*, *happy*, *sky*.
-
-</Given>
-
-<Find>
-
-har word ke liye Step 1b aur Step 1c ka result.
-
-</Find>
-
-<Steps>
-
-1. **agreed** EED pe khatam hota hai, stem *agr* ka $m = 1 > 0$ hai, to EED se EE: *agree*.
-2. **feed** EED pe khatam hota hai, lekin stem *f* ka $m = 0$ hai, to rule fail: *feed*.
-3. **plastered**: EED nahi; ED pe khatam; stem *plaster* mein vowel hai, to ED hatao: *plaster*. Clean-up rules lagte nahi.
-4. **bled**: ED pe khatam, lekin stem *bl* mein vowel nahi, to rule fail: *bled*.
-5. **motoring**: ING hata, stem *motor* mein vowels hain: *motor*.
-6. **sing**: ING match karta hai, lekin stem *s* mein vowel nahi: *sing*.
-7. **happy** (Step 1c): stem *happ* mein vowel hai, to Y se I: *happi*.
-8. **sky** (Step 1c): stem *sk* mein vowel nahi, to waisa hi: *sky*.
-
-</Steps>
-
-<Answer>
-
-agree, feed, plaster, bled, motor, sing, happi, sky.
-
-</Answer>
-
-<Box kind="verify">
-
-Values Porter ke paper ke Step 1b aur 1c examples ke barabar hain. Dhyan do ki ye sirf Step 1 ke baad ke results hain. Paanchon steps chalane par *agree* Step 5a mein ek baar aur chhota hokar *agre* ho jaata hai (stem *agre* ka $m = 1$ hai aur wo consonant-vowel-consonant par khatam nahi hota, to aakhri E hat jaata hai). NLTK ka original-mode stemmer bhi *agre* deta hai.
-
-</Box>
-
-</Sum>
-
-### Example 3: Step 1b ke clean-up rules
-
-<Sum>
-
-<Given>
-
-words *conflated*, *troubled*, *sized*, *hopping*, *tanned*, *falling*, *hissing*, *filing*, *failing*.
-
-</Given>
-
-<Find>
-
-clean-up rules sahit Step 1b ka result.
-
-</Find>
-
-<Steps>
-
-1. **conflated**: ED hatao, *conflat* milta hai. Ye AT pe khatam hota hai, to E jodo: *conflate*.
-2. **troubled**: ED hatao, *troubl* milta hai. Ye BL pe khatam hota hai, to E jodo: *trouble*.
-3. **sized**: ED hatao, *siz* milta hai. Ye IZ pe khatam hota hai, to E jodo: *size*.
-4. **hopping**: ING hatao, *hopp* milta hai. Ye double consonant (pp) pe khatam hota hai jo L, S ya Z nahi hai, to ek letter girao: *hop*.
-5. **tanned**: ED hatao, *tann* milta hai. Double nn, to ek girao: *tan*.
-6. **falling**: ING hatao, *fall* milta hai. Double ll, lekin L exception hai, to rakho: *fall*.
-7. **hissing**: *hiss*. Double ss, S exception hai, to rakho.
-8. **filing**: ING hatao, *fil* milta hai. AT/BL/IZ nahi, double letter nahi. Ab $m(\text{fil}) = 1$ (f, i, l yaani C V C) aur ye consonant-vowel-consonant par khatam hota hai jisme l, w, x ya y nahi hai, to E jodo: *file*.
-9. **failing**: ING hatao, *fail* milta hai. Stem f, ai, l hai: C V C, $m = 1$, lekin ye "ail" yaani vowel-vowel-consonant par khatam hota hai, consonant-vowel-consonant par nahi, to E nahi judta: *fail*.
-
-</Steps>
-
-<Answer>
-
-conflate, trouble, size, hop, tan, fall, hiss, file, fail.
-
-</Answer>
-
-<Box kind="verify">
-
-Naun ke naun Porter ke paper ki Step 1b clean-up table se milte hain (conflate, trouble, size, hop, tan, fall, hiss, file, fail). E rule ka dusra check: *fil* ka $m = 1$ hai aur wo c-v-c hai, to E judta hai; *fail* ka $m = 1$ hai lekin wo c-v-v-c hai, to nahi judta.
-
-</Box>
-
-</Sum>
-
-### Example 4: lambe word par paanchon steps
-
-Porter ka apna example *generalizations* hai, "stripped to generalization (Step 1), then to generalize (Step 2), then to general (Step 3), and then to gener (Step 4)". <Cite id="porter-stemmer-def" loc="§2" />
-
-<Sum>
-
-<Given>
-
-word *generalizations*.
-
-</Given>
-
-<Find>
-
-paanchon steps ke baad uska stem, har decision par measure ke saath.
-
-</Find>
-
-<Steps>
-
-1. **Step 1a.** Word S pe khatam hota hai. Sabse lamba matching rule S to nothing hai (ye "ons" pe khatam hota hai, SS, IES ya SSES pe nahi). Result: *generalization*.
-2. **Step 1b aur 1c.** Word EED, ED, ING ya Y pe khatam nahi hota. Koi change nahi.
-3. **Step 2.** Ye IZATION pe khatam hota hai; stem *general* ka $m = 3 > 0$ hai. Rule IZATION to IZE se *generalize* milta hai. *Reason: IZATION, ATION se lamba match hai.*
-4. **Step 3.** Ye ALIZE pe khatam hota hai; stem *gener* ka $m = 2 > 0$ hai. ALIZE to AL se *general* milta hai.
-5. **Step 4.** Ye AL pe khatam hota hai; stem *gener* ka $m = 2 > 1$ hai. AL hatao: *gener*.
-6. **Step 5.** *gener* E pe khatam nahi hota, aur double L pe bhi nahi. Koi change nahi.
-
-</Steps>
-
-<Answer>
-
-generalizations se gener.
-
-</Answer>
-
-<Box kind="verify">
-
-Measures: g-e-n-e-r C V C V C hai, to $m(\text{gener}) = 2$; general C V C V C V C hai, to $m = 3$. Dono use hui limits (0, phir 1) se bade hain. generalization, generalize, general, gener wala raasta paper mein chhapa hua wahi hai, aur NLTK ka original mode *gener* deta hai.
-
-</Box>
-
-</Sum>
-
-### Example 5: ek word jisme Step 5b chahiye
-
-<Sum>
-
-<Given>
-
-word *oscillators*.
-
-</Given>
-
-<Find>
-
-paanchon steps ke baad uska stem.
-
-</Find>
-
-<Steps>
-
-1. **Step 1a.** Aakhri S hatao: *oscillator*.
-2. **Step 2.** Ye ATOR pe khatam hota hai; stem *oscill* ka $m = 2 > 0$ hai. ATOR to ATE se *oscillate* milta hai.
-3. **Step 3.** *oscillate* ke end mein koi Step 3 suffix nahi. Koi change nahi.
-4. **Step 4.** Ye ATE pe khatam hota hai; stem *oscill* ka $m = 2 > 1$ hai. ATE hatao: *oscill*.
-5. **Step 5a.** Aakhir mein E nahi hai.
-6. **Step 5b.** Word double L pe khatam hota hai, aur $m(\text{oscill}) = 2 > 1$, to ek L girta hai: *oscil*.
-
-</Steps>
-
-<Answer>
-
-oscillators se oscil.
-
-</Answer>
-
-<Box kind="verify">
-
-Porter ka paper wahi raasta deta hai: oscillators, oscillator (Step 1), oscillate (Step 2), oscill (Step 4), oscil (Step 5). m ka check: o-s-c-i-l-l: o=v, sc=C, i=v, ll=C, to V C V C se $m = 2$.
-
-</Box>
-
-</Sum>
-
-### Example 6: jab condition rule ko rok deti hai
-
-<Sum>
-
-<Given>
-
-words *relational*, *conditional*, *rational*.
-
-</Given>
-
-<Find>
-
-har ka final stem, aur kaun si condition kis rule ko rokti hai.
-
-</Find>
-
-<Steps>
-
-1. **relational.** Step 2: sabse lamba match ATIONAL hai; stem *rel* ka $m = 1 > 0$ hai. ATIONAL to ATE se *relate* milta hai. Step 4: ATE ko $m > 1$ chahiye lekin *rel* ka $m = 1$ hai, to ATE rehta hai. Step 5a: stem *relat* ka $m = 2 > 1$ hai, to aakhri E hat jaata hai: *relat*.
-2. **conditional.** Step 2: TIONAL (stem *condi*, $m = 1$) to TION se *condition* milta hai. Step 4: ION ko $m > 1$ chahiye aur stem S ya T par khatam ho; stem *condit* ka $m = 2$ hai aur wo T pe khatam hota hai, to ION hat jaata hai: *condit*.
-3. **rational.** Step 2: sabse lamba match ATIONAL hai, lekin stem *r* ka $m = 0$ hai, to rule fail ho jaata hai. Kyunki sirf sabse lamba match try hota hai, chhota TIONAL rule use nahi hota. Step 4: AL; stem *ration* ka $m = 2 > 1$ hai, to AL hat jaata hai: *ration*.
-
-</Steps>
-
-<Answer>
-
-relational se relat, conditional se condit, rational se ration.
-
-</Answer>
-
-<Box kind="verify">
-
-Measures check karo: rel C V C hai, $m=1$; relat (r-e-l-a-t) C V C V C hai, $m=2$; condit C V C V C hai, $m=2$; ration (r-a-t-io-n) C V C V C hai, $m=2$. Porter ke apne examples Step 2 ke results se milte hain (relational se relate; conditional se condition; rational Step 2 mein rational hi rehta hai). NLTK original mode relat, condit, ration deta hai.
-
-</Box>
-
-</Sum>
-
-### Example 7: ek sentence ko stem karna
-
-Ye "tokenization and stemming" wale question ka chhota roop hai. Pehle tokens mein todo, phir har token ko stem karo.
-
-<Sum>
-
-<Given>
-
-sentence "The ponies were running and hopping happily."
-
-</Given>
-
-<Find>
-
-tokens aur har ka Porter stem.
-
-</Find>
-
-<Steps>
-
-1. **Tokenize** (lower-case, full stop hatao): the, ponies, were, running, and, hopping, happily.
-2. **the, were, and:** koi rule nahi lagta (*the* aur *were* mein Step 5a mein aakhri E rehta hai: *th* ka $m = 0$ hai aur *wer* ka $m = 1$ hai aur wo consonant-vowel-consonant par khatam hota hai). Ye waise hi rehte hain.
-3. **ponies:** Step 1a, IES to I: *poni*.
-4. **running:** Step 1b, ING hatao: *runn*; double N, to ek girao: *run*.
-5. **hopping:** ING hatao: *hopp*; double P, to ek girao: *hop*.
-6. **happily:** Step 1c, Y to I: *happili*. Baad ka koi rule *-ili* ending se match nahi karta.
-
-</Steps>
-
-<Answer>
-
-the, poni, were, run, and, hop, happili.
-
-</Answer>
-
-<Box kind="verify">
-
-NLTK ke original-mode Porter stemmer se dobara nikaala: the, poni, were, run, and, hop, happili. Dhyan do ki *happily* aur *happy* ko alag stems *happili* aur *happi* milte hain, jo under-stemming ka chhota example hai (NLTK ka Snowball stemmer bhi *happili* deta hai).
-
-</Box>
-
-</Sum>
-
-## Stemming ki galtiyan
-
-Rule-based stemming perfect nahi ho sakta. Do tarah ki galti hoti hai. <Cite id="porter-stemmer-wiki-stem" /> <Cite id="porter-stemmer-gfg-stemming" /> <Cite id="text-preprocessing-ibm-stemlem" />
-
-- **Over-stemming (false positive).** Alag words ko wahi stem mil jaata hai. Porter *universal*, *university* aur *universe* ko *univers* bana deta hai. IBM ka example hai *news* ka *new* ban jaana. Suffix asal mein word ka hissa tha.
-- **Under-stemming (false negative).** Related words ke stems alag rehte hain. Porter *alumni* aur *alumna* ko alag rakhta hai, aur IBM ka example *knavish* aur *knave* hai. *went* aur *go* jaise irregular forms bhi miss hote hain.
-- Ek galti sudharne se aksar doosri badh jaati hai, isliye rule set ek compromise hai. Porter ne khud likha ki vocabulary ke ek hisse ke liye zyada rules jodne se jaldi doosra hissa kharab hone lagta hai. <Cite id="porter-stemmer-def" loc="§1" />
+Condition usually S1 se pehle ke stem ke m ke terms mein hoti hai. Example: **(m > 1) EMENT to nothing**. S1 EMENT hai aur S2 khali hai. REPLACEMENT ban jaata hai REPLAC, kyunki stem REPLAC ka m = 2 hai. <Cite id="class-nlp-pyq2" loc="p. 3" />
 
 ```mermaid
-%% caption: Over-stemming un words ko jodta hai jo alag rehne chahiye; under-stemming un words ko alag rakhta hai jo saath hone chahiye. Dono rule-based stemmer ki galtiyon ke examples hain.
-flowchart LR
-  subgraph Over["Over-stemming: too much merged"]
-    U1["universe"] --> US["univers"]
-    U2["university"] --> US
-    U3["universal"] --> US
-  end
-  subgraph Under["Under-stemming: related words not merged"]
-    A1["alumni"] --> AS1["alumni"]
-    A2["alumna"] --> AS2["alumna"]
-  end
+%% caption: Ek rule kaise fire hota hai. Suffix match hona chahiye aur stem par condition sach honi chahiye; dono mein se ek bhi fail ho to word waisa hi rehta hai.
+flowchart TD
+  A["Word"] --> B{"Kya S1 par khatam hota hai?"}
+  B -- "Nahi" --> Z["Word waisa hi chhodo"]
+  B -- "Haan" --> C{"Kya S1 se pehle ka stem condition poori karta hai, jaise m > 1?"}
+  C -- "Nahi" --> Z
+  C -- "Haan" --> D["S1 ko S2 se badlo"]
 ```
 
-<Cite id="porter-stemmer-gfg-stemming" loc="diagram" />
+## Paanch steps aur unke main rules
 
-## Porter stemmer ke advantages aur disadvantages
+Class kehti hai ki 5 sets of rules hain par unhe list nahi karti, isliye neeche ke rules Porter ke algorithm ke standard rules hain, chhote rakhe gaye. Har example us **step ke baad** ka word dikhata hai. Conditions mein $*v*$ matlab stem mein vowel hai, $*d$ matlab stem double consonant par khatam hota hai, aur $*o$ matlab stem consonant-vowel-consonant par khatam hota hai jahan aakhri consonant W, X ya Y nahi hai.
 
-| Advantages | Disadvantages |
-|---|---|
-| Simple, chhota aur bahut tez; dictionary nahi chahiye. <Cite id="porter-stemmer-gfg-stemming" /> <Cite id="porter-stemmer-def" loc="§1" /> | Stems aksar real words nahi hote (*happi*, *troubl*). |
-| Vocabulary ghatata hai aur search mein recall badhata hai. | Over-stemming aur under-stemming ki galtiyan. |
-| Complex suffixes kuch chhote steps se sambhal jaate hain. | Irregular forms nahi sambhaal paata (*went*, *mice*). |
-| Har jagah same chalta hai, to queries aur documents ko same stems milte hain. | Sirf English ke liye bana; context aur part of speech ignore karta hai. |
-| Kisi bhi language mein implement karna aasaan. | Kuch rules mein known faults hain jo Porter ne baad mein Snowball mein theek kiye. <Cite id="porter-stemmer-snowball-porter2" /> |
-
-## Porter, Snowball aur Lancaster ka comparison
-
-| Point | Porter | Snowball (Porter2) | Lancaster |
+| Step | Kaam | Main rules | Examples |
 |---|---|---|---|
-| Year / author | 1980, M. F. Porter | baad mein, M. F. Porter | late 1980s, C. D. Paice (Lancaster University) |
-| Languages | English | English aur kai aur | English |
-| Speed and design | Simple aur tez | Porter se thoda tez aur zyada logical | Iterative: rules baar-baar lagte hain |
-| Strength | Naram | Naram, kam galtiyan | Bahut aggressive; bura over-stem kar sakta hai |
-| Example | generate se *gener*; friendship *friendship* hi rehta hai | generate se *generat*; friendship *friendship* hi rehta hai | generate se *gen*; friendship se *friend* |
+| 1a | Plurals | SSES to SS, IES to I, SS to SS, S to nothing | caresses to caress, ponies to poni, caress to caress, cats to cat |
+| 1b | -ed aur -ing | (m > 0) EED to EE, (\*v\*) ED to nothing, (\*v\*) ING to nothing | feed feed hi rehta hai, agreed to agree, plastered to plaster, bled bled hi rehta hai, motoring to motor, sing sing hi rehta hai |
+| 1b clean-up | -ed ya -ing hatane ke baad | AT to ATE, BL to BLE, IZ to IZE; double consonant to single (L, S, Z nahi); (m = 1 and \*o) E jodo | conflated to conflate, troubled to trouble, sized to size, hopping to hop, falling fall hi rehta hai, filing to file |
+| 1c | Aakhri y | (\*v\*) Y to I | happy to happi, sky sky hi rehta hai |
+| 2 | Lambe suffixes, sab (m > 0) | ATIONAL to ATE, TIONAL to TION, IZER to IZE, IZATION to IZE, ATION to ATE, ATOR to ATE, ALISM to AL, FULNESS to FUL, OUSNESS to OUS, IVENESS to IVE, ALITI to AL | relational to relate, conditional to condition, digitizer to digitize, vietnamization to vietnamize, predication to predicate, operator to operate, feudalism to feudal, hopefulness to hopeful |
+| 3 | Suffixes, sab (m > 0) | ICATE to IC, ATIVE to nothing, ALIZE to AL, ICITI to IC, ICAL to IC, FUL to nothing, NESS to nothing | triplicate to triplic, formative to form, formalize to formal, electrical to electric, hopeful to hope, goodness to good |
+| 4 | Suffixes hatao, sab (m > 1) | AL, ANCE, ENCE, ER, IC, ABLE, IBLE, ANT, EMENT, MENT, ENT, ION (S ya T ke baad), OU, ISM, ATE, ITI, OUS, IVE, IZE to nothing | revival to reviv, allowance to allow, replacement to replac, adoption to adopt, communism to commun, effective to effect |
+| 5a | Aakhri e | (m > 1) E to nothing; (m = 1 and not \*o) E to nothing | probate to probat, cease to ceas, rate rate hi rehta hai |
+| 5b | Double l | (m > 1 and *d and L par khatam) to a single letter | controll to control, roll roll hi rehta hai |
 
-(Example outputs NLTK implementations se chalaye gaye; Analytics Vidhya bhi Snowball aur Lancaster ka yahi behaviour dikhata hai.) <Cite id="porter-stemmer-av-stemming" /> <Cite id="porter-stemmer-nltk-stem" /> <Cite id="porter-stemmer-wiki-stem" />
+Agar ek group mein ek se zyada rule match karein to sabse lamba S1 wala rule use hota hai.
 
-## Python mein use
+## Worked traces
 
-NLTK mein Porter stemmer aata hai. <Cite id="text-preprocessing-nltk-porter" /> <Cite id="porter-stemmer-gfg-stem-nltk" />
+<Sum>
 
-```python
-from nltk.stem import PorterStemmer
-ps = PorterStemmer()
-for w in ["programs", "programmed", "programming"]:
-    print(w, ps.stem(w))   # all three print: program
-```
+<Given>
 
-NLTK ke default mode mein kuch extensions hain jo Porter ne 1980 ke baad jode, isliye kuch outputs paper se alag hote hain (jaise *ties* se *tie*, *ti* nahi). 1980 ke rules bilkul follow karne ke liye, jaise is note mein, `PorterStemmer(mode="ORIGINAL_ALGORITHM")` use karo. Porter khud practical kaam ke liye Snowball (Porter2) stemmer recommend karte hain. <Cite id="text-preprocessing-nltk-porter" /> <Cite id="porter-stemmer-snowball-porter2" />
+word **generalizations**.
 
-## Applications
+</Given>
 
-- **Search engines aur IR:** query ko word ke saare forms se match karna. <Cite id="porter-stemmer-def" loc="§1" />
-- **Text mining aur classification:** kam features, to chhote models. <Cite id="porter-stemmer-av-stemming" />
-- **Indexing aur tagging systems, SEO.** <Cite id="porter-stemmer-av-stemming" />
-- **Vocabulary reduction** words gin-ne ya topic model banane se pehle.
+<Find>
 
-## Exam mein kaise likhein
+uska Porter stem.
 
-10-mark question "Explain the Porter stemming algorithm" ke liye:
+</Find>
 
-1. Stemming define karo aur batao kyun zaroori hai (search recall, chhoti vocabulary).
-2. Consonant, vowel aur measure m define karo, do examples ke saath (tree 0, trouble 1, private 2).
-3. Rule form (condition) S1 to S2 aur longest-match rule likho.
-4. Paanchon steps ke naam ek line mein batao, aur har step ka ek ya do rule example ke saath do (caresses to caress; agreed to agree; happy to happi; relational to relate; hopeful to hope; replacement to replac; probate to probat).
-5. Five-step pipeline ka diagram banao.
-6. Ek word ko saare steps se guzaro (generalizations to gener).
-7. Galtiyan (over- aur under-stemming), advantages aur disadvantages likho.
+<Steps>
 
-Exam mein English mein likho: **Short definition for 5 marks:** "Stemming reduces the different forms of a word to a common stem by removing suffixes with rules, so that a search for connect also finds connected and connecting. Tokenization splits text into words; stemming then maps each token to its stem, for example ponies to poni and running to run."
+1. Step 1a: word ek single S par khatam hota hai, isliye S to nothing: generalizations ban jaata hai **generalization**.
+2. Step 2: (m > 0) IZATION to IZE. Isse pehle ka stem GENERAL hai jiska m = 3 hai, isliye rule fire hota hai: **generalize**.
+3. Step 3: (m > 0) ALIZE to AL. Stem GENER ka m = 2 hai, isliye rule fire hota hai: **general**.
+4. Step 4: (m > 1) AL to nothing. Stem GENER ka m = 2 hai, isliye rule fire hota hai: **gener**.
+5. Step 5: word e ya double l par khatam nahi hota, isliye kuch nahi badalta.
 
-## Pichhle papers mein ye kahan aaya
+</Steps>
 
-- <PYQ id="2022-12-ce/q6b" />: explain the Porter stemming algorithm in detail (10 marks)
-- <PYQ id="2023-05-ce/q5b" />: explain the Porter stemmer algorithm with rules (10 marks)
-- <PYQ id="2023-12-ce/q5a" />: explain the Porter stemming algorithm in detail (10 marks)
-- <PYQ id="2024-05-ce/q1b" />: tokenization and stemming (5 marks)
-- <PYQ id="2024-05-ce/q2b" />: working of the Porter stemmer algorithm (10 marks)
-- <PYQ id="2024-12-ce/q5a" />: explain the Porter stemming algorithm in detail (10 marks)
-- <PYQ id="2024-12/q2b" />: Porter's stemming algorithm with example (10 marks)
-- <PYQ id="2025-05/q3a" />: explain the Porter stemmer algorithm in detail (10 marks)
+<Answer>
 
-## Conclusion
+**gener**
 
-Porter stemmer paanch steps mein suffix rules ka ek chhota, tez, bina-dictionary wala set hai. Har rule tabhi chalta hai jab bacha hua stem kaafi lamba ho (measure m), isliye complex endings thoda-thoda karke utarte hain. Ye do tarah ki galti karta hai (over- aur under-stemming) aur stems hamesha words nahi hote, lekin search aur text pre-processing ke liye ye simple aur kaafi achha hai.
+</Answer>
+
+<Box kind="verify">
+
+Har m check karo: GENERAL hai G-E-N-E-R-A-L = C V C V C V C, yaani VC teen baar (m = 3); GENER hai C V C V C, yaani m = 2. Dono un limits 0 aur 1 se bade hain jo rules ko chahiye. Porter stemmer program bhi gener deta hai.
+
+</Box>
+
+</Sum>
+
+<Sum>
+
+<Given>
+
+word **relational**.
+
+</Given>
+
+<Find>
+
+uska Porter stem.
+
+</Find>
+
+<Steps>
+
+1. Step 1: koi rule match nahi karta (ye S, ED, ING ya Y par khatam nahi hota).
+2. Step 2: (m > 0) ATIONAL to ATE. Stem REL hai C V C, isliye m = 1 aur rule fire hota hai: **relate**.
+3. Steps 3 aur 4: koi rule match nahi karta.
+4. Step 5a: (m > 1) E to nothing. Stem RELAT hai C V C V C, isliye m = 2 aur rule fire hota hai: **relat**.
+
+</Steps>
+
+<Answer>
+
+**relat**
+
+</Answer>
+
+<Box kind="verify">
+
+RELATIONAL ka apna measure 4 hai (class page), isliye Step 2 ko kaatne ki permission hai. Porter stemmer program bhi relat deta hai.
+
+</Box>
+
+</Sum>
+
+<Sum>
+
+<Given>
+
+word **hopefulness**.
+
+</Given>
+
+<Find>
+
+uska Porter stem.
+
+</Find>
+
+<Steps>
+
+1. Steps 1a se 1c: koi rule match nahi karta.
+2. Step 2: (m > 0) FULNESS to FUL. Stem HOPE hai C V C V, isliye m = 1: **hopeful**.
+3. Step 3: (m > 0) FUL to nothing. Stem HOPE ka m = 1: **hope**.
+4. Step 4: koi rule match nahi karta.
+5. Step 5a: word E par khatam hota hai, aur stem HOP ka m = 1 hai aur wo consonant-vowel-consonant (*o) hai, isliye E rakha jaata hai.
+
+</Steps>
+
+<Answer>
+
+**hope**
+
+</Answer>
+
+<Box kind="verify">
+
+Rule 5a m = 1 ke saath final E tabhi hataata hai jab stem consonant-vowel-consonant na ho. HOP hai, isliye E rehta hai. Isi wajah se rate rate hi rehta hai. Porter stemmer program bhi hope deta hai.
+
+</Box>
+
+</Sum>
+
+## Advantages aur limits
+
+- **Fast aur simple**, isliye information retrieval mein use hota hai; terms ki sankhya kam karta hai. <Cite id="class-nlp-m2" loc="p. 19" /> <Cite id="class-nlp-pyq2" loc="p. 2" />
+- Ye ek **crude, heuristic process** hai jo word endings kaat deta hai, isliye aise roots de sakta hai jo dictionary words nahi hote (happy ban jaata hai happi, studies ban jaata hai studi). Lemmatization dictionary use karta hai aur real words deta hai (better ban jaata hai good). <Cite id="class-nlp-asol" loc="p. 12" />
+- Alag words ko same stem mil sakta hai (universe, university aur universal sab ban jaate hain univers). Ye stemming ki limit hai.
+
+## Ye kahan puchha gaya
+
+| Agar question kehta hai | Kya likhna hai | Kab aaya |
+|---|---|---|
+| "Explain Porter stemming algorithm in detail" | Definition, consonant aur vowel rule, form [C](VC)^m[V], measure examples, rule form, paanch steps, ek trace | <PYQ id="2022-12-ce/q6b" /> <PYQ id="2023-12-ce/q5a" /> <PYQ id="2024-12-ce/q5a" /> <PYQ id="2025-05/q3a" /> |
+| "Explain Porter stemmer algorithm with rules" | Paanch steps ki table, phir ek trace | <PYQ id="2023-05-ce/q5b" /> <PYQ id="assignment-1/q2b" /> |
+| "Explain Porter's stemming algorithm with example" | EMENT example ke saath rule form aur traces | <PYQ id="2024-12/q2b" /> |
+| "Illustrate the working of Porter stemmer" | Flow diagram aur ek trace | <PYQ id="2024-05-ce/q2b" /> |
+
+## Quick revision
+
+- Stemming root word dhundta hai. Porter stemmer ek simple rule-based algorithm hai jisme 5 sets of rules hain, speed aur simplicity ke liye jaana jaata hai.
+- Consonant: a, e, i, o, u nahi aur consonant ke baad wala y nahi. Baaki sab vowel.
+- Form $[C](VC)^m[V]$. m VC pairs ginta hai. TREE 0, TROUBLE 1, TRAP 1, TROUBLES 2, PRIVATE 2, RELATIONAL 4.
+- Rule: (condition) S1 to S2. Example (m > 1) EMENT to nothing: REPLACEMENT ban jaata hai REPLAC.
+- Steps: 1 plurals aur -ed/-ing, 2 aur 3 lambe suffixes, 4 suffixes hatao, 5 tidy up.
+- Traces: generalizations se gener, relational se relat, hopefulness se hope.
+
+**Conclusion.** Porter stemmer chhote conditional rules se word endings kaat deta hai, jinki condition stem ka measure m hai, aur IR ke liye fast aur simple stemming deta hai. <Cite id="class-nlp-m2" loc="p. 19" />

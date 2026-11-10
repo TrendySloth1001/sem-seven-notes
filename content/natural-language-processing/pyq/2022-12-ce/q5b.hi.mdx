@@ -1,81 +1,31 @@
 ---
-references: [anaphora-resolution-hobbs1978, anaphora-resolution-tetreault2001, discourse-reference-slp3-coref, anaphora-resolution-ibm-coref, anaphora-resolution-tp-nlp]
+references: [class-nlp-asol]
 ---
 
-**In simple words:** *he* ya *him* jaisa pronoun pehle aaye noun phrase ki taraf ishara karta hai, jise uska **antecedent** kehte hain. **Hobbs' algorithm** (1978) ise **parse trees** pe ek fixed order mein chalkar dhundta hai: pehle same sentence ki sabse nazdeeki jagah, phir pichhle sentences, naye se purane. Pronoun se agree karne wala pehla noun phrase (NP) answer hai. <Cite id="anaphora-resolution-hobbs1978" /> <Cite id="anaphora-resolution-ibm-coref" />
+**In simple words:** Hobbs algorithm sentence ke syntactic tree pe upar chadhkar nouns collect karta hai aur gender, number aur distance se wo noun chunta hai jo pronoun ke liye fit ho. <Cite id="class-nlp-asol" loc="p. 3" />
 
-**Ye kyun zaroori hai.** Text samajhne, summarise ya translate karne ke liye machine ko pata hona chahiye ki *he* kaun hai. Hobbs ek simple rule-based method deta hai jise training data nahi chahiye aur jo ek strong baseline tha. <Cite id="anaphora-resolution-tetreault2001" />
+**Definition:** Hobbs Algorithm is a heuristic method for pronoun resolution, developed by Jerry Hobbs in 1976. It finds to which noun a pronoun is referring. It uses the syntactic tree of the sentence and finds the solution by operations on that tree. Heuristic ek rule of thumb hai jo aam taur pe chalta hai par guaranteed nahi.
 
-**Terms.** *Breadth-first* matlab ek level ke saare nodes dekho phir aur gehre jao. *Agreement* matlab same number, gender aur person.
+**Steps**
 
-**Algorithm:**
-
-1. Us NP node se shuru karo jo pronoun ko dominate karta hai.
-2. Upar jaakar pehle NP ya S node tak jao; use X aur path ko p kaho.
-3. X ke neeche, p ke **left** mein, left-to-right, breadth-first search karo. Koi bhi NP propose karo jiske aur X ke beech koi aur NP ya S ho.
-4. Agar X top S hai, to **pichhle sentences** mein search karo, sabse recent pehle, left-to-right, breadth-first, har NP propose karte hue. Warna step 5.
-5. Agle NP ya S node tak upar jao: naya X.
-6. Agar X ek NP hai aur p uske neeche ke N-bar se nahi guzra, to X propose karo.
-7. X ke neeche p ke left mein left-to-right, breadth-first search karo; koi bhi NP propose karo.
-8. Agar X ek S hai, to p ke **right** mein search karo (lekin kisi NP ya S ke neeche mat jao); koi bhi NP propose karo.
-9. Step 4 pe jao.
-
-Proposal tabhi accept hota hai jab wo pronoun se agree kare. <Cite id="discourse-reference-slp3-coref" />
+1. Tree mein pronoun se **start** karo aur upar jao. Same level aur uske upar wale level mein noun check karo.
+2. Noun mile to use **consider** karo aur tree mein baaki nouns check karo.
+3. Saare nouns dekhne ke baad **constraints lagao**: gender, number agreement aur pronoun se distance.
+4. Suitable antecedent na mile to saare steps **repeat** karo. <Cite id="class-nlp-asol" loc="p. 3" />
 
 ```mermaid
-%% caption: Hobbs search. Pehle pronoun ke apne sentence mein pronoun se bahar ki taraf search, phir pichhle sentences mein, naye se purane. Agree karne wala pehla NP antecedent hai.
+%% caption: Hobbs ke chaar steps. Agar koi noun constraints pass nahi karta, to search repeat hota hai.
 flowchart TD
-  A["1. Start at the pronoun NP"] --> B["2. Climb to the first NP or S, X"]
-  B --> C["3. Search left of the path under X"]
-  C --> D{"Agreeing NP?"}
-  D -->|"yes"| Z["Antecedent found"]
-  D -->|"no"| E{"4. X is the top S?"}
-  E -->|"yes"| F["Search earlier sentences, newest first"]
-  F --> G{"Agreeing NP?"}
-  G -->|"yes"| Z
-  G -->|"no"| Y["Fail"]
-  E -->|"no"| H["5 to 8. Climb to next NP or S, search again"]
-  H --> D
+  A["Tree mein pronoun se start"] --> B["Upar jao: same level aur uske upar noun dhoondho"]
+  B --> C["Jitne noun mile collect karo"]
+  C --> D["Constraints: gender, number, distance"]
+  D --> E{"Suitable noun?"}
+  E -->|"haan"| F["Antecedent mil gaya"]
+  E -->|"nahi"| B
 ```
 
-<Sum>
+<Img id="class-anaphora-resolution-hobbs-tree" caption="Teacher ka John saw Mary, he greeted her ka tree (her ko pronoun padho). he ke upar ke nouns Mary aur John hain." />
 
-<Given>
+**Example:** "John saw Mary, he greeted her." Tree mein pronoun *he* ke upar ke nouns **Mary** aur **John** hain. Gender, number aur distance constraints lagao. *he* male ke liye use hota hai aur John male hai, isliye John suitable candidate hai. Mary female hai, isliye reject. Akhir mein *he* **John** ko refer karta hai. <Cite id="class-nlp-asol" loc="p. 4" />
 
-Text: *Sita met Ravi. She gave him a book.* Trees: [S1 [NP Sita] [VP met [NP Ravi]]] aur [S2 [NP She] [VP gave [NP him] [NP a book]]]. Pronoun: *him* (masculine, singular, third person).
-
-</Given>
-
-<Find>
-
-*him* ka antecedent.
-
-</Find>
-
-<Steps>
-
-1. NP(*him*) se shuru karo. Upar jao: VP na NP hai na S, to pehla S2 hai. X = S2.
-2. S2 ke neeche path ke left mein dekho: sirf NP(*She*). Uske aur S2 ke beech kuch nahi, isliye ise propose nahi kiya jaata. *Reason: pronoun apni hi clause ke noun phrase ki taraf point nahi kar sakta.*
-3. S2 top S hai, to S1 (pichhle sentence) pe jao.
-4. S1 mein left-to-right, breadth-first search karo. Pehla NP: *Sita*. Agreement test: feminine, lekin *him* masculine hai, to reject.
-5. Agla NP: *Ravi*. Masculine, singular, third person: agree karta hai. Accept.
-
-</Steps>
-
-<Answer>
-
-*him* = *Ravi*
-
-</Answer>
-
-<Box kind="verify">
-
-Meaning check: *She gave him a book* mein *him* = Ravi natural hai. *Sita* gender pe reject hoti hai. *She* ke liye wahi search S1 tak jaati hai aur *Sita* agree karti hai, to *She* = Sita.
-
-</Box>
-
-</Sum>
-
-**Advantages:** simple, fast, training nahi, Hobbs ke apne 300 pronouns ke test pe lagbhag 88%. **Disadvantages:** har sentence ka sahi parse chahiye; sirf pronouns ke liye; meaning ya world knowledge use nahi karta; sabse nazdeeki agreeing NP chun leta hai chahe galat ho; baad ke tests mein scores kam aate hain. <Cite id="anaphora-resolution-tetreault2001" /> <Cite id="anaphora-resolution-tp-nlp" />
-
-**Conclusion:** Hobbs' algorithm grammar ki recency aur role preferences ko tree walk mein badal deta hai. Ye achha baseline hai, lekin modern systems ye cues data se seekhte hain.
+**Conclusion:** Hobbs' algorithm ek simple, syntax-based method hai jo parse tree se ek baar mein ek pronoun resolve karta hai.

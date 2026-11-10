@@ -1,75 +1,42 @@
 ---
-references: [hmm-maxent-crf-slp3-ch18, hmm-maxent-crf-slp3-appA, pos-tagging-gfg-hmm, pos-tagging-wiki-viterbi]
+references: [class-nlp-pyq3]
 ---
 
-**In simple words:** HMM tagger tags ko ek hidden chain maanta hai. Har tag pichhle tag pe depend karta hai, aur har tag ek word produce karta hai. Words diye hone par ye wo tag sequence dhoondhta hai jo sabse zyada probable ho. <Cite id="hmm-maxent-crf-slp3-ch18" loc="§18.4" /> <Cite id="pos-tagging-gfg-hmm" />
+**In simple words:** HMM, jo dikh raha hai usse andaza lagata hai ki parde ke peeche kya ho raha hai. POS tagging mein tags hidden hain aur words dikhte hain, isliye HMM words ke liye sabse likely tags dhundhta hai. <Cite id="class-nlp-pyq3" loc="p. 2" />
 
-**Model ke parts:** states = tags (N, V, M...); observations = words; transition probability $P(\text{tag}_i \mid \text{tag}_{i-1})$; emission probability $P(\text{word}_i \mid \text{tag}_i)$. <Cite id="hmm-maxent-crf-slp3-appA" loc="§A.2" />
+**Definition:** Hidden Markov Model ek statistical model hai jo un systems ko samajhne ke liye use hota hai jinki asli states seedhe dikhti nahi, par hum wo outcomes dekh sakte hain jo in hidden states par depend karte hain. <Cite id="class-nlp-pyq3" loc="p. 2" />
 
-**Do assumptions:** tag sirf pichhle tag pe depend karta hai (Markov), aur word sirf apne tag pe depend karta hai.
+**Roz ki analogy:** aap bahar dekh kar mausam nahi dekh sakte, par aap logon ko kuch karte dekhte ho (walk, shop, clean). Ye actions hidden mausam ke clues dete hain.
+
+<Img id="class-hmm-maxent-crf-weather-hmm" caption="Class ka example: hidden states Rainy, Sunny aur Cloudy, unke beech transition probabilities, aur visible activities walk, shop, clean tak emission probabilities." />
+
+**Components** <Cite id="class-nlp-pyq3" loc="p. 3" />
+
+1. **States:** hidden conditions (POS tagging mein tags).
+2. **Observations:** jo signals hum dekh sakte hain (words).
+3. **Transition probabilities:** ek hidden state se doosri mein jaane ki probability (tag se agla tag).
+4. **Emission probabilities:** ek state se ek observation nikalne ki probability (tag se word). Example mein, mausam Rainy ho to: walk 0.1, shop 0.4, clean 0.5.
+5. **Initial state probabilities:** system ke har state se shuru hone ki probability.
+
+**POS tagging ke liye HMM:** model tagged corpus mein counting se seekha jaata hai. <Cite id="class-nlp-pyq3" loc="p. 7" />
+
+$$
+P(t_j \mid t_i) = \frac{\text{Count}(t_i \to t_j)}{\text{Count}(t_i)}, \qquad P(\text{word} \mid \text{tag}) = \frac{\text{Count}(\text{word}, \text{tag})}{\text{Count}(\text{tag})}
+$$
+
+Phir **Viterbi algorithm** sabse zyaada probability wala tag sequence dhundhta hai: $\delta_t(j)$ us best probability ko kehte hain jisme koi bhi tag path word $t$ par tag $j$ tak pahunchta hai, aur pichhle tag ka back-pointer saath rakhta hai. End mein back-pointers follow karke tags padhte hain. <Cite id="class-nlp-pyq3" loc="p. 7" />
 
 ```mermaid
-%% caption: Hidden tags (upar) transitions se chain banate hain; har tag ek visible word emit karta hai (dotted arrows).
+%% caption: HMM tagging: counting se do tables seekho, phir Viterbi se decode karo.
 flowchart LR
-  S(["START"]) --> T1["tag 1"] --> T2["tag 2"] --> T3["tag 3"]
-  T1 -.-> W1(["word 1"])
-  T2 -.-> W2(["word 2"])
-  T3 -.-> W3(["word 3"])
+  A["Tagged corpus"] --> B["Count: transition matrix"]
+  A --> C["Count: emission matrix"]
+  B --> D["Viterbi decoding"]
+  C --> D
+  E["Naya sentence"] --> D
+  D --> F["Best tag sequence"]
 ```
 
-<Cite id="hmm-maxent-crf-slp3-ch18" loc="Fig. 18.11" />
+**Limitation:** ye maanta hai ki agla tag sirf current tag par depend karta hai, aur extra clues aasani se use nahi kar sakta. <Cite id="class-nlp-pyq3" loc="p. 5" />
 
-**Working:**
-
-1. **Train** tagged corpus ginke: transition = $C(\text{prev},\text{tag})/C(\text{prev})$ aur emission = $C(\text{tag},\text{word})/C(\text{tag})$.
-2. **Decode** naya sentence: wo tags chuno jo $\prod_i P(w_i \mid t_i)\,P(t_i \mid t_{i-1})$ ko maximum karein.
-3. Har tag path try karna bahut slow hai ($k^n$), isliye **Viterbi** algorithm use karo: har word aur tag ke liye sirf best score aur ek backpointer rakho. <Cite id="pos-tagging-wiki-viterbi" />
-
-<Sum>
-
-<Given>
-
-Tagged corpus (N noun, M modal, V verb): `Martin/N Justin/N can/M watch/V Will/N`, `Spot/N will/M watch/V Martin/N`, `Will/N Justin/N spot/V Martin/N`, `Martin/N will/M pat/V Spot/N`. Capital aur small letters alag words hain.
-
-</Given>
-
-<Find>
-
-"Justin will spot Will" ke best tags.
-
-</Find>
-
-<Steps>
-
-1. Tag counts: N = 10, M = 3, V = 4.
-2. Emissions: P(Justin|N) = 2/10 = 0.2, P(Will|N) = 0.2, P(will|M) = 2/3, P(spot|V) = 1/4.
-3. Transitions (har tag se nikalti moves): `<S>`→N = 4/4 = 1; N→N = 2/10, N→M = 3/10, N→V = 1/10, N→end = 4/10; M→V = 3/3 = 1; V→N = 4/4 = 1.
-4. Viterbi, word by word (0 matlab wo tag us word ko produce nahi kar sakta; N sirf capital *Will* emit karta hai, small *will* kabhi nahi):
-
-| Tag | Justin | will | spot | Will |
-|---|---|---|---|---|
-| N | 1 × 0.2 = 0.2 | 0 | 0 | 0.01 × 1 × 0.2 = 0.002 |
-| M | 0 | 0.2 × 0.3 × 2/3 = 0.04 | 0 | 0 |
-| V | 0 | 0 | max(0, 0.04 × 1) × 1/4 = 0.01 | 0 |
-
-5. End: 0.002 × P(end|N) = 0.002 × 0.4 = 0.0008. Backpointers: N ← V ← M ← N.
-
-</Steps>
-
-<Answer>
-
-Justin/N will/M spot/V Will/N, probability 0.0008 ke saath.
-
-</Answer>
-
-<Box kind="verify">
-
-Path pe ek hi product: $1 \times 0.2 \times 0.3 \times \tfrac23 \times 1 \times \tfrac14 \times 1 \times 0.2 \times 0.4 = 0.0008$. Baaki har path mein zero hai, kyunki ya to tag word emit nahi kar sakta ya wo move kabhi dekhi nahi gayi. Rows ka sum 1 hai: N out = 0.2 + 0.3 + 0.1 + 0.4.
-
-</Box>
-
-</Sum>
-
-**Advantages:** simple, fast, sirf counts chahiye. **Disadvantages:** extra clues (suffix, capital letter) use nahi kar sakta, unknown words pe weak, zero counts ke liye smoothing chahiye, sirf pichhla tag dekhta hai.
-
-**Conclusion:** HMM tagger tagged corpus se transition aur emission tables seekhta hai aur Viterbi se sabse probable tag sequence deta hai.
+**Conclusion:** HMM tagger counting se seekhe transition aur emission probabilities use karta hai, aur Viterbi se best tags chunta hai.

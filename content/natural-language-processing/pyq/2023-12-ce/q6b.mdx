@@ -1,50 +1,46 @@
 ---
-references: [hmm-maxent-crf-lafferty2001, hmm-maxent-crf-sutton-mccallum, hmm-maxent-crf-av-crf, pos-tagging-gfg-crf]
+references: [class-nlp-m6, class-nlp-asol, class-nlp-pyq3]
 ---
 
-**In simple words:** sequence labeling gives a label to every item in a sequence (a POS tag to each word, or a name tag such as PERSON or LOCATION). A **Conditional Random Field (CRF)** is a probability model that looks at the **whole input sentence** and picks the best **whole label sequence**, taking into account how neighbouring labels fit together. <Cite id="hmm-maxent-crf-lafferty2001" /> <Cite id="hmm-maxent-crf-av-crf" />
+**In simple words:** a Conditional Random Field labels every word of a sentence, looking at the whole sentence and scoring the whole label sequence together. The class describes it as a probabilistic model that understands the sequence and context of words, which helps in making predictions (for example entities) more accurate. <Cite id="class-nlp-m6" loc="slide 39" /> <Cite id="class-nlp-asol" loc="p. 10" />
 
-**Why it is needed:** an HMM models how labels generate words, so it can use only the current word. A MEMM decides one label at a time and suffers from the *label bias* problem. A CRF is **discriminative** (it models $P(y \mid x)$ directly), can use any features of the whole sentence, and normalizes over the whole sequence, which avoids label bias.
+*(The class files give only this one-line description of CRF; the rest of this answer is the standard short explanation.)*
 
-**How it works (linear-chain CRF):**
+**Why it is needed:** the HMM assumes the next tag depends only on the current tag and cannot use extra features. <Cite id="class-nlp-pyq3" loc="p. 5" /> MaxEnt (MEMM) uses rich features but normalizes locally at each step, which gives the label bias problem. <Cite id="class-nlp-pyq3" loc="p. 10" /> A CRF keeps the rich features and normalizes once over the whole sentence.
 
-1. **Feature functions** look at the previous label, the current label and the input: $f_k(y_{t-1}, y_t, x, t)$. Examples: "word is capitalized and label is B-PER", "word ends in -ing and label is VERB", "previous label is DT and current label is NN".
-2. Each feature has a **weight** $w_k$ (positive favours it, negative discourages it).
-3. The probability of a label sequence is
+**Definition:** a CRF is a discriminative model that directly models $P(Y \mid X)$: the probability of the whole label sequence $Y = (y_1, \ldots, y_n)$ given the whole word sequence $X$.
 
 $$
-P(y \mid x) = \frac{1}{Z(x)} \exp\Big( \sum_{t}\sum_{k} w_k\, f_k(y_{t-1}, y_t, x, t) \Big)
+P(Y \mid X) = \frac{1}{Z(X)} \exp\Big(\sum_{i=1}^{n} \sum_{k} \lambda_k f_k(y_{i-1}, y_i, X, i)\Big)
 $$
 
-where $Z(x)$ adds the score of all possible label sequences so the probabilities total 1.
-
-4. **Training:** learn the weights from labelled sentences by maximizing the conditional log-likelihood with gradient methods (for example L-BFGS); the forward-backward algorithm computes $Z(x)$.
-5. **Decoding:** find the best label sequence with the **Viterbi** algorithm. <Cite id="hmm-maxent-crf-sutton-mccallum" />
+$f_k$ are feature functions (for example "word ends in -ing and the label is VBG"), $\lambda_k$ are learned weights and $Z(X)$ adds over all possible label sequences, so the normalization is global.
 
 ```mermaid
-%% caption: In a linear-chain CRF each label depends on its neighbouring labels and can look at the entire input sentence.
-flowchart TD
-  X["Input sentence x: Rahul lives in Pune"]
-  X --> W1["Rahul"]
-  X --> W2["lives"]
-  X --> W3["in"]
-  X --> W4["Pune"]
-  Y1["B-PER"] --- Y2["O"] --- Y3["O"] --- Y4["B-LOC"]
-  W1 -.-> Y1
-  W2 -.-> Y2
-  W3 -.-> Y3
-  W4 -.-> Y4
+%% caption: A linear-chain CRF. Each label depends on its neighbouring labels and can look at the whole input sentence X.
+flowchart LR
+  X["Whole sentence X"] --> Y1["y1"]
+  X --> Y2["y2"]
+  X --> Y3["y3"]
+  X --> Y4["y4"]
+  Y1 --- Y2
+  Y2 --- Y3
+  Y3 --- Y4
 ```
 
-**Example:** for "Rahul lives in Pune", features such as "capitalized word" push *Rahul* to B-PER and *Pune* to B-LOC, while *lives* and *in* get O.
+**How it is used for sequence labelling:**
 
-| Point | HMM | MEMM | CRF |
+1. Define feature functions on words, neighbours, word shape and neighbouring labels.
+2. Train the weights $\lambda_k$ on labelled sentences (iterative optimization).
+3. For a new sentence, find the label sequence with the highest probability using Viterbi.
+
+| Point | HMM | MaxEnt (MEMM) | CRF |
 |---|---|---|---|
-| Type | generative | discriminative | discriminative |
-| Models | $P(x, y)$ | $P(y_t \mid y_{t-1}, x)$ per step | $P(y \mid x)$ for whole sequence |
-| Features | current word only | any | any, overlapping |
-| Label bias | no | yes | no |
+| Type | Generative, $P(x, y)$ | Discriminative, $P(y \mid x)$ | Discriminative, $P(Y \mid X)$ |
+| Rich features | No | Yes | Yes |
+| Normalization | Joint model | Local, each step | Global, whole sentence |
+| Label bias | No | Yes | No |
 
-**Advantages:** rich features, best accuracy among classical taggers. **Disadvantages:** slower training, and features must be designed by hand. <Cite id="pos-tagging-gfg-crf" />
+**Applications:** POS tagging and named entity recognition. **Disadvantage:** training is slower than counting for an HMM.
 
-**Conclusion:** a CRF scores whole label sequences with weighted features and decodes with Viterbi; it is widely used for POS tagging and named entity recognition.
+**Conclusion:** a CRF labels a sequence using rich features and global normalization, so it avoids label bias.

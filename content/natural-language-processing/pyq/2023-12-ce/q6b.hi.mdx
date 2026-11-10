@@ -1,50 +1,46 @@
 ---
-references: [hmm-maxent-crf-lafferty2001, hmm-maxent-crf-sutton-mccallum, hmm-maxent-crf-av-crf, pos-tagging-gfg-crf]
+references: [class-nlp-m6, class-nlp-asol, class-nlp-pyq3]
 ---
 
-**In simple words:** sequence labeling sequence ke har item ko label deta hai (har word ko POS tag, ya name tag jaise PERSON ya LOCATION). **Conditional Random Field (CRF)** ek probability model hai jo **poora input sentence** dekhta hai aur padosi labels ek doosre ke saath kaise fit hote hain ye dhyan mein rakhke **poori label sequence** chunta hai. <Cite id="hmm-maxent-crf-lafferty2001" /> <Cite id="hmm-maxent-crf-av-crf" />
+**In simple words:** Conditional Random Field sentence ke har word ko label deta hai, poore sentence ko dekhte hue aur poore label sequence ko ek saath score karte hue. Class ise ek probabilistic model batati hai jo words ka sequence aur context samajhta hai, jisse predictions (jaise entities) zyaada accurate hote hain. <Cite id="class-nlp-m6" loc="slide 39" /> <Cite id="class-nlp-asol" loc="p. 10" />
 
-**Ye kyun zaroori hai:** HMM model karta hai ki labels words kaise generate karte hain, isliye wo sirf current word use kar sakta hai. MEMM ek-ek label alag decide karta hai aur *label bias* problem se grast hai. CRF **discriminative** hai ($P(y \mid x)$ ko seedha model karta hai), poore sentence ke koi bhi features use kar sakta hai, aur poori sequence pe normalize karta hai, jisse label bias nahi hota.
+*(Class files mein CRF ka bas yahi ek line ka description hai; baaki answer standard short explanation hai.)*
 
-**Kaise kaam karta hai (linear-chain CRF):**
+**Ye kyun zaroori hai:** HMM maanta hai ki agla tag sirf current tag par depend karta hai aur extra features use nahi kar sakta. <Cite id="class-nlp-pyq3" loc="p. 5" /> MaxEnt (MEMM) rich features use karta hai par har step par locally normalize karta hai, jisse label bias problem aati hai. <Cite id="class-nlp-pyq3" loc="p. 10" /> CRF rich features rakhta hai aur normalization poore sentence par ek baar karta hai.
 
-1. **Feature functions** pichla label, current label aur input dekhte hain: $f_k(y_{t-1}, y_t, x, t)$. Examples: "word capitalized hai aur label B-PER", "word -ing pe khatam aur label VERB", "pichla label DT aur current label NN".
-2. Har feature ka ek **weight** $w_k$ hota hai (positive use badhata hai, negative ghatata hai).
-3. Label sequence ki probability
+**Definition:** CRF ek discriminative model hai jo seedhe $P(Y \mid X)$ model karta hai: poore word sequence $X$ diya ho to poore label sequence $Y = (y_1, \ldots, y_n)$ ki probability.
 
 $$
-P(y \mid x) = \frac{1}{Z(x)} \exp\Big( \sum_{t}\sum_{k} w_k\, f_k(y_{t-1}, y_t, x, t) \Big)
+P(Y \mid X) = \frac{1}{Z(X)} \exp\Big(\sum_{i=1}^{n} \sum_{k} \lambda_k f_k(y_{i-1}, y_i, X, i)\Big)
 $$
 
-jahan $Z(x)$ saari possible label sequences ke scores jodta hai taaki probabilities ka total 1 ho.
-
-4. **Training:** labelled sentences se weights seekho, conditional log-likelihood ko gradient methods (jaise L-BFGS) se maximize karke; forward-backward algorithm $Z(x)$ nikalta hai.
-5. **Decoding:** **Viterbi** algorithm se best label sequence dhoondho. <Cite id="hmm-maxent-crf-sutton-mccallum" />
+$f_k$ feature functions hain (jaise "word -ing par khatam hota hai aur label VBG hai"), $\lambda_k$ seekhe hue weights hain aur $Z(X)$ saare possible label sequences par jodta hai, isliye normalization global hai.
 
 ```mermaid
-%% caption: Linear-chain CRF mein har label apne padosi labels pe depend karta hai aur poora input sentence dekh sakta hai.
-flowchart TD
-  X["Input sentence x: Rahul lives in Pune"]
-  X --> W1["Rahul"]
-  X --> W2["lives"]
-  X --> W3["in"]
-  X --> W4["Pune"]
-  Y1["B-PER"] --- Y2["O"] --- Y3["O"] --- Y4["B-LOC"]
-  W1 -.-> Y1
-  W2 -.-> Y2
-  W3 -.-> Y3
-  W4 -.-> Y4
+%% caption: Linear-chain CRF. Har label apne padosi labels par depend karta hai aur poore input sentence X ko dekh sakta hai.
+flowchart LR
+  X["Poora sentence X"] --> Y1["y1"]
+  X --> Y2["y2"]
+  X --> Y3["y3"]
+  X --> Y4["y4"]
+  Y1 --- Y2
+  Y2 --- Y3
+  Y3 --- Y4
 ```
 
-**Example:** "Rahul lives in Pune" mein "capitalized word" jaise features *Rahul* ko B-PER aur *Pune* ko B-LOC ki taraf dhakelte hain, aur *lives* aur *in* ko O milta hai.
+**Sequence labelling mein kaise use hota hai:**
 
-| Point | HMM | MEMM | CRF |
+1. Words, padosi words, word shape aur padosi labels par feature functions define karo.
+2. Labelled sentences par weights $\lambda_k$ train karo (iterative optimization).
+3. Naye sentence ke liye Viterbi se sabse zyaada probability wala label sequence dhundho.
+
+| Point | HMM | MaxEnt (MEMM) | CRF |
 |---|---|---|---|
-| Type | generative | discriminative | discriminative |
-| Models | $P(x, y)$ | $P(y_t \mid y_{t-1}, x)$ per step | $P(y \mid x)$ for whole sequence |
-| Features | current word only | any | any, overlapping |
-| Label bias | no | yes | no |
+| Type | Generative, $P(x, y)$ | Discriminative, $P(y \mid x)$ | Discriminative, $P(Y \mid X)$ |
+| Rich features | Nahi | Haan | Haan |
+| Normalization | Joint model | Local, har step | Global, poora sentence |
+| Label bias | Nahi | Haan | Nahi |
 
-**Advantages:** rich features, classical taggers mein sabse achhi accuracy. **Disadvantages:** training slow, aur features haath se design karne padte hain. <Cite id="pos-tagging-gfg-crf" />
+**Applications:** POS tagging aur named entity recognition. **Disadvantage:** training HMM ki counting se slow hai.
 
-**Conclusion:** CRF poori label sequences ko weighted features se score karta hai aur Viterbi se decode karta hai; ye POS tagging aur named entity recognition mein bahut use hota hai.
+**Conclusion:** CRF rich features aur global normalization se sequence label karta hai, isliye label bias se bachta hai.

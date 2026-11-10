@@ -1,75 +1,32 @@
 ---
-references: [porter-stemmer-def, porter-stemmer-gfg-stemming, porter-stemmer-wiki-stem, porter-stemmer-snowball]
+references: [class-nlp-m2, class-nlp-pyq2]
 ---
 
-**In simple words:** **stemmer** word ka ending kaat deta hai, taaki `connected`, `connecting` aur `connection` sab `connect` ban jaayein. Porter stemmer (Martin Porter, 1980) ye kaam suffix-stripping rules ki fixed list se paanch steps mein karta hai. Result ek stem hota hai, jo asli word hona zaroori nahi. <Cite id="porter-stemmer-def" /> <Cite id="porter-stemmer-gfg-stemming" />
+**In simple words:** Porter stemmer chhote rules ke set se word endings kaat deta hai, isliye connect, connected aur connecting sab ban jaate hain connect.
 
-**Ye kyun zaroori hai:** search engines aur classifiers `play`, `plays` aur `playing` ko ek hi idea maante hain. Stemming vocabulary chhoti karti hai aur recall badhati hai.
+**Definition:** stemming is a simplified form of morphological analysis used to find the root word. Porter stemmer is a simple rule-based algorithm for stemming, jisme 5 sets of rules hain, aur wo speed aur simplicity ke liye jaana jaata hai. Ye English words se suffixes hataata hai, jo information retrieval mein terms ki sankhya kam karta hai (space aur time bachta hai). Ise Martin F. Porter ne banaya. <Cite id="class-nlp-m2" loc="p. 19" /> <Cite id="class-nlp-pyq2" loc="p. 2" />
 
-**Key idea: measure m.** Word ko `[C](VC)^m[V]` likho, jahan C consonants ka run hai aur V vowels ka (`y` consonant ke baad vowel maana jaata hai). `m` vowel-consonant groups ginta hai. `tree` ka m=0, `trouble` ka m=1, `troubles` ka m=2. Ek rule tabhi chalta hai jab bacha hua stem condition poori kare, jaise `m>1` (stem kaafi lamba hai), `*v*` (stem mein vowel hai) ya `*d` (double consonant par khatam). Isse `bed` kat kar `b` nahi banta. <Cite id="porter-stemmer-def" />
+**Consonants aur vowels:** consonant wo letter hai jo a, e, i, o, u nahi hai aur wo y nahi hai jo consonant ke baad aaya ho; baaki har letter vowel hai. C matlab consonants ki string aur V vowels ki string. <Cite id="class-nlp-pyq2" loc="p. 2" />
+
+**Form aur measure:** har word $[C](VC)^m[V]$ hota hai, aur $m$ (measure) VC pairs ki sankhya hai. TREE ka m = 0, TROUBLE aur TRAP ka m = 1, TROUBLES aur PRIVATE ka m = 2, RELATIONAL ka m = 4. <Cite id="class-nlp-m2" loc="p. 20" /> <Cite id="class-nlp-m2" loc="p. 21" />
+
+<Img id="class-porter-stemmer-private-relational" caption="PRIVATE (m = 2) aur RELATIONAL (m = 4) consonant aur vowel groups mein." />
+
+**Rule form:** (condition) S1 to S2. Agar word S1 par khatam ho aur S1 se pehle ka stem condition poori kare, to S1 ko S2 se badlo. Example: (m > 1) EMENT to nothing se REPLACEMENT ban jaata hai REPLAC, kyunki REPLAC ka m = 2 hai. <Cite id="class-nlp-pyq2" loc="p. 3" />
 
 ```mermaid
-%% caption: Porter ke paanch steps order mein chalte hain. Har step sabse lamba matching suffix rule lagata hai jiski condition poori ho.
+%% caption: Porter stemmer ke paanch steps. Har step ke rules tabhi fire hote hain jab stem par condition sach ho.
 flowchart LR
-  A["Word"] --> B["1a: plurals (sses to ss, ies to i, s to nothing)"]
-  B --> C["1b: ed and ing, then clean-up"]
-  C --> D["1c: y to i"]
-  D --> E["2: long suffixes to short (ational to ate)"]
-  E --> F["3: ical, ful, ness, ative"]
-  F --> G["4: delete suffixes if m>1"]
-  G --> H["5: final e and double l"]
-  H --> I["Stem"]
+  A["Word"] --> B["1: plurals, -ed, -ing"]
+  B --> C["2: lambe suffixes"]
+  C --> D["3: aur suffixes"]
+  D --> E["4: suffixes hatao"]
+  E --> F["5: aakhri e, ll tidy"]
+  F --> G["Stem"]
 ```
 
-**Steps:**
+**Main rules** (standard; class files sirf rule form deti hain): 1a SSES to SS, IES to I, S to nothing (caresses se caress, ponies se poni, cats se cat); 1b (stem has a vowel) ED ya ING to nothing (motoring se motor); 2 (m > 0) ATIONAL to ATE (relational se relate); 3 (m > 0) FUL to nothing (hopeful se hope); 4 (m > 1) EMENT, MENT, AL aur doosre to nothing (replacement se replac); 5 (m > 1) E to nothing (relate se relat).
 
-| Step | Kaam | Example |
-|---|---|---|
-| 1a | Plurals | `caresses` se `caress`, `ponies` se `poni` |
-| 1b | `-eed`, `-ed`, `-ing` (stem mein vowel chahiye), phir fix-up (`at` se `ate`, double letter se single) | `hopping` se `hop`, `agreed` se `agree` |
-| 1c | Stem mein vowel ho to `y` se `i` | `happy` se `happi` |
-| 2 | Double suffixes map karo (m>0) | `relational` se `relate`, `generalization` se `generalize` |
-| 3 | `-ful`, `-ness`, `-ical`, `-ative` jaise hatao (m>0) | `hopeful` se `hope` |
-| 4 | `-al`, `-ance`, `-ate`, `-ment`, `-ous`, `-ize` jaise delete karo (m>1) | `adjustment` se `adjust` |
-| 5 | Last `e` hatao (m>1), `ll` ko ghatao (m>1) | `probate` se `probat` |
+**Example:** generalizations: 1a se generalization, 2 (IZATION to IZE) se generalize, 3 (ALIZE to AL) se general, 4 (AL to nothing) se **gener**.
 
-<Sum>
-
-<Given>
-
-words `relational` aur `generalizations`.
-
-</Given>
-
-<Find>
-
-dono ka Porter stem.
-
-</Find>
-
-<Steps>
-
-1. **relational.** Step 1a se 1c kuch nahi karte (`s`, `ed`, `ing`, `y` nahi hai). Step 2: `ational` se `ate`, stem `rel` ka m=1 (>0), to `relate`. *Reason: step 2 lambe suffix ko chhote mein map karta hai.* Step 4: `ate` ke liye m>1 chahiye par `rel` ka m=1 hai, to wo rehta hai. Step 5: m>1 ho to last `e` hatao; `relat` ka m=2 hai, to `relat`.
-2. **generalizations.** Step 1a: `s` hatao, to `generalization`. Step 2: `ization` se `ize` (stem `general`, m=3), to `generalize`. Step 3: `alize` se `al` (stem `gener`, m=2), to `general`. Step 4: `gener` ka m=2>1 hai, to `al` delete, to `gener`. Step 5: `e` nahi hai. *Reason: har step sabse lamba matching suffix chhota karta hai.*
-
-</Steps>
-
-<Answer>
-
-`relational` se `relat`; `generalizations` se `gener`.
-
-</Answer>
-
-<Box kind="verify">
-
-m check: `rel` = C V C, m=1; `relat` = C V C V C, m=2; `gener` = C V C V C, m=2. Path generalizations, generalization, generalize, general, gener wahi hai jo Porter ke paper mein diya hai.
-
-</Box>
-
-</Sum>
-
-**Advantages:** fast, simple, dictionary nahi chahiye. **Limitations:** over-stemming (`university` aur `universe` dono `univers` dete hain), under-stemming (`data`, `datum`), aise stems jo word nahi hain (`poni`), sirf English. Snowball (Porter2) ise improve karta hai. <Cite id="porter-stemmer-snowball" />
-
-**Conclusion:** Porter ka stemmer paanch rule-based steps mein suffix hatata hai, jo measure m se control hote hain.
-
-Exam mein English mein likho: "The Porter stemmer removes suffixes in five ordered steps, each rule being applied only if a condition on the measure m of the stem holds."
+**Conclusion:** Porter stemmer fast aur simple hai, par crude hai: stem dictionary word hona zaroori nahi (happy ban jaata hai happi).

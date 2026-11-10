@@ -1,47 +1,35 @@
 ---
-references: [word-sense-disambiguation-yarowsky1995, word-sense-disambiguation-wiki-yarowsky, ambiguity-challenges-navigli2009, word-sense-disambiguation-gfg-wsd]
+references: [class-nlp-pyq4]
 ---
 
-**In simple words:** both methods find the sense of a word without a large hand-tagged corpus. **Semi-supervised** (Yarowsky) starts from a few tagged seeds. **Unsupervised** (HyperLex) uses no tags at all and finds the senses by itself. <Cite id="word-sense-disambiguation-gfg-wsd" /> <Cite id="ambiguity-challenges-navigli2009" loc="§3.8.1" />
+**In simple words:** semi-supervised WSD starts from a few labelled examples (Yarowsky); unsupervised WSD uses no labelled examples at all (Hyperlex).
 
-**1) Yarowsky's semi-supervised method (1995).** It rests on two rules: **one sense per collocation** (nearby words give a strong, steady clue) and **one sense per discourse** (in one document a word keeps one sense). <Cite id="word-sense-disambiguation-yarowsky1995" />
+**Semi-supervised method (Yarowsky)** <Cite id="class-nlp-pyq4" loc="p. 7" />
 
-1. Collect all sentences with the target word (for *plant*) from raw text.
-2. Give one **seed word** per sense by hand: *life* (living) and *manufacturing* (factory). Sentences with a seed get that label.
-3. Train a **decision list** on these labelled sentences. It learns new clues, such as *species* and *worker*.
-4. Label all sentences with the list and keep only the confident ones.
-5. Apply one sense per discourse to make each document consistent.
-6. Repeat steps 3 to 5 until nothing new is added.
+The Yarowsky algorithm is an iterative bootstrapping method that uses a small set of labelled seed examples to classify a large amount of unlabelled data. It relies on two principles: one sense per collocation (a word with a given nearby word keeps the same sense) and one sense per discourse (a word keeps one sense in a document). <Cite id="class-nlp-pyq4" loc="p. 7" />
+
+Steps: seed examples, train a decision list, label the unlabelled text with confident predictions, apply one sense per discourse, add the new labels and retrain, repeat until nothing new is labelled. <Cite id="class-nlp-pyq4" loc="p. 7" /> <Cite id="class-nlp-pyq4" loc="p. 8" />
+
+**Unsupervised method (Hyperlex)**
+
+*(The class files do not cover Hyperlex; this is the standard short explanation.)* Hyperlex needs no labelled data and no dictionary of senses. It builds a graph from a text corpus:
+
+1. Take the words that appear near the target word; each is a node.
+2. Join two nodes if they occur together often (a co-occurrence graph).
+3. Find the **hubs**: the most highly connected nodes. Each hub stands for one sense of the target word.
+4. For a new sentence, see which hub its context words are closest to, and give the target word that sense.
 
 ```mermaid
-%% caption: Yarowsky bootstrapping. A few seeds start the loop and confident labels are fed back until nothing more can be added.
-flowchart TD
-  A["Untagged sentences with target word"] --> B["Label sentences containing seed words"]
-  B --> C["Train decision list"]
-  C --> D["Label all, keep confident ones"]
-  D --> E["One sense per discourse"]
-  E --> F{"New sentences added?"}
-  F -->|"yes"| C
-  F -->|"no"| G["Final decision list"]
+%% caption: Semi-supervised and unsupervised WSD side by side. The top row needs a few labels; the bottom row needs none.
+flowchart LR
+  S1["Few labelled seeds"] --> S2["Classifier labels more text"] --> S3["Retrain and repeat"]
+  U1["Unlabelled corpus"] --> U2["Co-occurrence graph"] --> U3["Hubs = senses"]
 ```
 
-<Cite id="word-sense-disambiguation-wiki-yarowsky" loc="diagram" />
-
-*Advantage:* needs only seeds and raw text. *Disadvantage:* an early wrong label can spread.
-
-**2) HyperLex (Véronis, 2004), unsupervised.** Senses are found from a **co-occurrence graph**. <Cite id="ambiguity-challenges-navigli2009" loc="§4.3" />
-
-1. Build a graph: words are nodes; two words are joined if they occur together in a paragraph with the target.
-2. Weight each edge $w_{ij} = 1 - \max\{P(w_i \mid w_j),\ P(w_j \mid w_i)\}$. Words that often occur together get a weight near 0 (close).
-3. Pick the best-connected nodes as **hubs**. Each hub is one sense.
-4. Join the hubs to the target and find the minimum spanning tree.
-5. For a new sentence, find the hub nearest to each context word, score $1/(1+d)$, add up, and take the highest hub.
-
-| Point | Yarowsky | HyperLex |
+| Point | Yarowsky | Hyperlex |
 |---|---|---|
-| Type | Semi-supervised | Unsupervised |
-| Needs | A few seed words | Only raw text |
-| Senses come from | Fixed by the seeds | Discovered as hubs |
-| Output | Named senses | Unnamed senses (hubs) |
+| Labelled data | Small seed set | None |
+| Idea | Bootstrapping with two principles | Hubs in a word graph |
+| Weakness | Poor seeds spread errors | Senses found may not match a dictionary |
 
-**Conclusion:** Yarowsky grows a labelled set from seeds; HyperLex discovers senses as hubs in a word graph.
+**Conclusion:** Yarowsky grows labels from seeds; Hyperlex finds senses from the structure of the text alone.

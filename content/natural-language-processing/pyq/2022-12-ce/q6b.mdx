@@ -1,75 +1,32 @@
 ---
-references: [porter-stemmer-def, text-preprocessing-porter1980, porter-stemmer-snowball, porter-stemmer-gfg-stemming, porter-stemmer-av-stemming, porter-stemmer-wiki-stem]
+references: [class-nlp-m2, class-nlp-pyq2]
 ---
 
-**In simple words:** **stemming** cuts the ending off a word so that related forms (*connect, connected, connecting, connection*) become one stem (*connect*). The **Porter stemmer** (Martin Porter, 1980) does this with a small set of suffix rules in five steps, without a dictionary. The stem need not be a real word (*happy* becomes *happi*). <Cite id="porter-stemmer-def" /> <Cite id="text-preprocessing-porter1980" /> <Cite id="porter-stemmer-wiki-stem" />
+**In simple words:** the Porter stemmer cuts word endings with a small set of rules, so connect, connected and connecting all become connect.
 
-**Why it is needed.** In search, a query for *connect* should also find *connected*. Stemming also shrinks the vocabulary. <Cite id="porter-stemmer-gfg-stemming" />
+**Definition:** stemming is a simplified form of morphological analysis used to find the root word. The Porter stemmer is a simple rule-based algorithm for stemming, with 5 sets of rules, known for its speed and simplicity. It removes suffixes from English words, which helps information retrieval by reducing the number of terms (saving space and time). Developed by Martin F. Porter. <Cite id="class-nlp-m2" loc="p. 19" /> <Cite id="class-nlp-pyq2" loc="p. 2" />
 
-**Measure m.** A letter is a vowel if it is a, e, i, o, u, or a y after a consonant; otherwise it is a consonant. Every word has the form $[C](VC)^m[V]$, where C is a run of consonants and V a run of vowels. The number $m$ counts the VC pairs: *tree* $m=0$, *trouble* $m=1$, *private* $m=2$. A rule fires only if the stem left has enough length, tested through $m$. <Cite id="porter-stemmer-def" loc="§2" />
+**Consonants and vowels:** a consonant is a letter other than a, e, i, o, u and other than y preceded by a consonant; every other letter is a vowel. C means a string of consonants and V a string of vowels. <Cite id="class-nlp-pyq2" loc="p. 2" />
 
-**Rule form:** (condition) S1 to S2: if the word ends in S1 and the stem satisfies the condition, replace S1 by S2. In a group, only the rule with the **longest matching** S1 is used.
+**Form and measure:** every word is $[C](VC)^m[V]$, and $m$ (the measure) is the number of VC pairs. TREE has m = 0, TROUBLE and TRAP m = 1, TROUBLES and PRIVATE m = 2, RELATIONAL m = 4. <Cite id="class-nlp-m2" loc="p. 20" /> <Cite id="class-nlp-m2" loc="p. 21" />
+
+<Img id="class-porter-stemmer-private-relational" caption="PRIVATE (m = 2) and RELATIONAL (m = 4) split into consonant and vowel groups." />
+
+**Rule form:** (condition) S1 to S2. If the word ends with S1 and the stem before S1 meets the condition, replace S1 with S2. Example: (m > 1) EMENT to nothing makes REPLACEMENT into REPLAC, since REPLAC has m = 2. <Cite id="class-nlp-pyq2" loc="p. 3" />
 
 ```mermaid
-%% caption: The five steps of Porter. A word passes through every step in order; each may change it or leave it.
+%% caption: The five steps of the Porter stemmer. Rules in each step fire only if the condition on the stem is true.
 flowchart LR
-  W["Word"] --> S1["Step 1: plurals, -ed, -ing, y to i"]
-  S1 --> S2["Step 2: long suffixes, m>0"]
-  S2 --> S3["Step 3: -icate, -ful, -ness, m>0"]
-  S3 --> S4["Step 4: remove suffix, m>1"]
-  S4 --> S5["Step 5: final e, double l"]
-  S5 --> R["Stem"]
+  A["Word"] --> B["1: plurals, -ed, -ing"]
+  B --> C["2: long suffixes"]
+  C --> D["3: more suffixes"]
+  D --> E["4: remove suffixes"]
+  E --> F["5: tidy up final e, ll"]
+  F --> G["Stem"]
 ```
 
-<Cite id="porter-stemmer-snowball" loc="the steps" />
+**Main rules** (standard; the class files give only the rule form): 1a SSES to SS, IES to I, S to nothing (caresses becomes caress, ponies becomes poni, cats becomes cat); 1b (stem has a vowel) ED or ING to nothing (motoring becomes motor); 2 (m > 0) ATIONAL to ATE (relational becomes relate); 3 (m > 0) FUL to nothing (hopeful becomes hope); 4 (m > 1) EMENT, MENT, AL and others to nothing (replacement becomes replac); 5 (m > 1) E to nothing (relate becomes relat).
 
-| Step | What it does | Example |
-|---|---|---|
-| 1a | Plurals: SSES to SS, IES to I, SS stays, S removed | caresses to caress, ponies to poni, cats to cat |
-| 1b | (m>0) EED to EE; remove ED or ING if the stem has a vowel, then tidy (AT to ATE, BL to BLE, IZ to IZE, double letter to one, short word add E) | agreed to agree, hopping to hop |
-| 1c | (stem has a vowel) Y to I | happy to happi |
-| 2 | m>0: ATIONAL to ATE, IZATION to IZE, BILITI to BLE ... | relational to relate |
-| 3 | m>0: ICATE to IC, ALIZE to AL, ATIVE, FUL, NESS removed | goodness to good |
-| 4 | m>1: remove AL, ANCE, ER, IC, ABLE, ANT, MENT, ION (after S or T) ... | allowance to allow, adoption to adopt |
-| 5 | (m>1) final E removed; (m>1, double L) one L | probate to probat, controll to control |
+**Example:** generalizations: 1a gives generalization, 2 (IZATION to IZE) gives generalize, 3 (ALIZE to AL) gives general, 4 (AL to nothing) gives **gener**.
 
-<Sum>
-
-<Given>
-
-The words *generalizations*, *relational*, *hopping*, *happiness*.
-
-</Given>
-
-<Find>
-
-the stem of each by the original Porter rules.
-
-</Find>
-
-<Steps>
-
-1. **generalizations.** 1a: S removed, *generalization*. 2: IZATION to IZE (stem *general* has $m>0$), *generalize*. 3: ALIZE to AL (stem *gener*, $m=2$), *general*. 4: AL removed (stem *gener* has $m=2>1$), *gener*. 5: no final E. Result **gener**.
-2. **relational.** 1: no change. 2: ATIONAL to ATE (stem *rel*, $m=1>0$), *relate*. 3: no rule. 4: ATE needs $m>1$ but *rel* has $m=1$, so it stays. 5a: remove E because *relat* has $m=2>1$. Result **relat**.
-3. **hopping.** 1b: remove ING (stem *hopp* has a vowel), *hopp*; clean-up: double consonant p becomes one, *hop*. Later steps do nothing. Result **hop**.
-4. **happiness.** 1a: ends in SS, unchanged. 3: NESS removed (stem *happi*, $m=1>0$), *happi*. Result **happi**.
-
-</Steps>
-
-<Answer>
-
-gener, relat, hop, happi.
-
-</Answer>
-
-<Box kind="verify">
-
-Check against NLTK's original Porter mode: generalizations gives gener, relational gives relat, hopping gives hop and happiness gives happi. Measure check: *gener* is C V C V C so $m=2$; *rel* is C V C so $m=1$.
-
-</Box>
-
-</Sum>
-
-**Errors.** Over-stemming: *university* and *universe* both go to *univers*. Under-stemming: *alumnus* and *alumni* stay different. The stem may be a non-word.
-
-**Advantages:** fast, simple, no dictionary, standard for English search. **Disadvantages:** English only, crude errors, non-word stems. Better: lemmatization (dictionary) or Snowball (Porter2). <Cite id="porter-stemmer-av-stemming" />
+**Conclusion:** the Porter stemmer is fast and simple, but it is crude: the stem need not be a dictionary word (happy becomes happi).

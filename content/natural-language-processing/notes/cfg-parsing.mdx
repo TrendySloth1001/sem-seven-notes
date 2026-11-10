@@ -1,591 +1,236 @@
 ---
 title: "Context-free grammar and parsing"
 module: 3
-summary: "A context-free grammar (CFG) is a small set of rewriting rules that says which word sequences are sentences and how the words group into phrases. Parsing is finding that grouping, the parse tree, for a given sentence. This note covers CFG rules and parse trees, ambiguity, top-down, bottom-up and shift-reduce parsing, the CYK algorithm, probabilistic CFGs (PCFG), and the three things plain CFGs handle badly: agreement, subcategorization and movement."
+summary: "How a grammar gives a sentence a structure. Top-down and bottom-up parsing (recursive descent and shift-reduce), the CYK algorithm worked on the class grammar with the correct table, a short note on PCFG and the three problems of a plain CFG: agreement, subcategorization and movement. The class files cover only top-down versus bottom-up and CYK, so the rest is short standard material."
 keyIdeas:
-  - "A constituent is a group of words that behaves as one unit (the tall girl is a noun phrase). Phrase-structure grammar describes a sentence as constituents inside constituents."
-  - "A CFG is four things: non-terminals (NP, VP), terminals (the words), rules (A to a string) and a start symbol S. A parse tree is the picture of the rules used."
-  - "One sentence can have several parse trees (structural ambiguity), for example the PP attachment in I shot an elephant in my pajamas."
-  - "Top-down parsing starts at S and predicts down to the words (goal-directed, but wastes work on wrong guesses and loops on left recursion). Bottom-up parsing starts at the words and builds up to S (data-directed, but builds phrases that can never fit in a sentence)."
-  - "A shift-reduce parser is bottom-up with a stack and four actions: shift, reduce, accept, error. It never backtracks, so a wrong choice can make it miss a valid parse."
-  - "CYK is a bottom-up dynamic-programming parser for grammars in Chomsky normal form. It fills a triangle table of spans and accepts when S sits in the top cell. It takes O(n^3) time."
-  - "A PCFG puts a probability on every rule (the probabilities of one left side add to 1). The probability of a tree is the product of its rule probabilities, and the best parse is the tree with the highest product."
-  - "Plain CFGs handle agreement, subcategorization and movement poorly: fixing them with extra rules makes the grammar huge, so real systems add features or probabilities."
+  - "Parsing finds the structure (parse tree) of a sentence from a grammar. A context-free grammar is a list of rewrite rules such as S to NP VP."
+  - "Top-down parsing starts from the start symbol and works down to the leaves (leftmost derivation, example: recursive descent). Bottom-up parsing starts from the leaves and reduces the string to the start symbol (rightmost derivation, example: shift-reduce)."
+  - "CYK: fill the diagonal from the word rules; for spans of length 2 to n and every split k, if A to B C with B in table[i][k] and C in table[k+1][j], add A to table[i][j]; the sentence is accepted if S is in table[1][n]."
+  - "CYK needs Chomsky Normal Form: every rule is A to B C or A to a word."
+  - "A shift-reduce parser uses a stack and an input: shift moves a word onto the stack, reduce replaces the right side of a rule by its left side; it accepts when only S is left."
+  - "A PCFG gives every rule a probability; a parse tree's probability is the product of its rules, so the best tree can be chosen."
+  - "Plain CFG problems: agreement (number, person), subcategorization (what a verb can take) and movement (a phrase far from its gap)."
 references:
-  - cfg-parsing-slp3-19
-  - cfg-parsing-slp3-E
-  - cfg-parsing-slp3-F
-  - text-preprocessing-fsnlp
-  - pos-tagging-marcus1993
-  - cfg-parsing-klein2003
-  - cfg-parsing-collins2003
-  - cfg-parsing-johnson1998
-  - ambiguity-challenges-nltk-ch8
-  - cfg-parsing-nltk-chart
-  - cfg-parsing-wiki-cfg
-  - cfg-parsing-wiki-const
-  - cfg-parsing-wiki-parsetree
-  - cfg-parsing-wiki-cnf
-  - cfg-parsing-wiki-cyk
-  - cfg-parsing-wiki-sr
-  - cfg-parsing-wiki-td
-  - cfg-parsing-wiki-bu
-  - cfg-parsing-wiki-earley
-  - cfg-parsing-wiki-pcfg
-  - cfg-parsing-wiki-agree
-  - cfg-parsing-wiki-subcat
-  - cfg-parsing-wiki-whmove
-  - cfg-parsing-gfg-cyk
-  - cfg-parsing-gfg-sr
-  - cfg-parsing-gfg-bu
-  - cfg-parsing-gfg-types
-  - cfg-parsing-gfg-cnf
-  - cfg-parsing-tp-syn
-  - cfg-parsing-tp-td
+  - class-nlp-pyq3
+  - class-nlp-pyq4
+  - class-nlp-qb1
 ---
 
-Before the new ideas, here are the old ones you need. If you already know them, skip to the next section.
+This note is syllabus <Syl m="3" />: syntax analysis with context-free grammar and parsing.
 
 ## The basics first
 
-- **Syntax** is the set of rules for how words are arranged into correct sentences. `The girl sings` is fine; `girl the sings` is not.
-- A **part of speech (POS)** is the class of a word: noun (N), verb (V), determiner (Det, words like `the`, `a`, `this`), adjective (Adj), preposition (P). Tagging each word with its POS is the topic before this one.
-- A **phrase** (or **constituent**) is a group of words that acts as one unit. In `The tall girl sings`, `The tall girl` is one unit (it can be replaced by `She`) and `sings` is another. <Cite id="cfg-parsing-wiki-const" />
-- **Noun phrase (NP)** is a group built around a noun (`the tall girl`). **Verb phrase (VP)** is a group built around a verb (`read this book`). **Prepositional phrase (PP)** is a preposition plus an NP (`in my pajamas`).
-- A **rewriting rule** says "this symbol can be replaced by that string of symbols", written with an arrow, for example `NP → Det N`.
-- **Parsing** means finding the structure of a sentence. In NLP the result is usually a **parse tree**. <Cite id="cfg-parsing-wiki-parsetree" /> <Cite id="cfg-parsing-tp-syn" />
+- A **grammar** is a set of rules for building sentences. A **context-free grammar (CFG)** has rules that rewrite one symbol into others, for example S → NP VP (a sentence is a noun phrase followed by a verb phrase). *(The class files give no separate definition of CFG; this is the standard idea.)*
+- **Non-terminals** are symbols such as S, NP, VP; **terminals** are the actual words. The **start symbol** is S.
+- A **parse tree** shows how the rules build the sentence. **Parsing** is finding that tree.
 
-## Context-free grammar (CFG)
+The class grammar is below: S → NP VP, NP → Det N | N, VP → V NP, Det → 'The' | 'this', N → 'man' | 'book', V → 'read'. <Cite id="class-nlp-pyq3" loc="p. 8" />
 
-**What it is.** A context-free grammar describes a language with rewriting rules in which the left side is always a single symbol, so the rule can be used wherever that symbol appears, whatever is around it ("context-free"). It is the most widely used formal system for the grammar of English. This is syllabus <Syl m="3" />, section 3.4 (introduction to CFG). <Cite id="cfg-parsing-slp3-19" loc="§19.2" /> <Cite id="cfg-parsing-slp3-F" loc="§F.2" /> <Cite id="cfg-parsing-wiki-cfg" />
+<Img id="class-cfg-parsing-cyk-grammar" caption="The class grammar and the five input words (The, man, read, this, book) used in the CYK question." />
 
-**Why it is needed.** A computer cannot list every correct sentence, because there are infinitely many. A short set of rules can generate all of them, and the same rules can be run backwards to check a sentence and find its structure. That structure is needed for meaning: question answering, translation and information extraction all depend on knowing who did what to whom.
+## Top-down and bottom-up parsing
 
-**Everyday analogy.** A CFG is like a recipe book for sentences. `S → NP VP` says "a sentence is made from a noun phrase and a verb phrase". Each ingredient has its own recipe until you reach actual words.
-
-<Box kind="definition">
-
-A **context-free grammar** is a 4-tuple $G = (N, \Sigma, R, S)$:
-
-- $N$: the **non-terminals** (phrase labels such as S, NP, VP and POS labels such as Det, N, V).
-- $\Sigma$: the **terminals**, the actual words (`the`, `girl`).
-- $R$: the **rules** (productions) of the form $A \rightarrow \alpha$, where $A$ is one non-terminal and $\alpha$ is a string of terminals and non-terminals.
-- $S$: the **start symbol**, the label of a whole sentence.
-
-</Box>
-
-A small grammar for English (used in the examples below):
-
-| Rule | Meaning |
-|---|---|
-| S → NP VP | a sentence is a noun phrase followed by a verb phrase |
-| NP → Det N, NP → Det Adj N | a noun phrase can be a determiner and a noun, with an optional adjective |
-| VP → V, VP → V NP | a verb phrase is a verb alone, or a verb and its object |
-| Det → the, Adj → tall, N → girl, V → sings | the **lexicon**: rules that give the words |
-
-**Derivation.** A **derivation** starts with S and keeps replacing one non-terminal by the right side of one of its rules until only words remain. In a **leftmost derivation** the leftmost non-terminal is always replaced first. A **parse tree** is the picture of a derivation: the root is S, every inner node is a non-terminal, its children are the right side of the rule used, and the leaves read left to right are the sentence. <Cite id="cfg-parsing-gfg-types" /> <Cite id="cfg-parsing-tp-syn" />
-
-```mermaid
-%% caption: Parse tree of "The tall girl sings". Each node with its children is one grammar rule: S has the rule S to NP VP, the left NP has NP to Det Adj N. Read the leaves left to right to get the sentence back.
-flowchart TD
-  S["S"] --> NP["NP"]
-  S --> VP["VP"]
-  NP --> Det["Det: the"]
-  NP --> Adj["Adj: tall"]
-  NP --> N["N: girl"]
-  VP --> V["V: sings"]
-```
-
-<Cite id="cfg-parsing-tp-syn" loc="diagram" />
-
-The constituency tree drawn on TutorialsPoint (linked above) is the same idea: phrase labels inside, words at the leaves. A **treebank** is a corpus whose sentences have been parsed by hand into such trees; the Penn Treebank is the best known, and grammar rules can be read straight off its trees. <Cite id="cfg-parsing-slp3-19" loc="§19.3" /> <Cite id="pos-tagging-marcus1993" />
-
-<Img id="img-nlp-n2-cfg-derivation-tree" caption="A derivation tree: the start symbol S at the top, non-terminals (A, B) in the middle, terminals (a, b) at the leaves, and epsilon for an empty string. Reading the leaves left to right gives the sentence." />
-
-### Worked example: parse tree for a sentence
-
-<Sum>
-
-<Given>
-
-Grammar: S → NP VP; NP → Det Adj N | Det N; VP → V | V NP; Det → "the"; Adj → "tall"; N → "girl"; V → "sings". Sentence: `The tall girl sings`.
-
-</Given>
-
-<Find>
-
-a leftmost derivation and the parse tree.
-
-</Find>
-
-<Steps>
-
-1. Start with S. Only one rule has S on the left: S ⇒ NP VP. *Reason: a sentence needs a subject NP and a VP.*
-2. Expand the leftmost symbol NP. The sentence has three words before the verb, so use NP → Det Adj N: ⇒ Det Adj N VP. *Reason: the other rule, NP → Det N, gives only two words and would leave `tall` unused.*
-3. Replace Det, Adj, N by the lexicon: ⇒ the Adj N VP ⇒ the tall N VP ⇒ the tall girl VP.
-4. Expand VP. Nothing is left after `sings`, so use VP → V: ⇒ the tall girl V. *Reason: VP → V NP would need an object that is not in the sentence.*
-5. Replace V: ⇒ the tall girl sings. Only words remain, so the derivation ends. The tree is the one in the figure above.
-
-</Steps>
-
-<Answer>
-
-S ⇒ NP VP ⇒ Det Adj N VP ⇒ the Adj N VP ⇒ the tall N VP ⇒ the tall girl VP ⇒ the tall girl V ⇒ the tall girl sings. Tree: [S [NP [Det the] [Adj tall] [N girl]] [VP [V sings]]].
-
-</Answer>
-
-<Box kind="verify">
-
-Count: the derivation has 7 arrows, so 7 rules were used (S → NP VP, NP → Det Adj N, VP → V and 4 lexical rules). The tree has 7 inner nodes with their children: S, NP, VP, Det, Adj, N, V, which is 7 as well. The leaves read `the tall girl sings`, the input. <PYQ id="2024-12-ce/q5b" />
-
-</Box>
-
-</Sum>
-
-## Ambiguity: one sentence, many trees
-
-**What it is.** A sentence is **structurally ambiguous** when the grammar gives it more than one parse tree. The classic case is **PP attachment**: in `I shot an elephant in my pajamas` the phrase `in my pajamas` can modify the shooting (I wore the pajamas) or the elephant (the elephant wore them). <Cite id="cfg-parsing-slp3-19" loc="§19.5" /> <Cite id="ambiguity-challenges-nltk-ch8" loc="§1.2" />
-
-<Img id="img-nlp-n2-ambiguous-trees" caption="One string, two parse trees: the left tree groups x + y first, the right tree groups y * z first. A grammar that allows both is ambiguous." />
-
-```mermaid
-%% caption: Reading 1, the PP attaches to the verb phrase: I was in my pajamas when I shot. The PP hangs from the upper VP.
-flowchart TD
-  S["S"] --> NP1["NP: I"]
-  S --> VPa["VP"]
-  VPa --> VPb["VP"]
-  VPa --> PP["PP: in my pajamas"]
-  VPb --> V["V: shot"]
-  VPb --> NP2["NP: an elephant"]
-```
-
-```mermaid
-%% caption: Reading 2, the PP attaches to the noun phrase: the elephant was in my pajamas. The PP hangs from the object NP. Same words, different tree, different meaning.
-flowchart TD
-  S["S"] --> NP1["NP: I"]
-  S --> VP["VP"]
-  VP --> V["V: shot"]
-  VP --> NPa["NP"]
-  NPa --> NPb["NP: an elephant"]
-  NPa --> PP["PP: in my pajamas"]
-```
-
-<Cite id="ambiguity-challenges-nltk-ch8" loc="§1.2" />
-
-The number of trees grows very fast with sentence length, so a parser must not list all trees one by one. It stores shared parts in a table (CYK and chart parsing below), and a probabilistic grammar picks the most likely tree. <Cite id="cfg-parsing-slp3-19" loc="§19.5" /> <Cite id="ambiguity-challenges-nltk-ch8" loc="§4.4" />
-
-## Parsing as search: top-down and bottom-up
-
-**What it is.** A parser must find a tree whose root is S and whose leaves are exactly the input words. There are two natural directions to search. <Cite id="cfg-parsing-gfg-types" />
-
-- **Top-down (goal-driven):** start with S, use rules to expand it into a tree, and check the leaves against the words. <Cite id="cfg-parsing-wiki-td" /> <Cite id="cfg-parsing-tp-td" />
-- **Bottom-up (data-driven):** start with the words, look up their POS, and combine neighbouring symbols into bigger ones using rules backwards, until S covers everything. <Cite id="cfg-parsing-wiki-bu" /> <Cite id="cfg-parsing-gfg-bu" />
-
-```mermaid
-%% caption: The two search directions on the same tree. Top-down goes from S down to the words, predicting. Bottom-up goes from the words up to S, combining.
-flowchart LR
-  subgraph TD1["Top-down"]
-    direction TB
-    A1["S"] --> A2["NP VP"] --> A3["Det N V"] --> A4["the girl sings"]
-  end
-  subgraph BU1["Bottom-up"]
-    direction TB
-    B4["the girl sings"] --> B3["Det N V"] --> B2["NP VP"] --> B1["S"]
-  end
-```
-
-<Cite id="cfg-parsing-gfg-bu" loc="diagram" />
-
-### Worked example: top-down and bottom-up on the same sentence
-
-<Sum>
-
-<Given>
-
-The grammar of the previous example. Sentence: `The girl sings` (no adjective this time).
-
-</Given>
-
-<Find>
-
-how a top-down and a bottom-up parser each reach S, and which wastes work.
-
-</Find>
-
-<Steps>
-
-1. **Top-down, goal S.** Expand S → NP VP. New goals: NP, then VP.
-2. **Top-down, goal NP.** Try the first rule NP → Det Adj N. Det matches `the`. The next goal is Adj but the next word is `girl`, which is not an adjective. This guess fails, so the parser **backtracks** (undoes it). *Reason: the parser predicted a word class without looking at the input.*
-3. **Top-down, retry.** Try NP → Det N: Det = `the`, N = `girl`, both match. Then VP → V: V = `sings` matches. All goals are done and all words are used: success.
-4. **Bottom-up, words to POS.** `the` is Det, `girl` is N, `sings` is V: the symbols are Det N V.
-5. **Bottom-up, combine.** Det N matches the right side of NP → Det N, so replace it by NP. V matches VP → V, so replace it by VP. NP VP matches S → NP VP, so replace it by S. Only S remains, covering all words: success.
-
-</Steps>
-
-<Answer>
-
-Both reach the same tree [S [NP [Det the] [N girl]] [VP [V sings]]]. Top-down made one wrong guess (NP → Det Adj N) and backtracked; bottom-up never tried an adjective because no adjective was in the input.
-
-</Answer>
-
-<Box kind="verify">
-
-Both trees use the same 6 rules: S → NP VP, NP → Det N, VP → V, Det → the, N → girl, V → sings. Top-down also applied one wrong rule (NP → Det Adj N) and undid it; bottom-up used only the 6 rules of the tree. That one undone guess is the difference between the two. <PYQ id="2022-12-ce/q4c" />
-
-</Box>
-
-</Sum>
-
-### Top-down versus bottom-up
-
-| Point | Top-down | Bottom-up |
+| Point | Top-down parsing | Bottom-up parsing |
 |---|---|---|
-| Starts from | the start symbol S | the input words |
-| Direction | S down to the words | words up to S |
-| Driven by | the goal (grammar) | the data (words) |
-| Uses rules | left to right (expand) | right to left (reduce) |
-| Typical implementation | recursive descent | shift-reduce, CYK |
-| Strength | never builds a phrase that cannot be part of a sentence | never predicts a word class that is not in the input |
-| Weakness | many wrong predictions, backtracking, and an infinite loop on left-recursive rules such as NP → NP PP | builds phrases that can never lead to S (for example `book` as a noun in a sentence that needs a verb), and also re-does work |
-| Ambiguous words | tries all rules for a symbol | tries all POS for a word |
+| Idea | First looks at the highest level of the parse tree and works down using the rules of the grammar | First looks at the lowest level of the parse tree and works up using the rules of the grammar |
+| Aim | Tries to find the leftmost derivation of the input string | Tries to reduce the input string to the start symbol of the grammar |
+| Direction | From the start symbol (top) to the leaf nodes (down) | From the leaf nodes (bottom) up to the start symbol |
+| Derivation | Leftmost derivation | Rightmost derivation (in reverse) |
+| Main decision | Which production rule to use to construct the string | When to use a production rule to reduce the string to the start symbol |
+| Example | Recursive descent parser | Shift-reduce parser |
 
-Both can repeat the same sub-work after backtracking. A table of finished pieces (a chart) fixes this, and so does dynamic programming. A **left-corner** parser combines both: it predicts top-down but filters with the next word, bottom-up. <Cite id="ambiguity-challenges-nltk-ch8" loc="§4.1" /> <Cite id="cfg-parsing-slp3-19" loc="§19.6" />
+<Cite id="class-nlp-pyq3" loc="p. 6" />
 
-**Conclusion.** Top-down is goal-directed and bottom-up is data-directed; practical parsers (CYK, Earley, chart) use a table so that no sub-parse is computed twice. <Cite id="cfg-parsing-wiki-earley" /> <Cite id="cfg-parsing-nltk-chart" />
+**Example** with the class grammar S → NP VP, NP → Det N | N, VP → V NP, Det → The | this, N → man | book, V → read, and the sentence "The man read this book":
 
-## Shift-reduce parsing
+- **Top-down:** S ⇒ NP VP ⇒ Det N VP ⇒ The N VP ⇒ The man VP ⇒ The man V NP ⇒ The man read NP ⇒ The man read Det N ⇒ The man read this N ⇒ The man read this book.
+- **Bottom-up:** The man read this book ⇒ Det N V Det N ⇒ NP V Det N ⇒ NP V NP ⇒ NP VP ⇒ S.
 
-**What it is.** A shift-reduce parser is a bottom-up parser that uses a **stack** and an **input buffer**. It reads the words left to right and repeats two moves until the stack holds only S. <Cite id="cfg-parsing-wiki-sr" /> <Cite id="cfg-parsing-gfg-sr" /> <Cite id="ambiguity-challenges-nltk-ch8" loc="§4.2" />
+```mermaid
+%% caption: The two directions. The top row expands S down to the words; the bottom row reduces the words up to S.
+flowchart LR
+  A1["S"] --> A2["NP VP"] --> A3["Det N V NP"] --> A4["The man read this book"]
+  B1["The man read this book"] --> B2["Det N V Det N"] --> B3["NP V NP"] --> B4["S"]
+```
 
-**Why it is needed.** It is simple and fast (one pass, no table), so it is the base of compilers and of many fast NLP parsers.
 
-**How it works.** The four actions:
+<PYQ id="2022-12-ce/q4c" />
+
+## Shift-reduce parser
+
+Bottom-up parsing tries to reduce the input string to the start symbol of the grammar (rightmost derivation, in reverse). The shift-reduce parser is the class example of a bottom-up parser. <Cite id="class-nlp-pyq3" loc="p. 6" />
+
+*(The class files name the parser but give no steps; the trace below is the standard method.)*
+
+**Parts:** a **stack**, an **input buffer** with the remaining words, and four actions:
 
 1. **Shift:** move the next word from the input onto the stack.
-2. **Reduce:** if the top of the stack matches the right side of a rule, replace it by the left side. The matching part is called the **handle**.
-3. **Accept:** the input is empty and the stack is just S.
-4. **Error:** neither shift nor reduce is possible.
+2. **Reduce:** replace the right side of a rule on top of the stack by its left side.
+3. **Accept:** the stack holds only S and the input is empty.
+4. **Error / backtrack:** no action works; go back and try another choice.
+
+**Example.** Grammar: S → NP VP, NP → Det N | N, VP → V NP, Det → The | this, N → man | book, V → read (the class grammar). Sentence: "The man read this book". <Cite id="class-nlp-pyq3" loc="p. 8" />
+
+| Step | Stack | Remaining input | Action |
+|---|---|---|---|
+| 1 | | The man read this book | Shift |
+| 2 | The | man read this book | Reduce Det → The |
+| 3 | Det | man read this book | Shift |
+| 4 | Det man | read this book | Reduce N → man |
+| 5 | Det N | read this book | Reduce NP → Det N |
+| 6 | NP | read this book | Shift |
+| 7 | NP read | this book | Reduce V → read |
+| 8 | NP V | this book | Shift |
+| 9 | NP V this | book | Reduce Det → this |
+| 10 | NP V Det | book | Shift |
+| 11 | NP V Det book | | Reduce N → book |
+| 12 | NP V Det N | | Reduce NP → Det N |
+| 13 | NP V NP | | Reduce VP → V NP |
+| 14 | NP VP | | Reduce S → NP VP |
+| 15 | S | | Accept |
 
 ```mermaid
-%% caption: The shift-reduce loop. Reduce whenever the top of the stack matches a rule, otherwise shift the next word. Stop with accept when only S is left and the input is empty.
+%% caption: The shift-reduce loop.
 flowchart TD
-  A["Start: empty stack, all words in input"] --> B{"Does the top of the stack match the right side of a rule?"}
-  B -- "yes" --> C["Reduce: replace it by the left side"]
-  B -- "no" --> D{"Any words left?"}
-  D -- "yes" --> E["Shift: push the next word"]
-  D -- "no" --> F{"Stack is only S?"}
-  F -- "yes" --> G["Accept"]
-  F -- "no" --> H["Error"]
+  A["Start: empty stack, all words in input"] --> B{"Can the top of the stack be reduced?"}
+  B -->|"Yes"| C["Reduce"]
+  B -->|"No"| D{"Any input left?"}
+  D -->|"Yes"| E["Shift next word"]
+  D -->|"No"| F{"Stack is only S?"}
+  F -->|"Yes"| G["Accept"]
+  F -->|"No"| H["Error: backtrack"]
   C --> B
   E --> B
 ```
 
-<Cite id="cfg-parsing-gfg-sr" loc="diagram" />
+**Conflicts:** at step 5 the top symbol N could also be reduced alone by NP → N, leaving Det NP, which no rule can reduce. The parser must then backtrack or use a look-ahead. Choosing between actions is the main difficulty of shift-reduce parsing.
 
-### Worked example: shift-reduce trace
+**Advantage:** simple, fast, works bottom-up from the words. **Disadvantage:** conflicts between actions.
+
+
+<PYQ id="2025-05-ce/q3b" />
+
+## CYK (CKY) algorithm
+
+**Algorithm (as in class):** <Cite id="class-nlp-pyq3" loc="p. 8" />
+
+1. Fill the diagonal $(i = j)$ using the productions that produce each word.
+2. For spans of length $L = 2$ to $n$, for each cell $(i, j)$ with $j = i + L - 1$ and every split point $k$ ($i \le k < j$): if there is a production $A \to B\,C$ with $B$ in table$[i][k]$ and $C$ in table$[k+1][j]$, add $A$ to table$[i][j]$.
+3. If $S$ is in table$[1][n]$, the grammar generates the string.
+
+CYK works on a grammar in Chomsky Normal Form (every rule is $A \to B\,C$ or $A \to$ a word), so the grammar is first converted.
+
+
+**Worked example on the class grammar** (this is the question the class answers). The class grammar has the unit rule NP → N, so first write NP → 'man' | 'book' as well, which keeps CNF. <Cite id="class-nlp-pyq3" loc="p. 8" />
 
 <Sum>
 
 <Given>
 
-The grammar of the first example. Sentence: `The tall girl sings`.
+the class grammar and the sentence *The man read this book* (words 1 to 5).
 
 </Given>
 
 <Find>
 
-the stack, input and action at every step.
+whether S is in table$[1][5]$.
 
 </Find>
 
 <Steps>
 
-1. Each word is shifted and then reduced to its POS by the lexicon (Det → the and so on). Then phrase rules reduce the POS symbols. The full trace:
-
-| Step | Stack | Input left | Action |
-|---|---|---|---|
-| 1 | (empty) | the tall girl sings | shift |
-| 2 | the | tall girl sings | reduce Det → the |
-| 3 | Det | tall girl sings | shift |
-| 4 | Det tall | girl sings | reduce Adj → tall |
-| 5 | Det Adj | girl sings | shift |
-| 6 | Det Adj girl | sings | reduce N → girl |
-| 7 | Det Adj N | sings | reduce NP → Det Adj N |
-| 8 | NP | sings | shift |
-| 9 | NP sings | (empty) | reduce V → sings |
-| 10 | NP V | (empty) | reduce VP → V |
-| 11 | NP VP | (empty) | reduce S → NP VP |
-| 12 | S | (empty) | accept |
-
-2. At step 10, `NP V` could also wait for an object (VP → V NP), but the input is empty, so only the reduction VP → V is possible. *Reason: no word is left to shift.*
+1. **Diagonal:** The = Det; man = N, NP; read = V; this = Det; book = N, NP.
+2. **Length 2:** The man = Det + N gives NP. man read = (N or NP) + V: no rule. read this = V + Det: no rule. this book = Det + N gives NP.
+3. **Length 3:** The man read = NP + V: no rule, so empty. man read this: empty. read this book = V + NP gives VP.
+4. **Length 4:** The man read this: empty. man read this book = man (NP) + read this book (VP) gives S, because NP is the bare noun *man*.
+5. **Length 5:** The man read this book = The man (NP) + read this book (VP) gives S. (The split Det + man read this book fails.)
 
 </Steps>
 
 <Answer>
 
-Accepted in 12 steps: 4 shifts, 7 reduces and 1 accept. The reductions give the tree [S [NP [Det the] [Adj tall] [N girl]] [VP [V sings]]].
+S is in table$[1][5]$, so the sentence is accepted. Parse: [S [NP [Det The] [N man]] [VP [V read] [NP [Det this] [N book]]]].
 
 </Answer>
 
 <Box kind="verify">
 
-Counts: shifts 4 (one per word) + reduces 7 + accept 1 = 12 rows. The 7 reduces are exactly the 7 rules of the parse tree found earlier, so both methods agree. The stack never holds more than three symbols, at step 6. <PYQ id="2025-05-ce/q3b" />
+Read the tree top-down: S → NP VP; NP → Det N → The man; VP → V NP → read, then NP → Det N → this book. These are all rules of the class grammar and they give the five words in order. Note: the class table shows table[1][3] = VP, S through "NP V gives VP", but the rule is VP → V NP, so table[1][3] is empty; the final answer (accepted, same tree) is unchanged.
 
 </Box>
 
 </Sum>
 
-**Conflicts and limits.** Sometimes two actions are possible. A **shift-reduce conflict**: with `NP V` on the stack and more words left, should the parser reduce VP → V or shift the object? A **reduce-reduce conflict**: two different rules match the top of the stack. A basic shift-reduce parser makes one choice and **never backtracks**, so it may fail on a sentence that has a valid parse, and it returns at most one parse. Real parsers add a lookahead table (LR parsing) or a trained classifier to choose the action. <Cite id="ambiguity-challenges-nltk-ch8" loc="§4.2" /> <Cite id="cfg-parsing-wiki-sr" />
-
-## Chomsky normal form and the CYK algorithm
-
-**What it is.** A grammar is in **Chomsky normal form (CNF)** when every rule is either $A \rightarrow B\,C$ (two non-terminals) or $A \rightarrow a$ (one word). Every CFG can be converted to CNF with the same language. The **CYK (Cocke-Younger-Kasami) algorithm** is a bottom-up, dynamic-programming parser for CNF grammars. <Cite id="cfg-parsing-slp3-19" loc="§19.4" /> <Cite id="cfg-parsing-wiki-cnf" /> <Cite id="cfg-parsing-wiki-cyk" /> <Cite id="cfg-parsing-gfg-cyk" />
-
-**Why it is needed.** Because every rule has two children, a span of words can be split into two parts in only a few ways. The table remembers every span already solved, so nothing is computed twice, and all parses are packed into one table even when there are thousands. Time is $O(n^3 \cdot |G|)$ for $n$ words and $|G|$ rules, space $O(n^2)$. <Cite id="cfg-parsing-slp3-19" loc="§19.6" />
-
-**How it works.**
-
-1. Convert the grammar to CNF. <Cite id="cfg-parsing-slp3-19" loc="§19.6.1" /> <Cite id="cfg-parsing-gfg-cnf" />
-   - Rule with more than two symbols on the right: break it with a new symbol (`S → Aux NP VP` becomes `S → X1 VP` and `X1 → Aux NP`).
-   - Unit rule $A \rightarrow B$: replace it by copying what $B$ can become (`VP → Verb` becomes `VP → book | include | read`).
-2. Number the gaps between words $0, 1, \dots, n$. Cell $[i,j]$ holds every non-terminal that can produce the words from gap $i$ to gap $j$.
-3. Fill the length-1 cells from the lexicon.
-4. For longer spans, for each split point $k$ between $i$ and $j$, if $B$ is in $[i,k]$, $C$ is in $[k,j]$ and the rule $A \rightarrow B\,C$ exists, put $A$ in $[i,j]$.
-5. The sentence is accepted if S is in $[0,n]$. Back-pointers recover the tree.
-
-### Worked example: CYK on "The man read this book"
-
-<Sum>
-
-<Given>
-
-Grammar: S → NP VP | Aux NP VP | VP; NP → Det NOM; NOM → Noun | Noun NOM; VP → Verb | Verb NP. Lexicon: Det → that, this, a, the; Noun → book, flight, meal, man; Verb → book, include, read; Aux → does. Sentence: `The man read this book`.
-
-</Given>
-
-<Find>
-
-whether the sentence is accepted, and its parse tree, using CYK.
-
-</Find>
-
-<Steps>
-
-1. **Convert to CNF.** Break `S → Aux NP VP` into `S → X1 VP` and `X1 → Aux NP`. Remove the unit rules: `NOM → Noun` becomes `NOM → book | flight | meal | man`; `VP → Verb` becomes `VP → book | include | read`; `S → VP` becomes `S → Verb NP | book | include | read` (S gets every right side that VP has). The CNF grammar is: S → NP VP | X1 VP | Verb NP | book | include | read; X1 → Aux NP; NP → Det NOM; NOM → Noun NOM | book | flight | meal | man; VP → Verb NP | book | include | read; plus the lexicon for Det, Noun, Verb, Aux. *Reason: CYK only works when every rule has two non-terminals or one word.*
-2. **Number the gaps.** 0 The 1 man 2 read 3 this 4 book 5.
-3. **Length-1 cells (lexicon).** [0,1] `the`: Det. [1,2] `man`: Noun, NOM. [2,3] `read`: Verb, VP, S. [3,4] `this`: Det. [4,5] `book`: Noun, NOM, Verb, VP, S.
-4. **Length 2.** [0,2] The man: Det + NOM gives NP. [1,3] man read: Noun/NOM + Verb/VP/S has no rule, empty. [2,4] read this: nothing (Verb, VP or S followed by Det matches no rule), empty. [3,5] this book: Det + NOM gives NP.
-5. **Length 3.** [0,3] The man read: NP in [0,2] + VP in [2,3] gives S (S → NP VP). [1,4] man read this: empty (no split works). [2,5] read this book: Verb in [2,3] + NP in [3,5] gives S (S → Verb NP) and VP (VP → Verb NP).
-6. **Length 4.** [0,4] The man read this: empty (S + Det has no rule). [1,5] man read this book: empty (Noun/NOM + S/VP has no rule).
-7. **Length 5.** [0,5]: split at 2: NP in [0,2] + VP in [2,5] gives S (S → NP VP). Splits at 1, 3, 4 give nothing. S is in the top cell, so the sentence is accepted.
-
-The completed table (row = start gap $i$, column = end gap $j$):
-
-| i \ j | 1 (The) | 2 (man) | 3 (read) | 4 (this) | 5 (book) |
+| | The | man | read | this | book |
 |---|---|---|---|---|---|
-| 0 | Det | NP | S | none | **S** |
-| 1 | | Noun, NOM | none | none | none |
-| 2 | | | Verb, VP, S | none | S, VP |
-| 3 | | | | Det | NP |
-| 4 | | | | | Noun, NOM, Verb, VP, S |
+| **The** | Det | NP | · | · | **S** |
+| **man** | | N, NP | · | · | S |
+| **read** | | | V | · | VP |
+| **this** | | | | Det | NP |
+| **book** | | | | | N, NP |
 
-</Steps>
+(Row = start word, column = end word; `·` is empty. The cell man..book = S is a valid extra result of the unit rule NP → N.)
 
-<Answer>
-
-Accepted: S is in cell [0,5]. Parse: [S [NP [Det the] [NOM [Noun man]]] [VP [Verb read] [NP [Det this] [NOM [Noun book]]]]].
-
-</Answer>
-
-<Box kind="verify">
-
-Rebuild the tree top-down with the original (not CNF) rules: S ⇒ NP VP ⇒ Det NOM VP ⇒ the NOM VP ⇒ the man VP ⇒ the man Verb NP ⇒ the man read NP ⇒ the man read Det NOM ⇒ the man read this NOM ⇒ the man read this book. Every step is a rule of the given grammar, and the words match. The other reading, S in [2,5] (`read this book` as an imperative sentence like `Book that flight`), is correctly not the whole sentence because `The man` is left over. <PYQ id="2023-05-ce/q5a" /> <PYQ id="2025-05-ce/q5a" />
-
-</Box>
-
-</Sum>
+<Img id="class-cfg-parsing-cyk-tree" caption="The class answer's parse tree: S splits into NP (The man) and VP (read, NP (this book))." />
 
 ```mermaid
-%% caption: The parse tree found by CYK for "The man read this book". The subject NP covers cell [0,2], the VP covers [2,5], and S covers [0,5].
+%% caption: The CYK procedure as a flow.
 flowchart TD
-  S["S [0,5]"] --> NP1["NP [0,2]"]
-  S --> VP["VP [2,5]"]
-  NP1 --> D1["Det: The"]
-  NP1 --> NO1["NOM"]
-  NO1 --> N1["Noun: man"]
-  VP --> V["Verb: read"]
-  VP --> NP2["NP [3,5]"]
-  NP2 --> D2["Det: this"]
-  NP2 --> NO2["NOM"]
-  NO2 --> N2["Noun: book"]
+  A["Convert the grammar to CNF"] --> B["Fill the diagonal from the word rules"]
+  B --> C["For each span length 2 to n and each split k"]
+  C --> D["If A to B C with B in left cell and C in right cell, add A"]
+  D --> E{"S in table 1,n?"}
+  E -->|"Yes"| F["Sentence accepted"]
+  E -->|"No"| G["Sentence rejected"]
 ```
 
-<Cite id="cfg-parsing-gfg-cyk" loc="diagram" />
+<PYQ id="2023-05-ce/q5a" /> <PYQ id="2025-05-ce/q5a" />
 
-The GeeksforGeeks page (linked above) draws the same triangle table for another grammar and the string `baaba`. Our table is the same idea for the exam sentence.
+## Parse tree and derivation
 
-**Other table parsers.** The **Earley parser** works for any CFG (no CNF needed) in $O(n^3)$ and keeps unfinished rules in a chart. A **chart parser** stores all partial parses in one table so none is built twice. <Cite id="cfg-parsing-wiki-earley" /> <Cite id="cfg-parsing-nltk-chart" />
+A derivation starts from S and keeps rewriting until only words remain. For "The tall girl sings" with S → NP VP, NP → Det Adj N, VP → V: S ⇒ NP VP ⇒ Det Adj N VP ⇒ the tall girl VP ⇒ the tall girl sings. A top-down parse starts from the start symbol and works down. <Cite id="class-nlp-pyq3" loc="p. 6" />
 
-## Probabilistic context-free grammar (PCFG)
+<PYQ id="2024-12-ce/q5b" />
 
-**What it is.** A **PCFG** is a CFG in which every rule has a probability. The probabilities of all rules with the same left side add up to 1. So $P(\text{NP} \to \text{Det N}) = 0.6$ means 60 percent of noun phrases are built that way. <Cite id="cfg-parsing-slp3-E" loc="§E.1" /> <Cite id="cfg-parsing-wiki-pcfg" /> <Cite id="text-preprocessing-fsnlp" />
+## Probabilistic CFG (PCFG)
 
-**Why it is needed.** An ordinary CFG says only "this tree is allowed". Real sentences are ambiguous, and the grammar cannot say which tree is more likely. A PCFG ranks the trees, so the parser can return the most probable one. It can also give the probability of a whole sentence, so it works as a language model. <Cite id="cfg-parsing-slp3-E" loc="§E.1" />
+*(Not in the class files; short standard note.)* A PCFG gives each rule a probability, and the probabilities of the rules with the same left side add to 1. The probability of a parse tree is the product of the probabilities of its rules. When a sentence has two trees, such as "I saw the man with the telescope" (the same ambiguity the class uses <Cite id="class-nlp-pyq4" loc="p. 6" />), the tree with the higher probability is chosen.
 
-**How it works.**
+```mermaid
+%% caption: A PCFG ranks the possible parse trees.
+flowchart LR
+  A["Sentence"] --> B["Possible parse trees"]
+  B --> C["Probability = product of rule probabilities"]
+  C --> D["Choose the most probable tree"]
+```
 
-1. **Probability of a tree** = the product of the probabilities of all the rules used in it. This assumes each rule is chosen independently of the rest of the tree (the context-free assumption).
-2. **Probability of a sentence** = the sum of the probabilities of all its trees.
-3. **Best parse** = the tree with the highest probability. Probabilistic CKY finds it by keeping, in each cell, the best probability for each non-terminal. <Cite id="cfg-parsing-slp3-E" loc="§E.2" />
-4. **Learning the probabilities.** Count rules in a treebank: $P(A \rightarrow \beta) = \dfrac{\text{Count}(A \rightarrow \beta)}{\text{Count}(A)}$. <Cite id="cfg-parsing-slp3-E" loc="§E.3" />
+<PYQ id="2023-12-ce/q5b" />
 
-### Worked example: rule probabilities from a treebank
+## Problems of a plain CFG
 
-<Sum>
+*(The class question bank lists these three problems <Cite id="class-nlp-qb1" loc="Module 3" />; the class files give no notes, so this is the standard short version.)*
 
-<Given>
+- **Agreement:** words must match in number and person: "He walks", not "He walk". A plain CFG accepts both, and separate singular and plural rules make the grammar huge. Fix: features that must match.
+- **Subcategorization:** a verb allows only certain complements. *Sleep* takes no object, *eat* may take one, *give* takes two; "He sleeps a book" is wrong. Fix: verb types or frames.
+- **Movement:** a phrase appears away from its normal place: in "What book did you read?" the object *book* is at the start, with a gap after *read*. Fix: gap (slash) rules.
 
-A treebank has 100 noun phrases: 60 are Det N, 25 are Det Adj N, 15 are NP PP. It has 100 verb phrases: 20 are V, 50 are V NP, 30 are VP PP.
+```mermaid
+%% caption: Three problems of a plain CFG and the usual fix for each.
+flowchart LR
+  A["Plain CFG: S to NP VP"] --> B["Agreement problem"]
+  A --> C["Subcategorization problem"]
+  A --> D["Movement problem"]
+  B --> B1["Fix: number and person features"]
+  C --> C1["Fix: verb frames"]
+  D --> D1["Fix: gap rules"]
+```
 
-</Given>
+<PYQ id="2024-12/q5b" /> <PYQ id="assignment-1/q3d" />
 
-<Find>
+## Questions from past papers
 
-the PCFG probabilities of the NP and VP rules.
-
-</Find>
-
-<Steps>
-
-1. NP rules, divide each count by the NP total 100: $P(\text{NP} \to \text{Det N}) = 60/100 = 0.60$; $P(\text{NP} \to \text{Det Adj N}) = 25/100 = 0.25$; $P(\text{NP} \to \text{NP PP}) = 15/100 = 0.15$. *Reason: relative frequency among all rules with NP on the left.*
-2. VP rules, divide by 100: $P(\text{VP} \to \text{V}) = 0.20$; $P(\text{VP} \to \text{V NP}) = 0.50$; $P(\text{VP} \to \text{VP PP}) = 0.30$.
-
-</Steps>
-
-<Answer>
-
-NP: 0.60, 0.25, 0.15. VP: 0.20, 0.50, 0.30.
-
-</Answer>
-
-<Box kind="verify">
-
-Each left side must add to 1: NP $0.60 + 0.25 + 0.15 = 1.00$; VP $0.20 + 0.50 + 0.30 = 1.00$. <PYQ id="2023-12-ce/q5b" />
-
-</Box>
-
-</Sum>
-
-### Worked example: choosing between two parse trees with a PCFG
-
-This is the classic ambiguity example from Manning and Schütze, `astronomers saw stars with ears`. <Cite id="text-preprocessing-fsnlp" />
-
-<Sum>
-
-<Given>
-
-Rules and probabilities: S → NP VP 1.0; PP → P NP 1.0; VP → V NP 0.7; VP → VP PP 0.3; NP → NP PP 0.4; NP → astronomers 0.1; NP → ears 0.18; NP → stars 0.18; NP → saw 0.04; NP → telescopes 0.1; P → with 1.0; V → saw 1.0. Sentence: `astronomers saw stars with ears`.
-
-</Given>
-
-<Find>
-
-the probability of each parse tree, the best parse and the probability of the sentence.
-
-</Find>
-
-<Steps>
-
-1. The sentence has two trees. Tree 1 attaches the PP to the noun phrase `stars` (the stars have the ears): VP → V NP, with the object NP → NP PP. Tree 2 attaches the PP to the verb phrase (the seeing is done with ears): VP → VP PP, with VP → V NP inside.
-2. **Tree 1.** Rules used: S → NP VP (1.0), NP → astronomers (0.1), VP → V NP (0.7), V → saw (1.0), NP → NP PP (0.4), NP → stars (0.18), PP → P NP (1.0), P → with (1.0), NP → ears (0.18). Multiply: $1.0 \times 0.1 \times 0.7 \times 1.0 \times 0.4 \times 0.18 \times 1.0 \times 1.0 \times 0.18 = 0.0009072$.
-3. **Tree 2.** Rules used: S → NP VP (1.0), NP → astronomers (0.1), VP → VP PP (0.3), VP → V NP (0.7), V → saw (1.0), NP → stars (0.18), PP → P NP (1.0), P → with (1.0), NP → ears (0.18). Multiply: $1.0 \times 0.1 \times 0.3 \times 0.7 \times 1.0 \times 0.18 \times 1.0 \times 1.0 \times 0.18 = 0.0006804$.
-4. Pick the larger: $0.0009072 > 0.0006804$, so Tree 1 is the best parse.
-5. Sentence probability is the sum over its trees: $0.0009072 + 0.0006804 = 0.0015876$.
-
-</Steps>
-
-<Answer>
-
-$P(t_1) = 0.0009072$, $P(t_2) = 0.0006804$. The best parse is Tree 1 (PP attached to the noun phrase `stars`). $P(\text{sentence}) = 0.0015876$.
-
-</Answer>
-
-<Box kind="verify">
-
-Recompute in stages. Tree 1: $0.1 \times 0.7 = 0.07$; $0.07 \times 0.4 = 0.028$; $0.028 \times 0.18 = 0.00504$; $0.00504 \times 0.18 = 0.0009072$. Tree 2: $0.1 \times 0.3 = 0.03$; $0.03 \times 0.7 = 0.021$; $0.021 \times 0.18 = 0.00378$; $0.00378 \times 0.18 = 0.0006804$. Also the NP rules add to 1: $0.4 + 0.1 + 0.18 + 0.18 + 0.04 + 0.1 = 1.0$, and the VP rules: $0.7 + 0.3 = 1.0$. <PYQ id="2023-12-ce/q5b" />
-
-</Box>
-
-</Sum>
-
-**Advantages.** Resolves ambiguity by ranking; rules are learned from a treebank; gives a language model; probabilistic CKY keeps the cubic running time. **Disadvantages.** Rules are assumed independent (a noun phrase is expanded the same way as subject or object, though they differ); words are ignored (the same probability for `saw the man with the telescope` whatever the nouns are); short trees are favoured because every rule multiplies in a number below 1. Fixes are splitting non-terminals and lexicalized grammars. <Cite id="cfg-parsing-slp3-E" loc="§E.4" /> <Cite id="cfg-parsing-klein2003" /> <Cite id="cfg-parsing-collins2003" /> <Cite id="cfg-parsing-johnson1998" />
-
-**Applications.** Parsing for question answering, machine translation and grammar checking; choosing between ambiguous parses; language modelling.
-
-## Problems with plain CFGs
-
-A CFG is a good first model, but English has patterns that a small set of context-free rules cannot capture neatly. The syllabus names three. <Cite id="cfg-parsing-slp3-F" loc="§F.3" />
-
-### 1. Agreement
-
-**What it is.** Words in a sentence must match in number, person and gender. The subject and verb agree: `She sings` but not `*She sing`; `These books` but not `*This books`. (A star marks an ungrammatical sentence.) Hindi also marks gender: `ladka jaata hai` but `ladki jaati hai`. <Cite id="cfg-parsing-wiki-agree" />
-
-**The problem.** The rule `S → NP VP` accepts `She sing` and `These book`, because it does not look at number. To stop that, the grammar must be split: `S → NP-sg VP-sg`, `S → NP-pl VP-pl`, and the NP, N, Det, V rules too. With person, number and gender together the number of rules multiplies, and the grammar becomes huge and repeats itself.
-
-**The fix.** Attach features (number, person) to symbols and require them to match (unification-based grammars). The rule stays one: `S → NP VP` with the condition that the NP and VP have the same number.
-
-### 2. Subcategorization
-
-**What it is.** Verbs differ in which phrases they take after them. This pattern is the verb's **subcategorization frame**. <Cite id="cfg-parsing-slp3-F" loc="§F.3.4" /> <Cite id="cfg-parsing-wiki-subcat" />
-
-| Verb type | Frame | Good | Bad |
-|---|---|---|---|
-| Intransitive | V | `The girl sleeps` | `*The girl sleeps the book` |
-| Transitive | V NP | `She reads a book` | `*She devours` |
-| Ditransitive | V NP NP, V NP PP | `He gave her a pen` | `*He handed her` |
-| Sentential complement | V S | `I think that she sings` | `*I think a book` |
-
-**The problem.** With a single rule `VP → V NP`, every verb can take an object, so `*The girl sleeps the book` is accepted. The CFG has to split V into $V_{intrans}$, $V_{trans}$, $V_{ditrans}$ and write one VP rule for each, which again enlarges the grammar and must be done for every verb frame.
-
-**The fix.** Store the frame of each verb in the lexicon and let the VP rule check it.
-
-### 3. Movement
-
-**What it is.** A phrase appears far from the place where it logically belongs. In `What did John buy?`, `what` is the object of `buy` but it comes at the front. In `Which book did you say she read?` the object `which book` is separated from `read` by several words (a long-distance dependency). Passives (`The book was read by Mary`) also move the object to the subject position. <Cite id="cfg-parsing-wiki-whmove" /> <Cite id="cfg-parsing-slp3-F" loc="§F.4" />
-
-**The problem.** A context-free rule sees only its own children, so it cannot say that a gap later in the sentence is filled by `what` earlier. We would need separate rules for every position and length where the gap can occur, and the length is unlimited.
-
-**The fix.** Use a **gap** (trace) and slash categories: `S/NP` means "a sentence that is missing an NP". The grammar rule `S → Wh-NP Aux NP VP/NP` then passes the missing NP down the tree until `buy` uses it.
-
-**Conclusion.** All three problems come from one cause: a CFG rule is local and has no memory of features, verb type or distant words. The usual cure is richer grammars (features, slash categories) or statistical parsers. <Cite id="cfg-parsing-slp3-19" loc="§19.2" />
-
-## Constituency versus dependency parsing
-
-A **constituency parse** (everything so far) shows phrases inside phrases. A **dependency parse** links words directly: `sings` is the head and `girl` depends on it as subject; there are no phrase nodes. Modern libraries such as spaCy output dependency parses, while CFG and PCFG give constituency parses. <Cite id="cfg-parsing-tp-syn" />
-
-<Img id="img-nlp-n2-constituency-vs-dependency" caption="The same sentence analysed two ways: the bottom tree groups words into phrases (constituency, what CFGs give), the top tree links word to word with no phrase nodes (dependency)." />
-
-| Point | Constituency (CFG) | Dependency |
-|---|---|---|
-| Unit | phrases (NP, VP) | words and links between them |
-| Labels | phrase labels | relations such as subject, object |
-| Output | tree with inner nodes | tree over the words only |
-| Good for | grammar, phrase structure | relations, information extraction, free word order |
-
-## Exam answers
-
-<Box kind="exam">
-
-**Compare top-down and bottom-up parsing with an example (10 marks):** one-line definition of each; the direction (S to words versus words to S); the example `the girl sings` with the wrong `NP → Det Adj N` guess and the backtrack; the comparison table (goal-driven versus data-driven, wasted predictions versus useless phrases, left recursion); a one-line conclusion. <PYQ id="2022-12-ce/q4c" />
-
-**CYK parse of "The man read this book" (10 marks):** convert to CNF (break `Aux NP VP`, remove unit rules), number the gaps, fill the lexicon cells, fill by length with the split rule, show the table, S in [0,5], and draw the tree. <PYQ id="2023-05-ce/q5a" /> <PYQ id="2025-05-ce/q5a" />
-
-**PCFG with an example (10 marks):** define PCFG (CFG plus rule probabilities adding to 1 per left side); why (ranking ambiguous parses); tree probability as a product; a two-tree example such as `astronomers saw stars with ears`; learning by counting; advantages and limits. <PYQ id="2023-12-ce/q5b" />
-
-**Parse tree with given CFG (10 marks):** write the leftmost derivation rule by rule, then draw the tree with the labelled words at the leaves, and state that all rules are from the given grammar. <PYQ id="2024-12-ce/q5b" />
-
-**Problems in CFG: agreement, subcategorization, movement (10 marks):** for each one give the definition, a good and a bad sentence, why a plain CFG fails, and the fix (features, frames, gaps). <PYQ id="2024-12/q5b" />
-
-**Shift-reduce parser with example (10 marks):** define it (stack, input buffer, bottom-up), the four actions, the stack-input-action table for a short sentence, conflicts and the no-backtracking limit. <PYQ id="2025-05-ce/q3b" />
-
-</Box>
+- <PYQ id="2022-12-ce/q4c" /> top-down versus bottom-up (10 marks)
+- <PYQ id="2023-05-ce/q5a" /> and <PYQ id="2025-05-ce/q5a" /> CYK on "The man read this book"
+- <PYQ id="2024-12-ce/q5b" /> parse tree for "The tall girl sings"
+- <PYQ id="2023-12-ce/q5b" /> PCFG; <PYQ id="2025-05-ce/q3b" /> shift-reduce parser
+- <PYQ id="2024-12/q5b" /> and <PYQ id="assignment-1/q3d" /> agreement, subcategorization, movement
