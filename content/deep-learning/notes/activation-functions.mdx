@@ -1,398 +1,242 @@
 ---
 title: "Activation functions"
 module: 2
-summary: "An activation function is the small rule each neuron applies to its weighted sum before passing it on. It is what lets a network learn curved, complicated patterns instead of only straight lines."
+summary: "What an activation function is and why a neuron needs one, then the functions the class teaches with formula, graph, range, example, use, advantages and disadvantages: sigmoid, tanh, ReLU, leaky ReLU, softmax and linear (identity), and how to choose one."
 keyIdeas:
-  - "A neuron first adds up its weighted inputs, then passes the total through an activation function."
-  - "Without a non-linear activation, any number of layers collapses into one straight-line model."
-  - "Sigmoid squashes to (0, 1) and tanh to (−1, 1); both go flat for large inputs, so their gradients vanish."
-  - "ReLU, max(0, z), is the default for hidden layers: cheap and does not go flat for positive inputs. Leaky ReLU keeps a small slope for negative inputs."
-  - "Softmax turns a list of scores into probabilities that add up to 1, for multi-class outputs."
-  - "Choose the output activation by the task: linear for numbers, sigmoid for yes/no, softmax for one-of-many."
+  - "An activation function is a mathematical function used in a neural network to decide whether a neuron should be activated (pass information) or not. It adds non-linearity so the network can learn complex patterns."
+  - "Without an activation function a neural network behaves like a simple linear model."
+  - "Sigmoid: output 0 to 1, binary classification output layer. Tanh: output −1 to 1, zero-centered, hidden layers. ReLU: max(0, x), range [0, ∞), most used in hidden layers. Leaky ReLU: small slope for negative inputs, fixes the dying ReLU problem. Softmax: probabilities that sum to 1, multi-class output layer. Linear: f(x) = x, regression output layer."
+  - "How to choose: binary classification uses sigmoid, multi-class uses softmax, regression uses linear, hidden layers use ReLU or tanh."
 references:
-  - gfdl-ch6
-  - glorot2010
-  - glorot2011
-  - he2015prelu
-  - nptel-dl
-  - cs231n-nn1
-  - d2l-mlp-activations
-  - d2l-numerical-stability
-  - d2l-softmax-regression
-  - gfg-activation-functions
-  - gfg-choose-activation
-  - gfg-sigmoid
-  - gfg-tanh
-  - gfg-relu
-  - gfg-leaky-relu
-  - gfg-softmax
-  - tp-activation-functions
-  - mlm-choose-activation
-  - mlm-relu
-  - av-activation-functions
-  - keras-activations
-  - pytorch-relu
-  - pytorch-leakyrelu
-  - pytorch-sigmoid
-  - pytorch-tanh
-  - pytorch-softmax
-  - wiki-activation-function
-  - wiki-relu
-  - wiki-sigmoid-function
-  - wiki-softmax
+  - class-dl-chp2
+  - class-dl-m2
+  - class-dl-m1
 ---
 
-Before the new ideas, here are the old ones you need. If you already know them, skip to the next section.
-
-## The basics first
-
-- A **neuron** takes some input numbers, multiplies each by a **weight** (how important that input is), adds them all up, and adds one more number called the **bias** (a starting offset).
-- That total is called the **weighted sum** (or pre-activation), written $z$. In symbols, $z = w_1x_1 + w_2x_2 + \dots + b$.
-- A **layer** is many neurons side by side. A **network** is layers one after another: the outputs of one layer are the inputs of the next.
-- **Training** changes the weights so the network's answers get closer to the right answers. It uses **gradients**: a gradient is a slope that says "if you nudge this weight a little, how much does the error change".
-- In a deep network the gradient for an early layer is found by **multiplying** the slopes of all the layers after it (the chain rule). Keep this in mind: if many of those slopes are tiny, their product is tinier still.
+This is syllabus <Syl m="2" />, "activation functions: tanh, logistic, linear, softmax, ReLU, leaky ReLU".
 
 ## What an activation function is
 
 <Box kind="definition">
 
-An **activation function** is a fixed rule that a neuron applies to its weighted sum $z$ to decide what number it passes on. The neuron's output, $a = f(z)$, is called its **activation** and goes to the next layer.
+An **activation function** is a mathematical function used in a neural network to decide whether a neuron should be activated (pass information) or not. It takes the output from a neuron and converts it into a new value, which is then passed to the next layer. <Cite id="class-dl-chp2" loc="slide 9" />
+
+**Simple definition:** an activation function decides the output of a neuron and helps the neural network learn complex patterns. <Cite id="class-dl-chp2" loc="slide 9" />
 
 </Box>
 
-Think of a dimmer switch on a light. The weighted sum is how hard you push the switch. The activation function decides how bright the bulb actually gets for that push: maybe not at all below some point, maybe up to a maximum brightness and no more. This is syllabus <Syl m="2" />, section 2.1.
+Every activation function (or non-linearity) takes a single number and performs a certain fixed mathematical operation on it. It introduces non-linearity into the model, allowing the network to learn and represent complex patterns in the data. It decides whether a neuron should be activated by calculating the weighted sum of inputs and adding a bias term. <Cite id="class-dl-m2" loc="p. 3" />
 
-**How it works, step by step:**
-
-1. The neuron receives inputs from the previous layer (or the raw data).
-2. It multiplies each input by its weight, adds them up and adds the bias. This gives $z$, which is only a straight-line mix of the inputs.
-3. The activation function reshapes $z$, for example squashing it into 0 to 1, or cutting negative values to zero.
-4. The result is sent on to every neuron of the next layer.
-5. During training, backpropagation also uses the **slope** of the activation function to work out how much each weight should change.
+The neuron first calculates $z = wx + b$, the activation function $f(z)$ then processes the result, and the processed value is sent to the next layer. <Cite id="class-dl-chp2" loc="slide 9" />
 
 ```mermaid
-%% caption: One neuron. The weighted sum is a straight-line mix of the inputs. The activation function is the only bent, non-straight step.
+%% caption: Where the activation function sits inside one neuron.
 flowchart LR
-  X1["Input x1"] --> S["Weighted sum z = w1·x1 + w2·x2 + b"]
-  X2["Input x2"] --> S
-  B["Bias b"] --> S
-  S --> F["Activation function a = f(z)"]
-  F --> O["Output a, sent to the next layer"]
+  A["Inputs x1 ... xn"] --> B["Multiply with weights"]
+  B --> C["Add bias b: z = wx + b"]
+  C --> D["Activation function f(z)"]
+  D --> E["Output to next layer"]
 ```
 
-<Img id="img-dl-n1-neuron-artificial" caption="Where the activation sits: the weighted sum is formed first, then the activation function (the box marked phi) gives the neuron's output." />
+## Why do we need it?
 
-## Why we need it: the "collapse" problem
+- Without an activation function, a neural network behaves like a simple linear model. It cannot learn complex relationships such as image recognition, speech recognition or object classification. <Cite id="class-dl-chp2" loc="slide 9" />
+- With it, the network can learn complex (non-linear) patterns, decide the output of each neuron, improve prediction accuracy and solve real-world problems.
+- It **introduces non-linearity**, **helps learn complex patterns**, **helps during backpropagation** (gradients can flow so learning can occur) and **determines the output range**. <Cite id="class-dl-chp2" loc="slide 25" />
+- Different problems need different outputs, so different activation functions are used for different tasks. <Cite id="class-dl-chp2" loc="slide 9" />
 
-Suppose a network has **no** activation function, so every layer just passes on its weighted sum. Each layer is then a straight-line (linear) rule, and a straight line fed into another straight line is still a straight line. For example, a layer that computes $2x + 1$ followed by a layer that computes $3h - 2$ is exactly the same as one layer computing $6x + 1$, because $3(2x + 1) - 2 = 6x + 3 - 2 = 6x + 1$.
+<Img id="class-activation-functions-significance" caption="Without an activation function the neuron is linear (y = z). With one, the model becomes non-linear and can learn complex patterns." />
 
-<Box kind="verify">
-
-Try a real input, $x = 1$. Two layers: the first gives $2(1) + 1 = 3$, the second gives $3(3) - 2 = 7$. One layer: $6(1) + 1 = 7$. Same answer, so the second layer added nothing new.
-
-</Box>
-
-So a deep network without activation functions is no more powerful than a single layer, however many layers it has. It could never learn a curved pattern, such as the XOR problem (output 1 when exactly one of two inputs is 1), which no single straight line can separate. <Cite id="gfdl-ch6" loc="§6.1" />
-
-<Box kind="intuition">
-
-The activation function adds a **bend** (non-linearity) after every layer. Stacking many bends lets the network build almost any curved shape, the way many short straight sticks can be arranged to trace a circle.
-
-</Box>
-
-**The significance of activation functions, in one list:**
-
-1. **Non-linearity.** They let the network learn curved, complex relationships such as faces in images or words in speech. Without them, depth is useless.
-2. **They control the output range.** Sigmoid gives a number between 0 and 1, which can be read as a probability; softmax gives class probabilities that add to 1.
-3. **They decide how well the network trains.** Training needs useful slopes. An activation that goes flat over a wide range (it **saturates**) gives tiny gradients and slow learning. <Cite id="gfdl-ch6" loc="§6.3.2" />
-4. **They decide whether a neuron "fires".** Like a real brain cell, a unit can be off for some inputs and on for others, so different neurons specialise in different patterns.
-
-**What a good activation function looks like:** it is non-linear; it has a slope almost everywhere, so gradients can be computed; it does not go flat over most of its range; it is cheap to compute; and ideally its outputs are centred around zero.
-
-## Saturation and the vanishing gradient (the key idea behind the choices)
-
-A function **saturates** when its curve goes almost flat, so a big change in input makes almost no change in output. Flat means the slope is nearly zero. During backpropagation, the gradient reaching an early layer is the product of the slopes of all later layers. If each slope is small, multiplying many of them gives a number close to zero, so the early layers receive almost no signal and stop learning. This is the **vanishing gradient problem**. <Cite id="glorot2010" /> <Cite id="d2l-numerical-stability" />
-
-Think of a whispering game: if each person passes on only a quarter of what they heard, after ten people almost nothing is left.
-
-This one idea explains why sigmoid and tanh fell out of favour in hidden layers and why ReLU became the default.
-
-<Img id="img-dl-n1-activation-slopes" caption="Red is the function, dashed orange is its slope. The sigmoid slope is at most 0.25 and nearly 0 at the ends, so gradients vanish. The ReLU slope is 1 for positive inputs." />
+<Img id="class-activation-functions-what-needed" caption="Why different activation functions are needed: regression uses linear, yes/no uses sigmoid, many classes use softmax." />
 
 ## Types of activation functions
 
+The activation functions can be divided into two types: **linear** activation functions and **non-linear** activation functions. <Cite id="class-dl-m2" loc="p. 3" />
+
+- The **linear (identity)** function $f(x) = x$ has range $(-\infty, \infty)$. It does not help with the complexity or various parameters of the usual data fed to neural networks. <Cite id="class-dl-m2" loc="p. 4" />
+- **Non-linear** functions make it easy for the model to generalize or adapt to a variety of data. Two terms are needed: **derivative** (change in y with respect to change in x, also called the slope) and **monotonic function** (a function that is entirely non-increasing or non-decreasing). <Cite id="class-dl-m2" loc="p. 4" />
+- Older functions in the notes: the **binary step** function (output 0 or 1 by a threshold $\theta$, used in single-layer nets), the **bipolar step** function (output +1 or −1) and the **ramp** function. <Cite id="class-dl-m2" loc="p. 5" />
+
 ```mermaid
-%% caption: The main families. The syllabus names linear, logistic (sigmoid), tanh, ReLU, leaky ReLU and softmax.
+%% caption: The activation functions of the class, grouped as linear and non-linear.
 flowchart TD
-  A["Activation functions"] --> L["Linear family"]
-  A --> S["S-shaped, saturating"]
-  A --> R["Rectified, ReLU family"]
-  A --> M["Whole-vector output"]
-  L --> L1["Linear (identity)"]
-  L --> L2["Step, old perceptron"]
-  S --> S1["Logistic sigmoid"]
-  S --> S2["Tanh"]
-  R --> R1["ReLU"]
-  R --> R2["Leaky ReLU and PReLU"]
-  M --> M1["Softmax"]
+  A["Activation functions"] --> B["Linear: identity f(x) = x"]
+  A --> C["Non-linear"]
+  C --> D["Sigmoid: 0 to 1"]
+  C --> E["Tanh: -1 to 1"]
+  C --> F["ReLU: 0 to infinity"]
+  C --> G["Leaky ReLU"]
+  C --> H["Softmax: probabilities"]
 ```
 
-### Linear (identity) activation
+<Img id="class-activation-functions-types-table" caption="The six activation functions with equation, plot and range." />
 
-**What it is.** The neuron passes its weighted sum on unchanged: $f(z) = z$. The output can be any number, from very negative to very positive.
+## 1. Sigmoid (logistic) activation function
 
-**Advantages:** simplest possible; does not limit the output range, so it can give any real value.
+<Box kind="definition">
 
-**Disadvantages:** adds no bend, so in hidden layers it causes the collapse shown above; its slope is the same everywhere, so it cannot help the network model curved data.
+The **sigmoid activation function** converts any input value into a value between 0 and 1. The output represents a probability, which makes it suitable for binary (yes or no) classification problems. $\sigma(x) = \dfrac{1}{1 + e^{-x}}$ <Cite id="class-dl-chp2" loc="slide 11" />
 
-**Application:** only in the **output layer** of a **regression** network, where the answer is a plain number such as a house price or tomorrow's temperature. <Cite id="gfdl-ch6" loc="§6.2.2.1" />
+</Box>
 
-A **step (threshold)** function, output 1 if $z \ge 0$ and 0 otherwise, was used in the original perceptron. Its slope is zero everywhere (except at 0, where it jumps), so gradients give no signal and it cannot be trained by gradient descent. That is why smooth functions replaced it.
+- The curve is **S-shaped**. A very large negative input gives an output close to 0, input 0 gives 0.5, and a very large positive input gives an output close to 1. Output range: **0 to 1**. <Cite id="class-dl-chp2" loc="slide 11" />
+- It exists between 0 and 1, so it is especially used for models where we have to predict a probability. The function is differentiable and monotonic, but its derivative is not monotonic. Derivative: $f'(x) = f(x)(1 - f(x))$. <Cite id="class-dl-m2" loc="p. 8" /> <Cite id="class-dl-m1" loc="p. 20" />
+- **Where it is used:** the output layer of binary classification problems: apple or not apple, spam or not spam, pass or fail, disease or no disease, fraud or not fraud. If the output is 0.95 the fruit is an apple with 95% probability; if it is 0.15 it is not an apple. <Cite id="class-dl-chp2" loc="slide 11" />
+- **Advantages:** produces probability values, easy to understand, smooth and continuous curve. **Disadvantages:** can suffer from the vanishing gradient problem in deep networks, training becomes slower in deep networks, and it is not commonly used in hidden layers of modern deep networks. <Cite id="class-dl-chp2" loc="slide 11" />
 
-### Logistic sigmoid
+<Img id="class-activation-functions-sigmoid" caption="Sigmoid: S-shaped curve; very large negative input gives close to 0, 0 gives 0.5, very large positive input gives close to 1." />
 
-**What it is.** A smooth "S"-shaped curve that squashes any input into the range 0 to 1. Large positive inputs give outputs near 1, large negative inputs give outputs near 0, and an input of 0 gives exactly 0.5.
+## 2. Tanh (hyperbolic tangent) activation function
 
-$$
-\sigma(z) = \frac{1}{1 + e^{-z}}
-$$
+<Box kind="definition">
 
-Here $e \approx 2.718$. In words: the bigger $z$ is, the smaller $e^{-z}$ becomes, so the fraction moves towards 1.
+The **tanh** activation function converts any input into a value between −1 and +1. Unlike sigmoid, tanh can produce negative, zero and positive values, which helps the network learn better. $\tanh(x) = \dfrac{e^x - e^{-x}}{e^x + e^{-x}}$ <Cite id="class-dl-chp2" loc="slide 13" />
 
-**How it behaves.** Its slope is largest at the centre (only 0.25 there) and falls to almost zero at both ends, where the curve is flat.
+</Box>
 
-**Advantages:**
+- tanh is also S-shaped (sigmoidal) and passes through (0, 0). A very large negative input gives close to −1, input 0 gives 0, a very large positive input gives close to +1. Range **−1 to +1**. <Cite id="class-dl-chp2" loc="slide 13" />
+- Negative inputs are mapped strongly negative and zero inputs are mapped near zero. The function is differentiable and monotonic, while its derivative is not monotonic. Derivative: $f'(x) = 1 - f(x)^2$. <Cite id="class-dl-m2" loc="p. 9" /> <Cite id="class-dl-m1" loc="p. 20" />
+- **Where it is used:** mainly the hidden layers, when the network needs to learn both positive and negative relationships (image recognition, speech recognition, handwritten digits, NLP, time-series prediction). Its output is zero-centered, which helps faster learning. <Cite id="class-dl-chp2" loc="slide 13" />
+- **Disadvantages:** can suffer from the vanishing gradient problem, is slower in very deep networks and is less used today than ReLU.
 
-- The output reads naturally as a **probability**.
-- Smooth, with a slope everywhere, so it can be trained by gradient descent.
+<Img id="class-activation-functions-tanh" caption="Tanh: S-shaped, passes through (0, 0), range −1 to +1." />
 
-**Disadvantages:**
+## 3. ReLU (rectified linear unit)
 
-- **Saturates**, so gradients vanish in deep networks; its slope is never more than 0.25.
-- **Not zero-centred**: outputs are always positive, which can make weight updates zig-zag instead of heading straight to a good answer. <Cite id="cs231n-nn1" />
-- Needs an exponential, which is slower to compute than ReLU.
+<Box kind="definition">
 
-**Applications:** the output of a yes/no (binary) classifier such as a spam filter or disease test; one sigmoid per label in multi-label tagging; the gates inside LSTM cells. <Cite id="gfdl-ch6" loc="§6.2.2.2" />
+**ReLU** is an activation function that returns the input value if it is positive, otherwise it returns 0. ReLU keeps positive values unchanged and converts all negative values to 0. $\text{ReLU}(x) = \max(0, x)$ <Cite id="class-dl-chp2" loc="slide 15" />
 
-Because of the saturation, Goodfellow et al. say sigmoid is now **discouraged in hidden layers** of feedforward networks, but it is fine at the output when paired with a suitable loss (cross-entropy). <Cite id="gfdl-ch6" loc="§6.3.2" /> <Cite id="glorot2010" />
+</Box>
 
-### Hyperbolic tangent (tanh)
+- If $x > 0$ the output is $x$; if $x \le 0$ the output is 0. Range: **[0, ∞)**. The function and its derivative are both monotonic. <Cite id="class-dl-chp2" loc="slide 15" /> <Cite id="class-dl-m2" loc="p. 10" />
+- ReLU is the most widely used activation function in the hidden layers of deep neural networks because it is simple and trains models faster. It is fast to compute, easy to implement, able to learn complex patterns and less affected by the vanishing gradient problem. <Cite id="class-dl-chp2" loc="slide 15" />
+- **Where it is used:** hidden layers of DNNs and CNNs (image recognition, face recognition, speech recognition, object detection, medical image analysis).
+- **Disadvantage:** negative inputs become 0. Some neurons may stop learning if they always receive negative inputs; this is called the **dying ReLU problem**. It is also not suitable for the output layer in classification problems. <Cite id="class-dl-chp2" loc="slide 15" />
 
-**What it is.** The same S shape as sigmoid, but stretched to the range −1 to +1 and centred on zero: an input of 0 gives 0. It is a stretched and shifted sigmoid.
+<Img id="class-activation-functions-relu-graph" caption="ReLU: formula max(0, x) and its graph, flat at 0 for negative input and a straight line for positive input." />
 
-In words: it compares $e^{z}$ with $e^{-z}$. When $z$ is large and positive the top and bottom are almost equal, so the answer is near +1; when $z$ is large and negative it is near −1; at $z = 0$ the top is 0.
+<Img id="class-activation-functions-relu-example" caption="ReLU example: 8, 3, 0, −2, −7 become 8, 3, 0, 0, 0." />
 
-$$
-\tanh(z) = \frac{e^{z} - e^{-z}}{e^{z} + e^{-z}}
-$$
+## 4. Leaky ReLU
 
-**Advantages:**
+<Box kind="definition">
 
-- **Zero-centred**, so positive and negative outputs balance and training is steadier than with sigmoid.
-- Its slope at the centre is 1 (four times sigmoid's 0.25), so it behaves more like a straight line near zero and usually trains better than sigmoid in hidden layers. <Cite id="gfdl-ch6" loc="§6.3.2" />
+**Leaky ReLU** is an improved version of the ReLU activation function. Unlike ReLU, which converts all negative values to 0, Leaky ReLU allows a small value for negative inputs instead of making them zero. $f(x) = \begin{cases} x & x > 0 \\ 0.01x & x \le 0 \end{cases}$ <Cite id="class-dl-chp2" loc="slide 17" />
 
-**Disadvantages:** it **still saturates** for large positive or negative inputs, so the vanishing gradient remains; it also needs exponentials.
+</Box>
 
-**Applications:** hidden units of recurrent networks such as RNN, LSTM and GRU; older shallow networks.
+- It is an attempt to solve the **dying ReLU problem**. The small constant (usually 0.01) is called the leak. When the constant is not 0.01 it is called Randomized ReLU. Range: **(−∞, ∞)**. Both Leaky and Randomized ReLU functions and their derivatives are monotonic. <Cite id="class-dl-m2" loc="p. 11" />
+- A neuron that always gets a negative input still gives a small non-zero output, so it continues learning.
+- **Where it is used:** hidden layers, when there is a possibility of the dying ReLU problem. **Advantages:** solves the dying ReLU problem, fast and efficient. **Disadvantages:** the small negative slope must be chosen, slightly more complex than ReLU, and not commonly used in the output layer. <Cite id="class-dl-chp2" loc="slide 17" />
 
-<Figure caption="Sigmoid (0 to 1) and tanh (−1 to 1) have the same S shape. Notice both go flat for large positive or negative inputs: that flatness is saturation.">
-  <CurvePlot curves="sigmoid,tanh" x="-6,6" y="-1.2,1.2" xLabel="weighted sum z" yLabel="output f(z)" />
-</Figure>
+<Img id="class-activation-functions-leaky-graph" caption="Leaky ReLU: f(x) = x for x > 0 and 0.01x for x ≤ 0. Negative inputs give a small negative value, not zero." />
 
-<Figure caption="The slopes. The sigmoid's slope never exceeds 0.25; tanh's peaks at 1. Both fall to almost zero away from the centre, which is why gradients vanish in deep sigmoid or tanh networks.">
-  <CurvePlot curves="sigmoid-derivative,tanh-derivative" x="-6,6" y="0,1.1" xLabel="weighted sum z" yLabel="slope f′(z)" />
-</Figure>
+<Img id="class-activation-functions-leaky-example" caption="Leaky ReLU example: −2 becomes −0.02 and −5 becomes −0.05, so the neuron keeps learning." />
 
-### ReLU (rectified linear unit)
+## 5. Softmax
 
-**What it is.** "Pass positive numbers through unchanged, replace negative numbers with zero." It is like a one-way valve: water flows forwards freely, but not backwards.
+<Box kind="definition">
 
-$$
-\text{ReLU}(z) = \max(0, z)
-$$
+**Softmax** is an activation function that converts the output of a neural network into probability values. The probabilities of all classes add up to 1 (100%). It is mainly used when there are more than two classes. $\text{Softmax}(z_i) = \dfrac{e^{z_i}}{\sum_{j=1}^{n} e^{z_j}}$ <Cite id="class-dl-chp2" loc="slide 19" />
 
-**How it behaves.** For positive inputs the slope is exactly 1, so gradients pass backwards without shrinking. For negative inputs the output and the slope are both 0. (At exactly zero the slope is undefined; software simply uses 0.)
+</Box>
 
-**Advantages:**
+- Each probability is between 0 and 1 and the total of all probabilities is 1. The class with the highest probability is selected as the prediction. The softmax function is a more generalized logistic activation function, used for multiclass classification. <Cite id="class-dl-chp2" loc="slide 19" /> <Cite id="class-dl-m2" loc="p. 8" />
+- This property of adding up to 1.0 is called **normalization**; an impossible event is denoted by 0 and a sure event by 1. <Cite id="class-dl-m1" loc="p. 22" />
+- **Where it is used:** the output layer of multi-class classification (fruit classification, handwritten digit recognition 0 to 9, animal, flower and image classification). **Disadvantages:** not suitable for binary classification, cannot predict multiple classes at the same time, needs more computation than simpler functions. <Cite id="class-dl-chp2" loc="slide 19" />
 
-- **No vanishing gradient for positive inputs**, so deep networks train much faster. <Cite id="gfdl-ch6" loc="§6.3.1" />
-- **Very cheap:** just a comparison with zero, no exponential.
-- **Sparse:** many neurons output exactly 0, so only some are active for a given input. Glorot et al. showed deep rectifier networks train well and give such sparse representations. <Cite id="glorot2011" />
+<Img id="class-activation-functions-softmax-example" caption="Softmax example: scores 2, 1, 0 become probabilities 0.67, 0.25, 0.09 for three classes." />
 
-**Disadvantages:**
+## 6. Linear (identity) activation function
 
-- **Dying ReLU:** if a neuron's weighted sum is negative for every training example, its output and slope are always 0, so its weights never change again; the neuron is "dead". Goodfellow et al. note ReLU cannot learn from examples where its activation is zero. <Cite id="gfdl-ch6" loc="§6.3.1" />
-- Not zero-centred, and the output has no upper limit.
+The linear (identity) activation function returns the same value as the input: $f(x) = x$, range $(-\infty, +\infty)$, a straight line through the origin with slope 1. It is used in the output layer for regression problems (fruit weight, house price, temperature, sales). Its disadvantages: it cannot learn complex non-linear relationships, is not suitable for classification and is rarely used in hidden layers. <Cite id="class-dl-chp2" loc="slide 21" /> <Cite id="class-dl-m2" loc="p. 5" />
 
-**Applications:** the **default for hidden layers** in almost all modern networks: CNNs for image recognition (AlexNet, VGG, ResNet) and fully connected networks. <Cite id="mlm-relu" />
-
-### Leaky ReLU (and PReLU)
-
-**What it is.** ReLU with a small "leak": instead of a flat zero for negative inputs, it lets through a small fraction of them, usually 1%.
-
-$$
-\text{LeakyReLU}(z) = z \text{ if } z > 0, \quad \alpha z \text{ otherwise}
-$$
-
-Here $\alpha$ (alpha) is a small fixed number, commonly $0.01$.
-
-**Advantages:**
-
-- Every neuron always gets some gradient, so neurons **cannot die**. <Cite id="gfdl-ch6" loc="§6.3.1" />
-- Keeps all the speed and simplicity of ReLU.
-
-**Disadvantages:** one more number ($\alpha$) to choose; the gain over ReLU is not guaranteed. Goodfellow et al. say these variants usually perform about as well as ReLU and sometimes better.
-
-**Variant:** **Parametric ReLU (PReLU)** makes $\alpha$ a number the network **learns** during training instead of fixing it. <Cite id="he2015prelu" />
-
-**Applications:** hidden layers where many ReLU neurons die; GAN discriminators commonly use it.
-
-<Figure caption="ReLU is flat at zero for negative inputs; leaky ReLU keeps a small slope there. (The plot uses α = 0.1 so the slope is visible; 0.01 is more common.) For positive inputs both are the straight line y = x.">
-  <CurvePlot curves="relu,leaky-relu" x="-4,4" y="-1,4" xLabel="weighted sum z" yLabel="output f(z)" />
-</Figure>
-
-### Softmax
-
-**What it is.** Softmax is different from the others: it works on a **whole list** of scores at once, not one number. It turns the raw scores (called **logits**) for $K$ classes into probabilities that are all between 0 and 1 and **add up to exactly 1**.
-
-**How it works, step by step:**
-
-1. Take the raw score of every class.
-2. Raise $e$ to each score, which makes every value positive and makes bigger scores much bigger.
-3. Add these values up.
-4. Divide each value by the total, so the shares sum to 1.
-
-$$
-\text{softmax}(z)_k = \frac{e^{z_k}}{\sum_{j=1}^{K} e^{z_j}}
-$$
-
-In words: the probability of class $k$ is its exponential divided by the sum of all the exponentials.
-
-**Worked example (softmax by hand).**
+## Worked example: five functions on the same input
 
 <Sum>
 
 <Given>
 
-raw scores for three classes, $z = [2, 1, 0.1]$ (cat, dog, bird).
+a neuron with weighted sum $z = -2$ and then $z = 2$. Use $e^{2} = 7.389$ and $e^{-2} = 0.1353$.
 
 </Given>
 
 <Find>
 
-the softmax probability of each class.
+the sigmoid, tanh, ReLU and leaky ReLU (0.01) outputs.
 
 </Find>
 
 <Steps>
 
-1. Raise $e$ to each score, to make every value positive: $e^{2} = 7.389$, $e^{1} = 2.718$, $e^{0.1} = 1.105$.
-2. Add them, to get the total that will be shared out: $7.389 + 2.718 + 1.105 = 11.212$.
-3. Divide each value by the total, so each class gets its share: $7.389 \div 11.212 = 0.659$, $2.718 \div 11.212 = 0.242$, $1.105 \div 11.212 = 0.099$.
+1. **Sigmoid:** $\sigma(-2) = 1/(1 + e^{2}) = 1/8.389 = 0.119$ and $\sigma(2) = 1/(1 + e^{-2}) = 1/1.1353 = 0.881$.
+2. **Tanh:** $\tanh(2) = (7.389 - 0.1353)/(7.389 + 0.1353) = 7.2537/7.5243 = 0.964$, and by symmetry $\tanh(-2) = -0.964$.
+3. **ReLU:** $\max(0, -2) = 0$ and $\max(0, 2) = 2$.
+4. **Leaky ReLU:** $0.01 \times (-2) = -0.02$ and for $z = 2$ the output is $2$.
 
 </Steps>
 
 <Answer>
 
-cat ≈ 0.66, dog ≈ 0.24, bird ≈ 0.10. The biggest score (cat) gets the biggest probability.
+| $z$ | Sigmoid | Tanh | ReLU | Leaky ReLU |
+|---|---|---|---|---|
+| −2 | 0.119 | −0.964 | 0 | −0.02 |
+| 2 | 0.881 | 0.964 | 2 | 2 |
 
 </Answer>
 
 <Box kind="verify">
 
-Check 1: the probabilities must add to 1. $0.659 + 0.242 + 0.099 = 1.000$. Correct.
-
-Check 2, a different route: subtract the largest score (2) from every score first, giving $[0, -1, -1.9]$. Then $e^{0} = 1$, $e^{-1} = 0.368$, $e^{-1.9} = 0.150$, total $1.518$, and $1 \div 1.518 = 0.659$, $0.368 \div 1.518 = 0.242$, $0.150 \div 1.518 = 0.099$. The same answer, which also shows why software can safely subtract the largest score to avoid overflow.
+Sigmoid: $0.119 + 0.881 = 1$, as it must for $\sigma(-z) + \sigma(z)$. Tanh is an odd function, so the two values are equal with opposite signs. The sigmoid values match the teacher's table (0.12 and 0.88). <Cite id="class-dl-chp2" loc="slide 23" />
 
 </Box>
 
 </Sum>
 
-Think of a pizza shared among friends by how hungry each one is: everyone gets a share, the hungriest gets the biggest, and the shares always make exactly one whole pizza.
+## Which activation function to use
 
-<Img id="img-dl-n1-softmax-example" caption="Softmax turns raw scores (35.4, 38.1, -5.0) into probabilities (0.06, 0.94, 0.00) that add up to 1. The biggest score gets the biggest share." />
+| Function | Range | Best used in |
+|---|---|---|
+| Sigmoid | (0, 1) | Output layer (binary classification) |
+| Tanh | (−1, 1) | Hidden layers |
+| ReLU | [0, ∞) | Hidden layers (most common) |
+| Leaky ReLU | (−∞, ∞) | Hidden layers (fixes dying ReLU) |
+| Softmax | (0, 1), sum 1 | Output layer (multi-class classification) |
+| Linear | (−∞, ∞) | Output layer (regression) |
 
-**Advantages:**
-
-- Gives a clear **probability for each class**, easy to interpret.
-- The biggest score gets the biggest probability, but the others are not thrown away (hence "soft" max).
-- Pairs naturally with categorical cross-entropy loss. With two classes it gives the same answer as a sigmoid applied to the difference of the two scores. <Cite id="gfdl-ch6" loc="§6.2.2.3" /> <Cite id="d2l-softmax-regression" />
-
-**Disadvantages:** used only at the output; classes compete, so it is wrong for multi-label problems; it can saturate when one score is much larger than the rest; exponentials of big scores can overflow (software subtracts the largest score first, which does not change the answer).
-
-**Applications:** the output layer of any one-of-many classifier: digit recognition (0 to 9), ImageNet classes, next-word prediction in language models.
-
-## Other activation functions you may meet
-
-- **Softplus:** a smooth version of ReLU. You might expect it to beat ReLU because it is smooth everywhere, but in comparisons ReLU did better, and Goodfellow et al. say its use is generally discouraged. <Cite id="gfdl-ch6" loc="§6.3.3" />
-- **ELU, GELU, Swish (SiLU):** newer smooth ReLU-like functions found in modern networks such as transformers. They are built into Keras. <Cite id="keras-activations" />
-
-## Comparison table
-
-| Function | Formula | Output range | Zero-centred | Saturates | Main advantage | Main problem | Typical use |
-|---|---|---|---|---|---|---|---|
-| Linear | $z$ | any number | yes | no | Simple, any output value | No non-linearity | Regression output |
-| Sigmoid | $\dfrac{1}{1+e^{-z}}$ | (0, 1) | no | yes | Reads as a probability | Vanishing gradient | Binary output |
-| Tanh | $\dfrac{e^{z}-e^{-z}}{e^{z}+e^{-z}}$ | (−1, 1) | yes | yes | Zero-centred, stronger slope | Still vanishes | RNN, LSTM hidden units |
-| ReLU | $\max(0,z)$ | [0, ∞) | no | no (for positive inputs) | Fast, no vanishing | Dying ReLU | Default hidden layer |
-| Leaky ReLU | $z$ or $\alpha z$ | (−∞, ∞) | roughly | no | No dead neurons | Extra number $\alpha$ | Hidden layers |
-| Softmax | $\dfrac{e^{z_k}}{\sum_j e^{z_j}}$ | (0, 1), sum = 1 | no | can | Probability for each class | Only for outputs | Multi-class output |
-
-## Choosing an activation function
-
-<Box kind="exam">
-
-**Hidden layers:** start with **ReLU**. If many neurons die, try **leaky ReLU**. Use **tanh** (and sigmoid for gates) inside recurrent networks.
-
-**Output layer, by task:**
-
-- Predict a number (regression) → **linear**.
-- Yes or no (binary classification) → **sigmoid**, one output.
-- Exactly one of many classes (multi-class) → **softmax**.
-- Several yes/no labels at once (multi-label) → one **sigmoid** per label.
-
-</Box>
+<Cite id="class-dl-chp2" loc="slide 23" />
 
 ```mermaid
-%% caption: Picking the output-layer activation. Ask what kind of answer the network must give.
+%% caption: How to choose an activation function, as in the class.
 flowchart TD
-  A["What must the output be?"] --> B["A number, e.g. price"]
-  A --> C["Yes or no, e.g. spam"]
-  A --> D["One class out of many, e.g. digit 0 to 9"]
-  A --> E["Several yes/no tags at once"]
-  B --> B1["Linear output"]
-  C --> C1["Sigmoid output"]
-  D --> D1["Softmax output"]
-  E --> E1["One sigmoid per tag"]
+  A["What is the layer for?"] --> B["Hidden layer"]
+  A --> C["Output layer"]
+  B --> B1["ReLU or tanh (leaky ReLU if neurons die)"]
+  C --> C1["Binary classification: sigmoid"]
+  C --> C2["Multi-class classification: softmax"]
+  C --> C3["Regression: linear"]
 ```
 
-The output activation and the loss function are chosen together: linear goes with squared error, sigmoid with binary cross-entropy, softmax with categorical cross-entropy (see the note on loss functions). <Cite id="gfdl-ch6" loc="§6.2.2" />
+<Img id="class-activation-functions-choose" caption="How to choose: sigmoid for binary, softmax for multi-class, linear for regression, ReLU or tanh for hidden layers." />
 
-<Box kind="pitfall">
-
-- Do not say ReLU is "linear". It is linear on each side of zero but bent at zero, and that single bend is enough to make the network non-linear.
-- Do not use softmax in hidden layers or for multi-label problems: its outputs must add to 1, so the labels would compete with each other.
-- Sigmoid's slope is at most 0.25, not 0.5. The **output** at zero is 0.5.
-
-</Box>
+Use non-linear functions in the hidden layers so that the network can learn complex patterns. <Cite id="class-dl-chp2" loc="slide 53" />
 
 ## Where this was asked
 
 | If the question says | What to write | Seen as |
 |---|---|---|
-| "What is an activation function? Describe any four activation functions." | Definition and dimmer-switch analogy, why non-linearity is needed (collapse in words), a neuron diagram; then sigmoid, tanh, ReLU and leaky ReLU, each with what it does, one-line formula, range, advantages, disadvantages and use; a graph and the comparison table | <PYQ id="2023-12/q2b" /> |
-| "What is the significance of Activation Functions in Neural Networks, explain different types Activation functions used in NN." | The four-point significance list and the collapse idea, saturation in words; then linear, sigmoid, tanh, ReLU, leaky ReLU and softmax with range, pros, cons and use; the comparison table; how to choose for the output layer | <PYQ id="2024-05/q6a" /> <PYQ id="2024-12/q6a" /> <PYQ id="2025-05/q6a" /> |
+| "What is an activation function? Describe any four activation functions." | Definition, then sigmoid, tanh, ReLU, leaky ReLU with formula, graph, range, use | <PYQ id="2023-12/q2b" /> |
+| "What is the significance of activation functions in neural networks? Explain different types used in NN." | Significance (non-linearity, controls output, helps backpropagation), then the six types and a table | <PYQ id="2024-05/q6a" /> <PYQ id="2024-12/q6a" /> <PYQ id="2025-05/q6a" /> |
 
 ## Quick revision
 
-- Neuron: weighted sum $z$, then activation $a = f(z)$.
-- No activation: all layers collapse into one straight line, so depth is wasted.
-- Saturation: a flat curve gives a near-zero slope; multiplied over many layers, gradients vanish.
-- Sigmoid: range (0, 1), slope at most 0.25, saturates, not zero-centred. Binary output.
-- Tanh: range (−1, 1), zero-centred, slope 1 at centre, still saturates. RNN/LSTM.
-- ReLU $\max(0,z)$: default hidden layer, fast, slope 1 for positive inputs; can die.
-- Leaky ReLU: small slope $\alpha \approx 0.01$ for negative inputs; never dies. PReLU learns $\alpha$.
-- Softmax: scores to probabilities that add to 1. Multi-class output.
-- Output layer: linear for a number, sigmoid for yes/no, softmax for one-of-many.
+- Activation function: decides whether a neuron is activated; adds non-linearity. Without it the network is just a linear model.
+- Sigmoid $1/(1+e^{-x})$: S-curve, 0 to 1, probability, binary output layer. Derivative $f(1-f)$.
+- Tanh: −1 to 1, zero-centered, hidden layers. Derivative $1 - f^2$.
+- ReLU $\max(0, x)$: [0, ∞), most used in hidden layers, dying ReLU problem.
+- Leaky ReLU: $0.01x$ for negative input, fixes dying ReLU.
+- Softmax: probabilities that sum to 1, multi-class output layer.
+- Linear $f(x) = x$: regression output layer.
 
-**Conclusion:** activation functions give a neural network its non-linearity, so depth becomes useful; ReLU is the usual choice inside the network, and the output activation is picked to match the task.
+**Conclusion.** Activation functions are the heart of neural networks: they make deep learning models powerful, flexible and capable of solving real-world problems, and the choice depends on the layer and the task. <Cite id="class-dl-m2" loc="p. 13" />

@@ -1,382 +1,262 @@
 ---
-title: "Generative adversarial networks"
+title: "Generative adversarial networks (GAN)"
 module: 6
-summary: "A GAN is two networks playing a game: a generator that makes fake data from random noise, and a discriminator that tries to tell fake from real. Each gets better by beating the other, until the fakes look real."
+summary: "What a GAN is and why we need one, its two networks (generator and discriminator), the architecture, the training loop, what happens after training, the limitations of a vanilla GAN (training instability, mode collapse, difficult training), the applications the class lists, and the ethical issues of DeepFakes."
 keyIdeas:
-  - "A GAN makes new data (faces, pictures, sounds) that looks like its training data, without needing labels."
-  - "The generator turns random noise into a fake sample. The discriminator outputs the probability that a sample is real."
-  - "They are trained in turns: the discriminator learns to catch fakes, then the generator learns to fool the discriminator."
-  - "At the ideal end point the fakes match the real data and the discriminator can only guess: it outputs 0.5 for everything."
-  - "Vanilla GANs are hard to train: mode collapse, vanishing gradients and non-convergence are the main issues."
-  - "Uses include image generation, image-to-image translation, super-resolution, data augmentation and deepfakes."
+  - "A Generative Adversarial Network (GAN) is a deep learning model used to generate new data that looks similar to real training data."
+  - "A GAN has two neural networks that work against each other: the Generator takes random noise and creates a fake sample; the Discriminator looks at real and fake samples and predicts whether each one is real or fake."
+  - "Training loop: generator creates, discriminator checks, loss is calculated, both networks are updated by backpropagation, repeat until the generator produces realistic samples. After training only the trained generator is used."
+  - "Issues of a vanilla GAN: training instability (the two networks have opposite goals), mode collapse (the generator produces very similar outputs), and difficult training (needs careful tuning of learning rate, architecture, batch size and balance)."
+  - "Applications: image generation, DeepFake, image-to-image translation, super-resolution, image restoration, synthetic data, video generation, art, medical imaging, text-to-image. Misuse brings misinformation, identity misuse, fraud and non-consensual content."
 references:
-  - goodfellow2014
-  - gfdl-ch20
-  - goodfellow2016-tutorial
-  - radford2015
-  - mirza2014
-  - salimans2016
-  - arjovsky2017
-  - arjovsky2017-principled
-  - metz2016
-  - isola2017
-  - zhu2017
-  - ledig2017
-  - karras2019
-  - kingma2013-vae
-  - nptel-dl
-  - d2l-gan
-  - d2l-dcgan
-  - gfg-gan
-  - gfg-gan-mode-collapse
-  - gfg-dcgan
-  - gfg-cgan
-  - gfg-vae
-  - google-gan-structure
-  - google-gan-training
-  - google-gan-loss
-  - google-gan-problems
-  - mlm-gan-intro
-  - mlm-gan-apps
-  - mlm-gan-failure
-  - ibm-gan
-  - av-gan
-  - pytorch-dcgan
-  - wiki-gan
-  - wiki-mode-collapse
-  - wiki-deepfake
-  - keras-dcgan
-  - tf-dcgan
-  - mlm-gan-loss
-  - aws-gan
+  - class-dl-chp6
 ---
 
-Before the new ideas, here are the old ones you need. If you already know them, skip to the next section.
+This is syllabus <Syl m="6" />: the architecture of a generative adversarial network and its applications.
 
-## The basics first
-
-- A neural network is a big formula with many adjustable numbers called **weights**. Training means adjusting the weights to lower a **loss**, one number that says how wrong the network is.
-- A **classifier** is a network that looks at an input and outputs a probability. With a **sigmoid** output it gives a number between 0 and 1, such as "0.9 = 90% sure this is a cat".
-- **Binary cross-entropy** is the usual loss for a yes/no classifier. It punishes confident wrong answers heavily and confident right answers hardly at all.
-- **Backpropagation** works out, for every weight, which way to nudge it to lower the loss. **Gradient descent** then takes a small step in that direction.
-- **Random noise** here just means a list of random numbers, for example 100 numbers each drawn from a bell curve. Different random lists give different outputs.
-
-**Discriminative versus generative models.** GANs belong to the second group, so it helps to see the difference first.
-
-| | Discriminative model | Generative model |
-|---|---|---|
-| Question it answers | "Is this a cat or a dog?" | "What do cats look like? Draw me a new one." |
-| What it learns | The boundary between classes | What the data itself looks like |
-| Output | A label or a probability | A brand-new sample |
-| Needs labels? | Usually yes | Usually no |
-| Examples | Logistic regression, CNN classifier | GAN, variational autoencoder (VAE) |
-
-## The idea: a forger and a detective
-
-Imagine a forger who prints fake banknotes and a police detective who checks notes.
-
-- At first the forger is bad, and the detective catches every fake easily.
-- The forger studies what gave the fakes away and prints better ones.
-- Now the detective must look more carefully, and learns finer details of real notes.
-- The forger improves again, and so on.
-
-If this keeps going, the forger ends up printing notes so good that the detective can only guess. The original GAN paper uses exactly this picture: the generator is "a team of counterfeiters" and the discriminator is the police. <Cite id="goodfellow2014" />
-
-A **generative adversarial network (GAN)** puts this game into two neural networks. "Generative" because it generates data, "adversarial" because the two networks are opponents. It was introduced by Ian Goodfellow and colleagues in 2014. This is syllabus <Syl m="6" />: GAN architecture, and applications such as image generation and deepfakes.
+## What is a GAN?
 
 <Box kind="definition">
 
-**Generative adversarial network (GAN):** a pair of neural networks trained together as a game. The **generator** turns random noise into a fake sample. The **discriminator** looks at a sample and outputs the probability that it is real. The discriminator is trained to tell real from fake, and the generator is trained to fool the discriminator.
-
-Short names used below: $G$ = generator, $D$ = discriminator, $z$ = random noise, $G(z)$ = a fake sample, $x$ = a real sample, $D(x)$ = the discriminator's probability that $x$ is real.
+**GAN** stands for **Generative Adversarial Network**. A GAN is a deep learning model used to **generate new data** that looks similar to real training data. <Cite id="class-dl-chp6" loc="slide 2" /> <Cite id="class-dl-chp6" loc="slide 3" />
 
 </Box>
 
-**Why do we need it?**
+Unlike models that mainly classify or predict existing data, GANs can learn to generate new data. **Generative** means creating new data that looks similar to the data it learned from. If we give a GAN many real human face images, it learns the patterns and can generate a new face that was not in the training data. The important word is "Generative". <Cite id="class-dl-chp6" loc="slide 2" />
 
-- We often want **new** data that looks real: new faces for a game, extra medical scans to train a classifier, a sharper version of a blurry photo.
-- Many older generative models had to write down and compute the exact probability of every possible image. For big pictures this is extremely hard, and the results were often blurry.
-- A GAN skips that step. It only needs one network that **makes** samples and a second network that **judges** them. The judge's feedback replaces the hard probability calculation. The book puts it this way: GAN learning needs "neither approximate inference nor approximation of a partition function gradient", two hard steps that older models needed. <Cite id="gfdl-ch20" loc="§20.10.4" />
-- It also needs **no labels**: just a pile of real examples.
+<Img id="class-gan-what" caption="Real images go in, the GAN learns patterns and generates a new image. Generative means creating new data that looks similar to the data it learned from." />
+
+**Generative model.** A generative model learns from the data and creates new data that looks similar to what it has learned. It learns the underlying patterns of the training data (for digits: shape, curves, thickness, general structure, variations in appearance) and uses them to generate new examples. The generated image is not simply copied from one training image; it is a new sample based on what the model has learned. <Cite id="class-dl-chp6" loc="slide 4" />
+
+## Why do we need GANs?
+
+Traditional machine learning is great at understanding existing data, but it mainly focuses on recognizing, predicting or classifying. GANs go a step further: they can also generate new data. <Cite id="class-dl-chp6" loc="slide 5" />
+
+| Aspect | Traditional model | GAN |
+|---|---|---|
+| Main focus | Recognizes existing data | Generates new data |
+| Task type | Classification, prediction | Generation |
+| Example question | "What is this?" ("Is this a human face?") | "Can I create something like this?" ("How can I create a new human face?") |
+
+<Cite id="class-dl-chp6" loc="slide 5" /> In short: traditional ML tells us what something is; GANs help us create something new.
+
+## The basic idea: two networks that compete
+
+A GAN contains **two neural networks that work against each other**. <Cite id="class-dl-chp6" loc="slide 6" />
+
+- **Generator (G):** creates new (fake) data that looks real. It takes random noise and creates a fake (synthetic) sample. <Cite id="class-dl-chp6" loc="slide 3" />
+- **Discriminator (D):** checks the data and decides whether it is real or fake. It looks at real and fake samples and predicts whether the sample is real or fake. <Cite id="class-dl-chp6" loc="slide 3" />
+
+They compete: the generator tries to fool the discriminator (disguises fake as real); the discriminator tries to detect the fake (spots the fake). Both improve over time, and this competition helps the generator create more realistic data. <Cite id="class-dl-chp6" loc="slide 6" />
+
+**Simple example: fake currency.** The generator is like someone making fake currency ("I will create a fake note that looks like a real note"). The discriminator is like an examiner ("I will examine the note and decide whether it is real or fake"). <Cite id="class-dl-chp6" loc="slide 6" />
+
+<Img id="class-gan-competition" caption="The competition: the generator tries to fool the discriminator, the discriminator tries to detect the fake, and both improve over time." />
+
+```mermaid
+%% caption: The idea of a GAN in five lines. The loop repeats many times.
+flowchart TD
+  A["Generator creates"] --> B["Discriminator checks"]
+  B --> C["Feedback (loss)"]
+  C --> D["Generator improves"]
+  D --> E["Repeat"]
+  E --> A
+```
 
 ## GAN architecture
 
-A GAN has five parts. Read them in the order data flows.
+The generator creates fake images from **random noise**. The discriminator checks whether an image is real or fake. It receives images from two sources: **real data** (training images) and **generated data** (fake images from the generator). <Cite id="class-dl-chp6" loc="slide 7" />
 
-1. **Random noise $z$ (the latent vector).** A short list of random numbers, for example 100 numbers from a bell curve. It is the "seed" of one new sample. Change $z$ and you get a different face.
-2. **Generator $G$.** A neural network that turns $z$ into a sample of the same shape as the real data, for example a $64 \times 64$ colour picture. It **never sees real data**. It learns only from the discriminator's feedback.
-3. **Real data $x$.** Examples from the training set, for example real photos of faces. No labels are needed.
-4. **Discriminator $D$.** A classifier. Its input is one sample, real or fake. Its output is one number between 0 and 1 (from a sigmoid): near 1 means "I think this is real", near 0 means "I think this is fake".
-5. **Loss and feedback.** The discriminator's answer is compared with the truth (real or fake). The error is used to update the discriminator directly, and it is passed back **through** the discriminator into the generator to update the generator.
-
-<Img id="img-dl-n3-gan-architecture" caption="The whole GAN: noise goes into the generator, and the discriminator judges a mix of fake and real samples." />
+<Img id="class-gan-architecture" caption="Basic GAN architecture: random noise goes into the generator, which makes a fake image. The discriminator receives the fake image and a real image and says real or fake." />
 
 ```mermaid
-%% caption: GAN architecture. The generator turns noise into a fake sample. The discriminator sees real and fake samples and outputs the probability of "real". Its mistakes become the learning signal for both networks.
+%% caption: GAN architecture. The discriminator sees both the fake image from the generator and a real image from the dataset.
 flowchart LR
-  Z["Random noise z, e.g. 100 numbers"] --> G["Generator G"]
-  G --> F["Fake sample G(z)"]
-  R["Real data x from the training set"] --> D["Discriminator D"]
+  N["Random noise"] --> G["Generator (creates fake data)"]
+  G --> F["Fake image"]
+  R["Real image (from dataset)"] --> D["Discriminator (real or fake?)"]
   F --> D
-  D --> P["Probability that the input is real, from 0 to 1"]
-  P --> L["Loss: was D right?"]
-  L -- "update D to catch fakes" --> D
-  L -- "update G to fool D" --> G
+  D --> O["Real / Fake"]
 ```
 
-**Roles of the two networks side by side.**
+**Random noise.** The input of the generator is random noise, often represented as a **vector** of random numbers, for example [0.2, −0.7, 1.1, 0.4, ...]. It does not look like an image; it is only a starting point. The generator converts it into a realistic-looking image, and **different noise gives different results**. <Cite id="class-dl-chp6" loc="slide 8" />
 
-| | Generator $G$ | Discriminator $D$ |
+**Role of the generator and the discriminator** <Cite id="class-dl-chp6" loc="slide 9" />
+
+| | Generator (G) | Discriminator (D) |
 |---|---|---|
-| Job | Make fakes that look real | Tell real from fake |
-| Input | Random noise $z$ | One sample, real or fake |
-| Output | A fake sample (e.g. an image) | One probability of "real" |
-| Analogy | Forger | Detective |
-| Wins when | $D$ calls its fakes "real" | It labels real and fake correctly |
-| Kept after training? | Yes, it is the useful part | No, it is thrown away |
+| Responsible for | Creating fake or generated data | Checking whether an input is real or generated |
+| Input | Random noise or latent vector | A real image from the dataset or a generated image from the generator |
+| Output | Generated image | REAL or FAKE |
+| Goal | Make the generated image look realistic enough to fool the discriminator | Correctly distinguish real images from generated images |
+| Think of it as | An artist trying to create a realistic painting | An art critic checking whether a painting is genuine |
 
-**What the two networks look like inside.**
+<Img id="class-gan-generator-role" caption="Generator: input random noise or latent vector, output a generated image, goal to fool the discriminator." />
 
-- In the **original (vanilla) GAN**, both are mostly simple fully connected networks (multilayer perceptrons). The 2014 paper tested them on small images such as handwritten digits (MNIST), faces and CIFAR-10 (for CIFAR-10 it also tried a small convolutional version). <Cite id="goodfellow2014" />
-- For bigger pictures, the **DCGAN** (deep convolutional GAN) uses convolution layers. The discriminator is an ordinary CNN that shrinks the picture down to one number. The generator runs the other way: it starts from $z$ and uses **transposed convolutions** to make the picture bigger at every layer, for example $4 \times 4 \to 8 \times 8 \to 16 \times 16 \to 32 \times 32 \to 64 \times 64$. <Cite id="radford2015" /> <Cite id="pytorch-dcgan" /> <Cite id="tf-dcgan" /> <Cite id="keras-dcgan" />
-
-<Figure caption="A tiny vanilla GAN drawn as two fully connected networks. The generator (left) grows 3 noise numbers into a 6-number fake sample. The discriminator (right) shrinks a 6-number sample down to one output: the probability that it is real. Real GANs use far more neurons.">
-  <NetworkFigure layers="3,5,6" title="Generator G" labels="Noise z,Hidden,Fake sample" />
-  <NetworkFigure layers="6,4,1" title="Discriminator D" labels="Sample,Hidden,P(real)" />
-</Figure>
-
-**DCGAN design rules** (Radford et al., 2015), worth listing in a 10-mark answer:
-
-- No pooling layers: the discriminator uses **strided convolutions** to shrink, and the generator uses **transposed convolutions** to grow.
-- **Batch normalization** in both networks, which keeps training steady.
-- No fully connected hidden layers in deep versions.
-- **ReLU** in the generator, except **tanh** at the output (so pixel values lie between −1 and 1).
-- **Leaky ReLU** in the discriminator.
-
-```mermaid
-%% caption: DCGAN shapes. The generator grows a noise vector into an image with transposed convolutions. The discriminator shrinks an image to one probability with strided convolutions.
-flowchart LR
-  Z["Noise, 100 numbers"] --> P["Reshape to a small 4×4 block"]
-  P --> U["Transposed convs grow it: 8, 16, 32, 64"]
-  U --> I["Fake image 64×64×3, tanh"]
-  I --> S["Strided convs shrink it, leaky ReLU"]
-  S --> O["Sigmoid: P(real)"]
-```
-
-## The game in one formula
-
-This section holds the only formula in the topic. Learn the words first; write the formula only when the question asks for "architecture in detail" or "working", where one line of it earns marks.
-
-Both networks share one score, called the **value function** $V(D, G)$. In words:
-
-- The first part rewards $D$ for saying "real" to real data.
-- The second part rewards $D$ for saying "fake" to fake data.
-- $D$ tries to make the score **large** (be a good judge). $G$ tries to make it **small** by fooling $D$ on the second part.
-
-Because one player maximizes and the other minimizes the same score, it is called a **minimax** game. This is the one formula worth writing in an exam: <Cite id="goodfellow2014" /> <Cite id="gfdl-ch20" loc="§20.10.4" />
-
-$$
-\min_G \max_D \; V(D,G) = \mathbb{E}_{x \sim p_{\text{data}}}\big[\ln D(x)\big] + \mathbb{E}_{z \sim p_z}\big[\ln\big(1 - D(G(z))\big)\big]
-$$
-
-- $x \sim p_{\text{data}}$: a real example from the training data. $z \sim p_z$: random noise.
-- $\mathbb{E}[\dots]$: "the average over many examples".
-- $D(x)$: $D$'s probability that a real sample is real. $D$ wants it near 1.
-- $D(G(z))$: $D$'s probability that a fake is real. $D$ wants it near 0; $G$ wants it near 1.
-
-**Tiny example with real numbers.** Say $D$ gives a real sample 0.9 and a fake sample 0.2. Then $V = \ln(0.9) + \ln(1 - 0.2) = -0.1054 - 0.2231 = -0.3285$. If $D$ improves and gives the fake 0.1, $V = \ln(0.9) + \ln(0.9) = -0.2108$, which is larger, as $D$ wants. If $G$ fools $D$ so the fake gets 0.6, $V = \ln(0.9) + \ln(0.4) = -0.1054 - 0.9163 = -1.0217$, which is smaller, as $G$ wants. Check the end point: if $D$ gives 0.5 to everything, $V = \ln(0.5) + \ln(0.5) = -1.3863$, which is $-2 \ln 2$.
-
-<Box kind="intuition">
-
-This is just binary cross-entropy in disguise. The discriminator is a normal classifier with label 1 for real and label 0 for fake. The only new thing is that the "fake" examples are made by a second network that keeps getting better.
-
-</Box>
-
-**The ideal end point.** The paper proves that, if both networks were big enough and trained perfectly, the game ends when the fakes are spread exactly like the real data. Then the discriminator cannot tell them apart and outputs $0.5$ ("50-50, I can only guess") for every sample. After training, the discriminator is thrown away. We keep only the generator, and feed it new random $z$ to make new samples. <Cite id="goodfellow2014" />
+<Img id="class-gan-discriminator-role" caption="Discriminator: input a real image or a generated image, output REAL or FAKE, goal to tell them apart." />
 
 ## How a GAN is trained
 
-The two networks are trained **in turns**, not at the same time. One turn of the loop:
+<Img id="class-gan-training-loop" caption="The GAN training loop: noise, generator, fake image, discriminator (with the real image), loss, backpropagation, update both G and D, repeat." />
 
-<Img id="img-dl-n3-gan-training-targets" caption="What the discriminator is trained to say: 0 for a fake from the generator, 1 for a real image. The generator is trained to push its fakes towards 1." />
+1. The generator receives **random noise**.
+2. The generator creates a **fake image**.
+3. The discriminator receives the fake image and also sees **real images** and compares them.
+4. The discriminator predicts **real or fake**.
+5. The prediction produces a **loss** (if the discriminator makes mistakes the loss increases; if correct the loss is low).
+6. **Backpropagation** provides feedback.
+7. The parameters of **both the generator and the discriminator are updated**.
+8. The process **repeats** until the generator produces realistic samples. <Cite id="class-dl-chp6" loc="slide 2" /> <Cite id="class-dl-chp6" loc="slide 10" />
 
-1. **Train the discriminator** (keep $G$ frozen).
-   - Take a mini-batch of real examples and label them 1 (real).
-   - Pass noise through $G$ to get a batch of fakes, and label them 0 (fake).
-   - Update $D$ so it gets better at spotting fakes. This is ordinary classifier training.
-2. **Train the generator** (keep $D$ frozen).
-   - Take new noise and make new fakes.
-   - Pass them through $D$. Backpropagate **through $D$ into $G$**, but change only $G$'s weights, so that $D$ will rate the fakes as more real.
-3. **Repeat** for many epochs. Stop when the fakes look good. People usually judge by looking at samples, because the loss values alone do not say when to stop.
+**The two losses.** The discriminator wants real images classified as real and fake images classified as fake; if it makes mistakes, its loss increases. The generator wants the discriminator to classify its generated image as real; its loss increases if the discriminator says "fake". Lower discriminator loss means better separation; lower generator loss means better fooling. <Cite id="class-dl-chp6" loc="slide 10" /> <Cite id="class-dl-chp6" loc="slide 12" />
 
-```mermaid
-%% caption: The GAN training loop. The discriminator and generator take turns. Each one is frozen while the other learns.
-flowchart TD
-  A["Sample a batch of real data and a batch of noise"] --> B["G makes a batch of fakes"]
-  B --> C["Train D: real = 1, fake = 0, G frozen"]
-  C --> E["Sample new noise, G makes new fakes"]
-  E --> F["Train G: make D call the fakes real, D frozen"]
-  F --> H{"Are the fakes good enough?"}
-  H -- "No" --> A
-  H -- "Yes" --> I["Throw D away, keep G to make new samples"]
-```
+**What happens after feedback.** The discriminator's feedback tells the generator how wrong it was. In the first attempt the face is poor and the discriminator says "fake"; the loss and backpropagation update the generator; in the next iterations the face becomes better, even better and finally realistic. The generator does not become better automatically; it becomes better because the training process gives it feedback through the discriminator. <Cite id="class-dl-chp6" loc="slide 10" /> <Cite id="class-dl-chp6" loc="slide 11" />
 
-<Cite id="goodfellow2014" /> <Cite id="google-gan-training" /> <Cite id="d2l-gan" />
-
-**A practical trick: the non-saturating loss.** Early in training the fakes are poor, so $D$ rejects them confidently. With the original formula the generator then gets almost no learning signal, like a student who gets "0" on every test with no comments. The paper's fix is to change the generator's goal from "make $D$ less sure the fake is fake" to "make $D$ more sure the fake is real". Both push the same way, but the new one gives a strong signal exactly when the generator is bad. Goodfellow's book gives this reason: the signal stays large "even in the situation when the discriminator confidently rejects all generator samples". <Cite id="goodfellow2014" /> <Cite id="gfdl-ch20" loc="§20.10.4" /> <Cite id="mlm-gan-loss" />
-
-<Figure caption="The non-saturating generator loss plotted against the probability D gives to a fake. It is very steep on the left, where the fakes are bad and caught easily, so the generator gets a strong push exactly when it needs one.">
-  <CurvePlot curves="ce-loss" x="0.01,1" y="0,4.7" xLabel="D(G(z)): probability D gives to the fake" yLabel="Generator loss" />
-</Figure>
-
-## Issues faced by vanilla GANs
-
-"Vanilla GAN" means the original 2014 GAN: fully connected networks and the minimax loss above. It works on small images but is famously hard to train. The book says plainly that "stabilization of GAN learning remains an open problem". <Cite id="gfdl-ch20" loc="§20.10.4" />
-
-```mermaid
-%% caption: The main problems of vanilla GANs. Most of them come from one root cause: two networks pulling in opposite directions.
-flowchart TD
-  R["Two networks trained against each other"] --> A["Non-convergence: losses keep swinging"]
-  R --> B["Mode collapse: same few outputs"]
-  R --> C["Vanishing gradients: D too strong"]
-  R --> E["G-D imbalance: sensitive to settings"]
-  R --> F["Hard to evaluate: loss says little"]
-```
-
-**1. Non-convergence (the game never settles).** Ordinary training goes downhill on one loss. Here two players push in opposite directions, and simple gradient steps are **not guaranteed** to reach the balance point. They can circle around it, like two people pulling a rope in turns. In practice the losses swing up and down, and sample quality can get worse after getting better. <Cite id="gfdl-ch20" loc="§20.10.4" />
-
-**2. Mode collapse.** A "mode" is one typical kind of example in the data, for example each digit 0 to 9 in MNIST. In mode collapse the generator finds one or a few outputs that fool the discriminator and keeps making only those, so variety is lost. Example: a GAN trained on all ten digits produces only very good 1s. The original paper calls this the "Helvetica scenario": many different noise inputs give the same output. It warns that this can happen if $G$ is trained too much without updating $D$, though that is not the only cause. <Cite id="goodfellow2014" /> <Cite id="wiki-mode-collapse" /> <Cite id="gfg-gan-mode-collapse" />
-
-**3. Vanishing gradients.** If the discriminator becomes too good too early, it rejects every fake with total confidence, and the original generator loss becomes flat. The generator gets almost no signal and stops learning. Arjovsky and Bottou showed why: when real and fake data hardly overlap, a near-perfect discriminator exists and the generator's gradient fades away. <Cite id="arjovsky2017-principled" /> <Cite id="google-gan-problems" />
-
-**4. Balancing the two networks.** If $D$ is too weak, it gives useless feedback and $G$ learns nothing real. If $D$ is too strong, gradients vanish. Keeping them matched needs careful choice of learning rates, network sizes and how many steps each gets, so results are very **sensitive to hyperparameters**. <Cite id="goodfellow2014" />
-
-**5. Hard to evaluate.** A GAN never writes down the probability of a sample, so we cannot simply score it on test data. The loss values do not tell you whether the pictures are good. People look at samples or use separate scores such as the Inception Score. <Cite id="goodfellow2014" /> <Cite id="salimans2016" />
-
-**6. Low quality and no control.** Fully connected vanilla GANs give small, blurry or noisy images, and you cannot ask for a particular kind of output (for example "draw a 7"), because $G$ only gets random noise.
-
-**Common fixes** (one line each is enough in an exam):
-
-| Issue | Fix | Source |
-|---|---|---|
-| Vanishing gradients | Non-saturating generator loss; Wasserstein loss (WGAN) | <Cite id="goodfellow2014" /> <Cite id="arjovsky2017" /> |
-| Mode collapse | Minibatch discrimination (D looks at a whole batch, so it notices when all fakes are the same); unrolled GANs; WGAN | <Cite id="salimans2016" /> <Cite id="metz2016" /> |
-| Non-convergence | Feature matching; one-sided label smoothing (real label 0.9 instead of 1); adding noise to D's inputs; penalizing D's weights | <Cite id="salimans2016" /> <Cite id="google-gan-problems" /> |
-| Poor image quality, unstable training | DCGAN design rules: convolutions, batch normalization, ReLU / leaky ReLU | <Cite id="radford2015" /> |
-| No control over output | Conditional GAN: give both G and D a label | <Cite id="mirza2014" /> |
+**Improving over time.** Early stage: the generator knows almost nothing and the discriminator easily spots the poor-quality fake. After more training: the generator produces better samples and the discriminator still detects them. After many iterations: the samples look realistic and are harder to distinguish. <Cite id="class-dl-chp6" loc="slide 12" />
 
 <Box kind="pitfall">
 
-Do not say a GAN "always converges to the real data distribution". That is only proven for the ideal case where the networks are unlimited and $D$ is trained to perfection at every step. With real neural networks, training can oscillate or collapse.
+Do not say "finally the generator wins". Say: the generator aims to fool the discriminator and the discriminator aims to detect the fake. The goal is for the generator to produce samples that are difficult for the discriminator to distinguish from real ones. <Cite id="class-dl-chp6" loc="slide 12" />
 
 </Box>
 
-## Types of GAN
+**After training.** The discriminator is mainly needed during training. Once training is complete, only the trained generator is used: a new random noise goes in and the generator creates a new image on its own. <Cite id="class-dl-chp6" loc="slide 11" /> <Cite id="class-dl-chp6" loc="slide 27" />
 
-| Type | What changes | Main benefit | Source |
-|---|---|---|---|
-| **Vanilla GAN** (2014) | Fully connected G and D, minimax loss | The original idea; simple | <Cite id="goodfellow2014" /> |
-| **DCGAN** (2015) | Convolutional G and D with the design rules above | Steadier training, better images; the standard starting point | <Cite id="radford2015" /> <Cite id="gfg-dcgan" /> |
-| **Conditional GAN (cGAN)** (2014) | Both networks also get a label, such as a digit class | You can ask for "make a 7" | <Cite id="mirza2014" /> <Cite id="gfg-cgan" /> |
-| **Wasserstein GAN (WGAN)** (2017) | D becomes a "critic" giving a realness score, not a probability | Steadier training; loss tracks quality better | <Cite id="arjovsky2017" /> |
-| **pix2pix** (2017) | Conditional GAN on paired images | Sketch to photo, map to satellite image | <Cite id="isola2017" /> |
-| **CycleGAN** (2017) | Translation without paired examples | Horse to zebra, summer to winter | <Cite id="zhu2017" /> |
-| **SRGAN** (2017) | Generator upscales a small image | Super-resolution: blurry to sharp | <Cite id="ledig2017" /> |
-| **StyleGAN** (2019) | Generator controls style at each layer | Very realistic faces with control over pose and hair | <Cite id="karras2019" /> |
+<Img id="class-gan-after-training" caption="After training: new random noise goes into the trained generator (only G) and it creates a new image." />
+
+```mermaid
+%% caption: During training both networks work with a feedback loop. After training only the generator is used.
+flowchart LR
+  subgraph T["During training"]
+    A["Noise"] --> B["Generator"] --> C["Fake image"] --> D["Discriminator"] --> E["Loss"] --> F["Update G and D"]
+  end
+  subgraph U["After training"]
+    X["New noise"] --> Y["Trained generator"] --> Z["New image"]
+  end
+```
+
+## Issues faced by a vanilla GAN
+
+GANs are powerful, but they are not easy to train. <Cite id="class-dl-chp6" loc="slide 13" />
+
+1. **Training instability.** A GAN has two networks learning at the same time with opposite objectives. Sometimes one network becomes much better than the other. If the discriminator is too strong, the generator is very poor and almost every generated image is identified as fake. If the generator is too strong, it improves fast and the discriminator struggles and cannot correctly identify fake images. Both need to improve in a balanced way, otherwise training becomes unstable.
+2. **Mode collapse.** The generator may find that producing only one or a few types of samples is enough to fool the discriminator. What we want is many different faces; what can happen is the same face again and again. Mode collapse occurs when the generator produces limited or very similar types of samples instead of diverse samples.
+3. **Difficult to train.** Training requires careful selection of many factors: learning rate, network architecture, batch size, training strategy and the balance between generator and discriminator. Small changes can affect training significantly, so GANs can need considerable experimentation. It is not a plug-and-play model. <Cite id="class-dl-chp6" loc="slide 13" />
+
+<Img id="class-gan-instability" caption="Training instability: opposite goals; if one network becomes much stronger than the other, training becomes unstable." />
+
+<Img id="class-gan-mode-collapse" caption="Mode collapse: instead of many different faces, the generator keeps producing the same face." />
+
+| Problem | Meaning |
+|---|---|
+| Training instability | Generator and discriminator may not learn in a balanced way |
+| Mode collapse | Generator produces limited or similar outputs |
+| Training difficulty | GANs can require careful tuning and experimentation |
 
 ## Applications of GANs
 
-| Application | What the GAN does | Example |
+GANs are not just theoretical; they are used in many real-world applications. <Cite id="class-dl-chp6" loc="slide 16" />
+
+| # | Application | What it does |
 |---|---|---|
-| **Image generation** | Makes brand-new realistic images from noise | Faces of people who do not exist (StyleGAN) <Cite id="karras2019" /> |
-| **Image-to-image translation** | Turns one kind of picture into another | Sketch to photo, day to night (pix2pix); horse to zebra (CycleGAN) <Cite id="isola2017" /> <Cite id="zhu2017" /> |
-| **Super-resolution** | Adds realistic detail to small, low-quality images | Sharpening old photos or CCTV frames (SRGAN) <Cite id="ledig2017" /> |
-| **Text-to-image** | Draws a picture from a sentence | "A small bird with a red head" |
-| **Inpainting and photo editing** | Fills in missing or damaged parts of an image | Removing an object, repairing a scratch |
-| **Data augmentation** | Makes extra training data when real data is scarce or private | Synthetic medical scans to train a classifier |
-| **Face aging, pose and style** | Changes age, expression or artistic style | Showing a face 30 years older |
-| **Video and 3D** | Predicts next video frames; makes 3D object shapes | Video prediction, 3D chairs |
-| **Deepfakes** | Swaps or edits faces and voices in video | Putting one actor's face on another's body |
+| 1 | Image generation | Generate new human faces, objects, animals, scenery; synthetic images similar to the training data |
+| 2 | DeepFake | Face swapping, face synthesis, manipulating facial expressions or appearance |
+| 3 | Image-to-image translation | Convert one type of image into another (sketch to realistic image, day to night, summer to winter) |
+| 4 | Image super-resolution | Convert a low-resolution (blurry) image into a higher-resolution version |
+| 5 | Image restoration | Remove noise, restore damaged or old images, fill missing portions (inpainting) |
+| 6 | Data augmentation or synthetic data | Generate additional training samples when real data is limited or hard to collect |
+| 7 | Video generation or manipulation | Generate or modify video frames; face and expression manipulation |
+| 8 | Art and creative content | Generate artistic images; create new visual styles and designs |
+| 9 | Medical imaging | Generate synthetic medical images (for example MRI or CT style) for research and training |
+| 10 | Text-to-image generation | GAN-based research has been used to generate images from textual descriptions |
 
-<Cite id="mlm-gan-apps" /> <Cite id="gfg-gan" /> <Cite id="ibm-gan" /> <Cite id="aws-gan" />
+<Img id="class-gan-apps-gen-deepfake" caption="Applications 1 and 2: image generation and DeepFake." />
 
-**Image generation in a little more detail.** After training on many face photos, the generator alone is kept. Each new random noise vector gives a new face that never existed. Moving smoothly from one noise vector to another makes one face change smoothly into another, which shows the generator has learned meaningful features (pose, smile, hair) rather than copying photos. <Cite id="radford2015" /> <Cite id="karras2019" />
+<Img id="class-gan-apps-i2i" caption="Application 3: image-to-image translation (sketch to realistic image)." />
 
-<Img id="img-dl-n3-gan-face" caption="A face made by StyleGAN2. This person does not exist: the generator built the picture from random noise." />
+<Img id="class-gan-apps-superres" caption="Application 4: image super-resolution." />
 
-<Img id="img-dl-n3-gan-cat" caption="Another StyleGAN2 output, this time a cat, showing that GANs can make animals as well as faces." />
+<Img id="class-gan-apps-restoration" caption="Application 5: image restoration (denoising, restoration, inpainting)." />
 
-**Deepfakes in a little more detail.** A **deepfake** is a photo, video or audio clip where a person's face or voice has been replaced or changed by deep learning so that it looks real. Many deepfakes are made with autoencoders, and some also use GANs: an encoder-decoder learns to map one person's face onto another, and some tools add a GAN-style discriminator that pushes the result to look natural. <Cite id="wiki-deepfake" />
+<Img id="class-gan-apps-synthetic" caption="Application 6: data augmentation or synthetic data." />
+
+<Img id="class-gan-apps-video-art" caption="Applications 7 and 8: video generation or manipulation, and art and creative content." />
+
+**The same pattern for almost every application.** Training: real training data (images, videos, text) goes to the GAN (generator + discriminator), the loss shows how well it is performing, backpropagation gives the learning signal, parameters are updated, the generator produces better data and the discriminator checks again, and the loop repeats. After training: new input (random noise, text or a condition) goes into the trained generator, which gives the final output (image or video). <Cite id="class-dl-chp6" loc="slide 27" />
+
+<Img id="class-gan-pattern" caption="The pattern to remember: the training loop with the discriminator, and after training the generator alone." />
+
+### Image-to-image translation
+
+Image-to-image translation uses GANs to convert an image from one domain to another (for example sketch to realistic image). <Cite id="class-dl-chp6" loc="slide 19" />
+
+1. Give the generator an image from the source domain (a sketch).
+2. The generator transforms it into a realistic-looking image in the target domain.
+3. The discriminator receives both the real target-domain image and the generated image and asks: "does this generated image look like a real image from the target domain?"
+4. If the generated image does not look realistic, the loss increases and gives feedback to the generator.
+5. The generator updates its parameters using the feedback and tries again.
+6. Repeat for many iterations, until the generator produces realistic images and the discriminator can no longer easily tell the difference. <Cite id="class-dl-chp6" loc="slide 19" />
+
+<Img id="class-gan-i2i-discriminator" caption="Discriminator step: it receives the real target-domain image and the generated image." />
+
+<Img id="class-gan-i2i-result" caption="Final result: a sketch goes into the trained GAN and a realistic-looking image comes out." />
 
 ```mermaid
-%% caption: How a face-swap deepfake is made, in outline. A shared encoder reads person A's expression and a decoder trained on person B redraws it as B's face. The optional discriminator makes the swap look natural.
+%% caption: Image-to-image translation with a GAN. The loop repeats until the generated image looks like a real image of the target domain.
 flowchart LR
-  A["Video of person A"] --> E["Encoder: learn face expression and pose"]
-  E --> Dc["Decoder trained on person B"]
-  Dc --> S["Swapped face: B with A's expression"]
-  S --> Di["Discriminator: does it look real?"]
-  Di -- "feedback" --> Dc
+  A["Sketch"] --> B["Generator"]
+  B --> C["Generated realistic image"]
+  D["Real target-domain image"] --> E["Discriminator"]
+  C --> E
+  E --> F["Loss and feedback"]
+  F --> B
 ```
 
-| Good uses of deepfakes | Harms of deepfakes |
-|---|---|
-| Film dubbing and special effects | Fake news and political misinformation |
-| Bringing historical figures to life in education | Fraud, for example a fake voice of a boss asking for money |
-| Privacy: hiding a witness's face | Fake videos of real people made without consent |
+### Synthetic data for another model
 
-That is why deepfake **detection** is an active research area, and many countries are writing laws about them.
+GANs can generate additional data samples when real data is limited, which helps create a larger and more diverse training dataset. Example: suppose we have only 500 real images. Train the GAN on them, let the trained generator create new samples from random noise, check them with the discriminator, and add the good synthetic images to the real ones to form a larger training dataset. Synthetic images should be quality-checked before being used as training data, because not all generated samples are good. <Cite id="class-dl-chp6" loc="slide 22" />
 
-## Advantages and disadvantages
+<Img id="class-gan-synthetic-result" caption="500 real images plus synthetic images from the generator make a larger training dataset." />
 
-| Advantages | Disadvantages |
-|---|---|
-| Very sharp, realistic samples (sharper than many older generative models) | Unstable training; the game may never settle |
-| Needs no labels, only real examples | Mode collapse: limited variety |
-| Makes a new sample in one quick forward pass of $G$ | Hard to evaluate; the loss says little about quality |
-| No need to compute exact probabilities of images | Needs a lot of data, compute and careful tuning |
-| Easy to extend: conditional, translation, super-resolution | Can be misused (deepfakes) |
+### DeepFake and the other applications in short
 
-## GAN compared with a variational autoencoder
+- **DeepFake** is digitally generated or manipulated media in which a person's appearance, voice or other characteristics are altered to make the content appear authentic (face swapping, changing facial expressions, lip-sync manipulation). The goal is to generate Person A's face while following Person B's expressions and movements. GANs have historically been used in DeepFake systems, although modern DeepFake systems are not limited to GANs. <Cite id="class-dl-chp6" loc="slide 18" />
+- **Super-resolution:** the generator adds plausible fine details (textures, edges, patterns); it is not recovering the exact original lost pixels. <Cite id="class-dl-chp6" loc="slide 20" />
+- **Restoration and inpainting:** the generator predicts what could plausibly fill the missing or corrupted region; the result is visually plausible but not the exact original image. <Cite id="class-dl-chp6" loc="slide 21" />
+- **Video:** frames must look realistic individually, remain consistent with each other and change smoothly over time; the key challenge is temporal consistency. <Cite id="class-dl-chp6" loc="slide 23" />
+- **Art and medical images:** the generator learns the style and characteristics from the training data and creates new original work, not copies; generated medical images are synthetic and not automatically medically accurate, so they are for research, development and data augmentation, not direct diagnosis. <Cite id="class-dl-chp6" loc="slide 24" /> <Cite id="class-dl-chp6" loc="slide 25" />
+- **Text-to-image:** the text is converted to a numerical representation (embedding) and the generator creates the image; modern text-to-image systems are dominated by diffusion-based approaches. <Cite id="class-dl-chp6" loc="slide 26" />
 
-A VAE is not named in the syllabus, but it builds on the autoencoders of Module 3 and is the other well-known generative model, so it is a useful contrast. <Cite id="kingma2013-vae" /> <Cite id="gfg-vae" />
+## Ethical and social issues of GANs and DeepFakes
 
-| | GAN | Variational autoencoder (VAE) |
-|---|---|---|
-| Parts | Generator + discriminator | Encoder + decoder |
-| How it learns | A game: fool the judge | Rebuild the input and keep the hidden code smooth |
-| Image quality | Usually sharper | Often blurrier |
-| Training | Unstable, can collapse | Stable, one loss going down |
-| Has an encoder (image to code)? | No (in the basic version) | Yes |
+GAN technology can be used for both useful and harmful purposes. <Cite id="class-dl-chp6" loc="slide 14" />
 
-<Img id="img-dl-n3-gen-model-tree" caption="Where GANs sit among generative models: they learn the data distribution implicitly, directly from samples, while the VAE learns an explicit approximate density." />
+1. **Misinformation:** manipulated images or videos can make it appear that a person said or did something that never happened.
+2. **Identity misuse:** a person's face can be placed into another image or video without permission (privacy and consent issues).
+3. **Fraud and impersonation:** synthetic media can be used to impersonate someone and can lead to financial loss and scams.
+4. **Non-consensual content:** a person's face or identity used in manipulated content without consent.
+5. **Difficulty in trusting digital media:** simply seeing an image or video is not always enough to establish that it is genuine. Needed: DeepFake detection, media verification, digital provenance and responsible AI practices.
 
-## Conclusion
-
-A GAN learns to create realistic new data by setting two networks against each other: the generator makes fakes and the discriminator judges them. It needs no labels and gives very sharp samples, but training is unstable, which is why improved versions such as DCGAN, WGAN and conditional GAN exist.
-
-<Box kind="exam">
-
-For "Explain the architecture/working of GAN and its applications" (10 marks), write in this order: definition and forger-detective analogy, why it is needed, the labelled architecture diagram (noise, G, fake, real, D, probability, feedback), the roles of G and D, the minimax formula explained in words, the training steps, the ideal end point ($D = 0.5$), advantages and disadvantages, then 5 to 6 applications with one example each, and a one-line conclusion.
-
-</Box>
+Positive uses: creative content generation, image restoration, synthetic training data, medical research, visual effects, research and experimentation. <Cite id="class-dl-chp6" loc="slide 14" />
 
 ## Where this was asked
 
 | If the question says | What to write | Seen as |
 |---|---|---|
-| "Explain the working of GAN" | Analogy, G and D roles, architecture diagram, minimax idea, alternating training steps, end point $D = 0.5$ | <PYQ id="2023-12/q4b" /> |
-| "Issues faced by vanilla GAN models" | What vanilla GAN is, then non-convergence, mode collapse, vanishing gradients, G-D balance and hyperparameters, evaluation, low quality; a fixes table | <PYQ id="2024-05/q4b" /> |
-| "What are GANs, comment on applications" | Definition, short architecture and training, then an applications table with examples, including deepfakes and their risks | <PYQ id="2024-05/q6b" /> |
-| "GAN architecture and its applications" or "architecture of GAN in detail, applications" | The five parts, labelled diagram, inside G and D (MLP or DCGAN), loss, training loop, then applications | <PYQ id="2024-12/q6b" /> <PYQ id="2025-05/q5b" /> |
+| "Explain the working of GAN" / "working principle with a suitable example" | Generator and discriminator, noise, the training loop, after training, example of faces or currency | <PYQ id="2023-12/q4b" /> <PYQ id="assignment-2/q6a" /> |
+| "What are the issues faced by vanilla GAN models?" | Training instability, mode collapse, difficult to train | <PYQ id="2024-05/q4b" /> |
+| "What are GANs, comment on applications" / "Explain GAN architecture and its applications" | Definition, architecture diagram, roles, training, the application list with one line each | <PYQ id="2024-05/q6b" /> <PYQ id="2024-12/q6b" /> <PYQ id="2025-05/q5b" /> |
+| GANs to generate additional training data | Train on limited real data, generate synthetic samples, quality-check, merge | <PYQ id="assignment-2/q6b" /> |
+| GANs for image-to-image translation | Sketch to realistic image, six steps with the discriminator feedback loop | <PYQ id="assignment-2/q6c" /> |
+| Role of the discriminator | Input real and generated, output real or fake, goal, feedback to the generator | <PYQ id="assignment-2/q6d" /> |
 
 ## Quick revision
 
-- GAN = generator $G$ (noise → fake sample) + discriminator $D$ (sample → probability of real). Trained as opponents, like a forger and a detective.
-- Needed because it makes realistic new data without labels and without computing exact image probabilities.
-- Value function: $\min_G \max_D \; \mathbb{E}[\ln D(x)] + \mathbb{E}[\ln(1 - D(G(z)))]$. $D$ wants it high, $G$ wants it low.
-- Training alternates: update $D$ with real = 1 and fake = 0, then update $G$ to make $D$ say "real" (D frozen).
-- In practice $G$ tries to make $D$ say "real" (non-saturating loss) to avoid weak signals early on.
-- Ideal end point: fakes match real data, $D = 0.5$ everywhere. Then throw $D$ away.
-- Vanilla GAN issues: non-convergence, mode collapse (Helvetica scenario), vanishing gradients, G-D imbalance, hard to evaluate, low quality.
-- Types: DCGAN, conditional GAN, WGAN, pix2pix, CycleGAN, SRGAN, StyleGAN.
-- Applications: image generation, image translation, super-resolution, inpainting, data augmentation, deepfakes.
+- GAN = Generative Adversarial Network: a deep learning model that generates new data similar to real training data.
+- Two networks: generator (noise to fake sample) and discriminator (real or fake?). They compete and both improve.
+- Training: generator creates, discriminator checks, loss, backpropagation, update both, repeat. After training only the generator is used.
+- Issues: training instability, mode collapse, difficult to train (needs tuning).
+- Applications: image generation, DeepFake, image-to-image translation, super-resolution, restoration, synthetic data, video, art, medical imaging, text-to-image.
+- Ethics: misinformation, identity misuse, fraud, non-consensual content, loss of trust in digital media.
+
+**Conclusion.** GANs are powerful generative models: a generator learns to create realistic data from random noise by competing with a discriminator. Their applications can be beneficial, but realistic synthetic media also creates privacy, consent, misinformation and authenticity challenges, so responsible use matters. <Cite id="class-dl-chp6" loc="slide 14" />

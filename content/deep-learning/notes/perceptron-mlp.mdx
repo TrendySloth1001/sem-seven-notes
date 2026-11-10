@@ -1,543 +1,337 @@
 ---
 title: "Perceptron, MLP and feedforward networks"
 module: 1
-summary: "How one artificial neuron (the perceptron) makes a yes/no decision, why one neuron is not enough, and how stacking neurons in layers gives the multilayer perceptron (MLP), the basic feedforward network that can represent almost any function."
+summary: "From one artificial neuron to a deep feedforward network, the way the class teaches it: the biological neuron, the perceptron and its logic gates, why XOR needs hidden layers, the multi-layer perceptron, the feedforward network and its representation power."
 keyIdeas:
-  - "A perceptron multiplies each input by a weight, adds a bias, and outputs 1 if the total is at least 0, else 0."
-  - "One perceptron can only draw one straight line, so it can do AND and OR but not XOR."
-  - "A sigmoid neuron is a perceptron with a smooth S-shaped output, which lets gradient descent learn the weights."
-  - "A feedforward network (MLP) passes information one way: input layer, hidden layers, output layer, with no loops."
-  - "Representation power: with one hidden layer and enough neurons an MLP can approximate any continuous function, but the layer may have to be huge; depth makes it much cheaper."
+  - "A perceptron is the simplest neural network used for binary classification. It multiplies inputs by weights, adds a bias, and applies a step activation: if Net ≥ 0 the output is 1, else 0."
+  - "A single perceptron draws one straight line, so it solves linearly separable problems (AND, OR, NAND) but cannot solve XOR."
+  - "A Multi-Layer Perceptron (MLP) consists of fully connected dense layers: an input layer, one or more hidden layers and an output layer. The hidden layers make it solve complex, non-linear problems."
+  - "A feedforward network defines y = f(x; θ) and learns θ. Information flows only forward, from x to y, with no feedback connections."
+  - "Universal approximation theorem: a feedforward network with a single hidden layer and a non-linear activation can approximate any continuous function to any desired accuracy, given enough hidden units."
 references:
-  - gfdl-ch1
-  - gfdl-ch4
-  - gfdl-ch6
-  - rosenblatt1958
-  - minsky-papert-1969
-  - rumelhart1986
-  - hornik1989
-  - montufar2014
-  - eldan2016
-  - hinton2006-dbn
-  - lecun2015-review
-  - krizhevsky2012
-  - nptel-dl
-  - cs231n-nn1
-  - d2l-mlp-activations
-  - gfg-perceptron
-  - gfg-perceptron-and
-  - gfg-perceptron-xor
-  - gfg-mlp
-  - gfg-feedforward
-  - gfg-uat
-  - gfg-gradient-descent
-  - w3s-perceptron
-  - w3s-perceptron-training
-  - keras-dense
-  - mlm-perceptron
-  - mlm-mlp-crash
-  - ibm-neural-networks
-  - tp-ann-building-blocks
-  - wiki-perceptron
-  - wiki-mlp
-  - wiki-feedforward
-  - wiki-uat
-  - wiki-ann-history
+  - class-dl-chp1
+  - class-dl-m1
+  - class-dl-chp2
 ---
 
-Before the new ideas, here are the old ones you need. If you already know them, skip to the next section.
+This is syllabus <Syl m="1" />: history of deep learning, the multilayer perceptron (MLP) and deep feedforward networks.
 
-## The basics first
+## Deep learning in one minute
 
-- A **feature** (or input) is one number that describes an example, for example the size of a house or the brightness of one pixel.
-- A **label** (or target) is the correct answer for that example, for example "spam" or "not spam".
-- A **weight** is a number that says how important one input is. A big positive weight means "this input pushes the answer towards yes".
-- A **bias** is one extra number added at the end. It moves the decision point up or down, like an offset.
-- An **activation function** is the rule a neuron applies to its total to decide its output (for example "1 if the total is 0 or more, else 0").
-- **Training** means adjusting the weights so the outputs get close to the labels. The **loss** is one number that says how wrong the network is, and the **learning rate** is the size of each correction step.
+- Deep Learning is a subfield of Machine Learning that involves the use of neural networks to model and solve complex problems. <Cite id="class-dl-chp1" loc="slide 3" />
+- The key characteristic is the use of deep neural networks, which have **multiple layers of interconnected nodes**. They learn complex representations by **discovering hierarchical patterns and features** in the data, without manual feature engineering. <Cite id="class-dl-chp1" loc="slide 3" />
+- Main reasons for using it: automatic feature learning, handles large and complex data, high accuracy, learns complex patterns, works well with unstructured data (images, video, voice, text), and improves with more data. <Cite id="class-dl-chp1" loc="slide 4" />
+
+<Img id="class-three-classes-ml-vs-dl" caption="ML versus DL: DL extracts features automatically and works end to end, but needs more data, more training time and a GPU." />
 
 ## A very short history
 
-This topic is the first part of syllabus <Syl m="1" />: history, success stories, perceptrons and MLPs and their representation power, sigmoid neurons, gradient descent and feedforward networks. Deep learning sounds new, but its roots go back to the 1940s. It has had three waves of popularity under different names. <Cite id="gfdl-ch1" loc="§1.2.1" />
+The timeline is: 1943 mathematical model of a neuron; 1958 the single-layer perceptron; 1969 it cannot solve XOR; 1986 backpropagation and the multi-layer perceptron; 1998 CNN and LeNet; 2006 deep belief networks; 2009 stacked auto-encoders; 2012 ImageNet, AlexNet, dropout, ReLU; 2014 GoogLeNet, GAN, VGGNet; 2017 AlphaGo and Mask R-CNN; 2019 AlphaZero and graph neural networks. <Cite id="class-dl-chp1" loc="slide 6" /> <Cite id="class-dl-m1" loc="p. 4" />
 
 ```mermaid
-%% caption: The three waves of neural-network research. Each wave fixed a weakness of the one before it.
+%% caption: The teacher's timeline in short. The XOR failure in 1969 stopped neural networks until backpropagation in 1986.
 flowchart LR
-  A["1943 McCulloch and Pitts: first model of a neuron"] --> B["1958 Rosenblatt: the perceptron learns its weights"]
-  B --> C["1969 Minsky and Papert: one perceptron cannot do XOR"]
-  C --> D["1986 Rumelhart, Hinton, Williams: backpropagation trains hidden layers"]
-  D --> E["2006 Hinton: deep belief nets, layer-wise pre-training"]
-  E --> F["2012 onwards: big data plus GPUs, deep CNNs win ImageNet"]
+  A["1943: model of a neuron"] --> B["1958: perceptron"]
+  B --> C["1969: cannot solve XOR (AI winter)"]
+  C --> D["1986: backpropagation, MLP"]
+  D --> E["1998: CNN, LeNet"]
+  E --> F["2006: deep belief networks"]
+  F --> G["2012: ImageNet, AlexNet"]
+  G --> H["2014 onwards: GAN, ResNet, YOLO"]
 ```
 
-- **Wave 1, cybernetics (1940s to 1960s).** McCulloch and Pitts described a simple on/off model of a brain cell. Rosenblatt's **perceptron** was the first such model that could *learn* its weights from examples. <Cite id="rosenblatt1958" />
-- **The setback.** Minsky and Papert showed that a single perceptron cannot learn simple patterns such as XOR, and interest dropped. <Cite id="minsky-papert-1969" />
-- **Wave 2, connectionism (1980s to mid-1990s).** **Backpropagation** made it possible to train networks with hidden layers, which fixed the XOR problem. <Cite id="rumelhart1986" />
-- **Wave 3, deep learning (2006 onwards).** Hinton and colleagues showed how to train much deeper networks one layer at a time. <Cite id="hinton2006-dbn" /> Large datasets and fast graphics cards (GPUs) then made deep networks the best method for images, speech and text. <Cite id="lecun2015-review" />
+<Img id="class-perceptron-mlp-history-xor" caption="1958 Rosenblatt invents the perceptron, 1969 Minsky and Papert show it cannot solve XOR, 1986 backpropagation makes XOR solvable." />
 
-<Img id="img-dl-n1-history-rosenblatt" caption="Rosenblatt compared the brain (top) with his perceptron (bottom): sensory points, association units and response units copy the retina, association areas and motor cortex." />
+Success stories: face recognition, speech recognition, medical diagnosis (cancer detection), self-driving cars, language translation. <Cite id="class-dl-chp1" loc="slide 7" /> <Cite id="class-dl-m1" loc="p. 9" />
 
-**Why it took off in wave 3.** Three things came together: much more data (the internet, phones, sensors), much faster hardware (GPUs), and better training tricks (ReLU, dropout, better initialization). <Cite id="gfdl-ch1" loc="§1.2" />
+## From the biological neuron to the artificial neuron
 
-## Deep learning success stories
+A **biological neuron** is a nerve cell that receives, processes and sends information using electrical signals. Dendrites receive signals, the cell body (soma) processes them, the axon sends the signal on, and the synapse is the gap where the signal passes to the next neuron. In short: dendrites receive, cell body thinks, axon sends, synapse connects. <Cite id="class-dl-chp1" loc="slide 8" />
 
-The syllabus asks for a few examples of what deep learning achieved. Write three or four with one line each. <Cite id="lecun2015-review" /> <Cite id="gfdl-ch1" loc="§1.2" />
+<Box kind="definition">
 
-| Area | Success story |
+An **artificial neuron** is a math model inspired by a biological neuron. It is used in neural networks to process data in AI. <Cite id="class-dl-chp1" loc="slide 10" />
+
+</Box>
+
+It takes inputs, multiplies them with weights, adds a bias, passes the sum through an activation function (like ReLU or sigmoid) and gives an output. The parts are: inputs $x$ (like dendrites), weights $w$ (importance of each input), summation (adds inputs × weights), activation function (decides the output) and output $y$. <Cite id="class-dl-chp1" loc="slide 10" />
+
+<Img id="class-perceptron-mlp-neuron" caption="One artificial neuron: inputs times weights, plus bias, then the activation function gives y." />
+
+<Img id="class-perceptron-mlp-bio-vs-ann" caption="Biological versus artificial neuron, as written on the slide." />
+
+A **neural network** is a computational model inspired by the human brain. It is made of connected units called neurons that learn patterns from data and make decisions. The neurons are arranged in an input layer, hidden layer(s) and an output layer, and the network learns by adjusting weights to reduce error. <Cite id="class-dl-chp1" loc="slide 11" />
+
+<Img id="class-perceptron-mlp-nn-layers" caption="Input layer, hidden layer(s), output layer. Each arrow is a connection with a weight." />
+
+```mermaid
+%% caption: The simple learning flow of a neural network: repeat until the error is minimum.
+flowchart LR
+  A["Input (data)"] --> B["Process in hidden layers"]
+  B --> C["Output (prediction)"]
+  C --> D["Compare with actual output"]
+  D --> E["Adjust weights"]
+  E --> B
+```
+
+**Key factors of a neural network** <Cite id="class-dl-chp1" loc="slide 12" />
+
+| Factor | Meaning |
 |---|---|
-| Image recognition | In 2012 a deep CNN (AlexNet) won the ImageNet competition by a large margin, and deep CNNs have led image tasks ever since. <Cite id="krizhevsky2012" /> |
-| Speech recognition | Deep networks cut error rates sharply around 2010 to 2012 and now power voice assistants. |
-| Language | Machine translation and chatbots are built on deep sequence models. |
-| Medicine and science | Networks read X-rays and scans and help predict the shape of proteins. |
-| Everyday products | Face unlock, photo search, spam filters and recommendations. |
+| Weights | Show how important an input is. A higher weight means more influence on the output. |
+| Bias | An extra value added to help the neuron make a better decision. It shifts the output up or down. |
+| Threshold | A limit value used to decide the output (for example marks ≥ 40 means pass). |
+| Learning constant (learning rate) | Controls how fast the network learns. High is fast but risky, low is slow but accurate. |
+| Momentum factor | Uses the previous weight update to speed up training and avoid getting stuck. |
 
-<Img id="img-dl-n1-lenet-alexnet" caption="LeNet (1998) and AlexNet (2012) side by side. AlexNet is the deep CNN that won ImageNet: more layers, bigger images, ReLU and dropout." />
-
-## The perceptron: one artificial neuron
+## The perceptron
 
 <Box kind="definition">
 
-**Perceptron:** a single artificial neuron. It multiplies each input by a weight, adds a bias, and passes the total through a **step function**: output 1 if the total is at least 0, otherwise output 0. It was proposed by Rosenblatt in 1958 as the first neuron model that can learn. <Cite id="rosenblatt1958" />
+A **perceptron** is the simplest neural network used for binary classification. It answers only two classes: yes or no, 1 or 0. <Cite id="class-dl-chp1" loc="slide 13" />
 
 </Box>
 
-**Why it is needed.** We want a machine to make a simple yes/no decision from several clues, and to *learn* how much each clue matters from examples instead of being told.
+<Img id="class-perceptron-mlp-perceptron-structure" caption="Perceptron: inputs and bias go into a sum, then a step activation gives y. The circle is called the neuron." />
 
-**Analogy.** A judge on a talent show listens to several things (singing, dancing, confidence), gives each one an importance, adds up the points, and says "yes" if the total crosses her bar. A perceptron does exactly this with numbers.
+**Working of a perceptron** <Cite id="class-dl-chp1" loc="slide 13" />
 
-<Img id="img-dl-n1-neuron-bio" caption="A real neuron: inputs arrive at the dendrites, the cell body combines them, and the result leaves along the axon. The perceptron copies this idea." />
+1. Give the input $x_1, x_2, \dots$
+2. Multiply each input with its weight.
+3. Add everything: $\text{Net} = w_1x_1 + w_2x_2 + \dots + b$
+4. Apply the activation function: if $\text{Net} \ge 0$ then output 1, else output 0.
 
-**How it works, step by step.**
-
-1. **Take the inputs** $x_1, x_2, \dots, x_n$ (the clues).
-2. **Weigh each input:** multiply it by its weight $w_i$ (how much that clue matters).
-3. **Add them up with the bias** $b$ to get one total $z$, the weighted sum.
-4. **Apply the step function:** if $z$ is 0 or more the output is 1 ("yes"), otherwise 0 ("no").
-5. **Learn:** if the output was wrong, nudge the weights a little towards the right answer (the learning rule below).
-
-In symbols, the weighted sum and the step are
-
-$$
-z = w_1x_1 + w_2x_2 + \dots + w_nx_n + b, \qquad
-y = \begin{cases} 1 & \text{if } z \ge 0\\ 0 & \text{if } z < 0 \end{cases}
-$$
-
-Some books write a **threshold** $\theta$ instead of a bias and fire when the weighted sum reaches $\theta$; this is the same thing with $b = -\theta$. <Cite id="gfg-perceptron" /> <Cite id="w3s-perceptron" />
-
-<Img id="img-dl-n1-neuron-artificial" caption="One artificial neuron: inputs times weights, added up, then passed through an activation function (the step, for a perceptron) to give the output." />
-
-```mermaid
-%% caption: Inside one perceptron. Each input is multiplied by its weight, everything is added with the bias, and the step function turns the total into 0 or 1.
-flowchart LR
-  X1["Input x1"] -- "× w1" --> S["Sum: z = w1·x1 + w2·x2 + b"]
-  X2["Input x2"] -- "× w2" --> S
-  B["Bias b"] --> S
-  S --> T["Step: 1 if z ≥ 0, else 0"]
-  T --> Y["Output y"]
-```
-
-**What it can do (the geometry).** The points where the weighted sum is exactly 0 form a straight line (a flat plane in more dimensions). Points on one side get 1 and points on the other side get 0. So a perceptron is a **linear classifier**: it can only separate two groups that one straight line can separate. Such groups are called **linearly separable**.
-
-**The perceptron learning rule (in words first).** Show the perceptron one example. If its answer is right, change nothing. If it said 1 but should have said 0, lower the weights of the inputs that were on; if it said 0 but should have said 1, raise them. With target $t$, output $y$ and learning rate $\eta$:
-
-$$
-w_i \leftarrow w_i + \eta\,(t - y)\,x_i, \qquad b \leftarrow b + \eta\,(t - y)
-$$
-
-The **perceptron convergence theorem** says that if the data is linearly separable, this rule stops making mistakes after a finite number of updates. If the data is not separable (XOR below), it never settles. <Cite id="wiki-perceptron" /> <Cite id="w3s-perceptron-training" />
-
-**Advantages.**
-
-- Very simple and fast; easy to understand and to build in hardware.
-- Learns its own weights from examples.
-- Guaranteed to find a separating line when one exists.
-
-**Disadvantages.**
-
-- Only straight-line (linear) boundaries, so it cannot solve XOR.
-- Output is only 0 or 1, with no confidence level.
-- The step function has no useful slope, so it cannot be trained by gradient descent or stacked into deep networks directly.
-
-**Applications.** Simple yes/no filters (for example spam or not spam on a few clues), logic gates, and, most importantly, as the building block of every larger network. <Cite id="mlm-perceptron" />
-
-## Designing an AND gate with a perceptron
-
-This is a favourite 5-mark question, and it *does* need numbers, so solve it like a sum. The AND gate outputs 1 only when both inputs are 1.
-
-| $x_1$ | $x_2$ | AND |
-|---|---|---|
-| 0 | 0 | 0 |
-| 0 | 1 | 0 |
-| 1 | 0 | 0 |
-| 1 | 1 | 1 |
-
-**Sum 1: design the AND gate by reasoning.**
+**Example (Netflix movie like prediction).** Inputs: action movie = 1, thriller = 1, IMDb rating = 0.9, critics rating = 0.8. Weights 0.5, 0.4, 0.6, 0.3 and bias −1.
 
 <Sum>
 
 <Given>
 
-two inputs $x_1, x_2$ that are each 0 or 1; the perceptron rule "output 1 if $z = w_1x_1 + w_2x_2 + b \ge 0$, else 0"; the AND truth table above.
+$x = (1, 1, 0.9, 0.8)$, $w = (0.5, 0.4, 0.6, 0.3)$, $b = -1$.
 
 </Given>
 
 <Find>
 
-weights $w_1, w_2$ and a bias $b$ that give the AND output for all four rows.
+the perceptron output $y$.
 
 </Find>
 
 <Steps>
 
-1. **Choose equal weights, $w_1 = w_2 = 1$.** Both inputs matter equally in AND, so give them the same importance.
-2. **List the possible sums $x_1 + x_2$.** With these weights the weighted sum (before the bias) is $0 + 0 = 0$, $0 + 1 = 1$, $1 + 0 = 1$ or $1 + 1 = 2$.
-3. **Write what the bias must do.** Only the sum 2 should reach 0 or more, so we need $2 + b \ge 0$ (row (1,1) fires) and $1 + b < 0$ (rows with one input on stay off).
-4. **Solve the two conditions.** $2 + b \ge 0$ gives $b \ge -2$. $1 + b < 0$ gives $b < -1$. So any $b$ with $-2 \le b < -1$ works.
-5. **Pick a safe value in the middle.** $b = -1.5$ (the same as a threshold $\theta = 1.5$), so no row sits right on the edge.
-6. **Check every row with $z = x_1 + x_2 - 1.5$.**
-
-| $x_1$ | $x_2$ | $z = x_1 + x_2 - 1.5$ | $y = \text{step}(z)$ | Matches AND? |
-|---|---|---|---|---|
-| 0 | 0 | $0 + 0 - 1.5 = -1.5$ | 0 | yes |
-| 0 | 1 | $0 + 1 - 1.5 = -0.5$ | 0 | yes |
-| 1 | 0 | $1 + 0 - 1.5 = -0.5$ | 0 | yes |
-| 1 | 1 | $1 + 1 - 1.5 = +0.5$ | 1 | yes |
+1. **Multiply each input by its weight:** $1 \times 0.5 = 0.5$, $1 \times 0.4 = 0.4$, $0.9 \times 0.6 = 0.54$, $0.8 \times 0.3 = 0.24$.
+2. **Add them with the bias:** $\text{Net} = 0.5 + 0.4 + 0.54 + 0.24 - 1 = 1.68 - 1 = 0.68$.
+3. **Apply the step rule:** $0.68 \ge 0$, so $y = 1$.
 
 </Steps>
 
 <Answer>
 
-$w_1 = 1$, $w_2 = 1$, $b = -1.5$ (threshold 1.5). <Cite id="gfg-perceptron-and" />
+$y = 1$: the movie is liked. <Cite id="class-dl-chp1" loc="slide 13" />
 
 </Answer>
 
 <Box kind="verify">
 
-Check it a different way, with the picture. The decision line is where $z = 0$, that is $x_1 + x_2 = 1.5$. It crosses the $x_1$ axis at 1.5 and the $x_2$ axis at 1.5. The points (0,0), (0,1) and (1,0) have $x_1 + x_2$ equal to 0, 1 and 1, all below 1.5, so they fall on the "0" side. Only (1,1), with $x_1 + x_2 = 2$, is above 1.5, on the "1" side. One line cuts off exactly the one corner AND needs, so the design is right. A quick range check also agrees: $-1.5$ lies inside the allowed range $-2 \le b < -1$ from step 4.
+The four products add to $0.5 + 0.4 = 0.9$, then $0.9 + 0.54 = 1.44$, then $1.44 + 0.24 = 1.68$. Subtract the bias magnitude 1 to get 0.68. Same result.
 
 </Box>
 
 </Sum>
 
-**Sum 2: design the AND gate by learning.** Instead of guessing, start from any weights and apply the learning rule over the four rows until a full pass makes no mistake. <Cite id="mlm-perceptron" />
+<Img id="class-perceptron-mlp-perceptron-calc" caption="The teacher's worked example: Net = 0.68, so the movie is liked." />
 
-<Sum>
-
-<Given>
-
-starting weights $w_1 = 1$, $w_2 = 1$, bias $b = -1$, learning rate $\eta = 0.5$; the AND table as training data; the rule $w_i \leftarrow w_i + \eta(t - y)x_i$ and $b \leftarrow b + \eta(t - y)$.
-
-</Given>
-
-<Find>
-
-the final weights and bias after training stops.
-
-</Find>
-
-<Steps>
-
-1. **Row (0,0), target 0.** $z = 1(0) + 1(0) - 1 = -1$, which is below 0, so $y = 0$. Correct, so nothing changes.
-2. **Row (0,1), target 0.** $z = 1(0) + 1(1) - 1 = 0$, which is "at least 0", so $y = 1$. Wrong (should be 0), so the error is $t - y = 0 - 1 = -1$.
-3. **Update after row (0,1).** $w_1 = 1 + 0.5(-1)(0) = 1$ (unchanged, because $x_1$ was 0). $w_2 = 1 + 0.5(-1)(1) = 0.5$. $b = -1 + 0.5(-1) = -1.5$. Only the input that was on and the bias are lowered.
-4. **Row (1,0), target 0, with the new values.** $z = 1(1) + 0.5(0) - 1.5 = -0.5$, so $y = 0$. Correct.
-5. **Row (1,1), target 1.** $z = 1(1) + 0.5(1) - 1.5 = 0$, so $y = 1$. Correct. The first pass made one mistake.
-6. **Second pass with $w_1 = 1$, $w_2 = 0.5$, $b = -1.5$.** Row (0,0): $z = -1.5$, $y = 0$. Row (0,1): $z = 0.5 - 1.5 = -1$, $y = 0$. Row (1,0): $z = 1 - 1.5 = -0.5$, $y = 0$. Row (1,1): $z = 1 + 0.5 - 1.5 = 0$, $y = 1$. All four are correct, so training stops.
-
-</Steps>
-
-<Answer>
-
-$w_1 = 1$, $w_2 = 0.5$, $b = -1.5$, reached after one update.
-
-</Answer>
-
-<Box kind="verify">
-
-Check it against the four conditions AND needs, instead of re-running the rows. Off rows: $b = -1.5 < 0$ (for (0,0)), $w_2 + b = -1 < 0$ (for (0,1)), $w_1 + b = -0.5 < 0$ (for (1,0)). On row: $w_1 + w_2 + b = 0 \ge 0$ (for (1,1)). All four hold, so these weights compute AND. Note that row (1,1) sits exactly on the line ($z = 0$); it still fires because the rule says "at least 0". This is why the reasoning design in Sum 1, with a safety gap, is the nicer exam answer. Different starting values give different, equally correct, lines.
-
-</Box>
-
-</Sum>
-
-**OR gate** for comparison: $w_1 = w_2 = 1$, $b = -0.5$. Any single 1 gives $1 - 0.5 = 0.5 \ge 0$, so it fires; (0,0) gives $-0.5$, so it stays off.
-
-## The XOR problem: why one neuron is not enough
-
-XOR outputs 1 when exactly one input is 1: $(0,0) \to 0$, $(0,1) \to 1$, $(1,0) \to 1$, $(1,1) \to 0$. Put the four points on a square. The two 1s sit on opposite corners and the two 0s on the other corners. No single straight line can put both 1s on one side and both 0s on the other. So **no single perceptron can compute XOR**, whatever weights it uses. <Cite id="minsky-papert-1969" />
-
-**The fix: add a hidden layer.** XOR is "OR but not AND". One hidden neuron computes OR, another computes AND, and the output neuron fires when OR is on and AND is off.
+**Learning (perceptron learning algorithm).** The weights start random and the perceptron learns by correcting them: take one training example, predict, compare with the actual answer; if wrong, update the weights (for a positive sample wrongly classified $w = w + x$, for a negative sample wrongly classified $w = w - x$); repeat for all examples until every example is classified correctly. <Cite id="class-dl-chp1" loc="slide 13" />
 
 ```mermaid
-%% caption: XOR with one hidden layer. The two hidden perceptrons compute OR and AND; the output fires only when OR is on and AND is off.
-flowchart LR
-  X1["Input x1"] --> H1["Hidden h1: OR (bias -0.5)"]
-  X2["Input x2"] --> H1
-  X1 --> H2["Hidden h2: AND (bias -1.5)"]
-  X2 --> H2
-  H1 -- "weight +1" --> Y["Output: h1 - h2 - 0.5 ≥ 0"]
-  H2 -- "weight -1" --> Y
-```
-
-| $x_1, x_2$ | $h_1$ (OR) | $h_2$ (AND) | $y$ |
-|---|---|---|---|
-| 0, 0 | 0 | 0 | 0 |
-| 0, 1 | 1 | 0 | 1 |
-| 1, 0 | 1 | 0 | 1 |
-| 1, 1 | 1 | 1 | 0 |
-
-The hidden layer moves the problem into a new space where a straight line *does* work. This is the whole reason we need hidden layers. Goodfellow solves the same XOR problem with a small ReLU network. <Cite id="gfdl-ch6" loc="§6.1" /> <Cite id="gfg-perceptron-xor" />
-
-## Sigmoid neurons
-
-<Box kind="definition">
-
-**Sigmoid neuron:** a neuron that computes the same weighted sum as a perceptron but passes it through the smooth S-shaped **sigmoid** (logistic) function instead of the hard step, so its output is any number between 0 and 1.
-
-</Box>
-
-**Why it is needed.** The perceptron's step jumps straight from 0 to 1. A tiny change in a weight either changes nothing or flips the output completely, so we cannot tell which small change makes things a little better. Learning by **gradient descent** needs exactly that information. The sigmoid fixes this: every small change in a weight changes the output a little.
-
-**How it works.** Same steps as the perceptron (weigh, add, add bias), but the last step squashes the total smoothly: a large positive total gives nearly 1, a large negative total gives nearly 0, and a total of 0 gives exactly 0.5. The formula (with $e \approx 2.718$) is
-
-$$
-\sigma(z) = \frac{1}{1 + e^{-z}}
-$$
-
-<Figure caption="Left: the perceptron's step jumps from 0 to 1 at z = 0, so small weight changes give no useful signal. Right: the sigmoid makes the same decision smoothly, so every small change in z changes the output a little, and gradient descent can learn.">
-  <CurvePlot curves="step" x="-6,6" y="-0.2,1.2" xLabel="z (weighted sum)" yLabel="output" />
-  <CurvePlot curves="sigmoid" x="-6,6" y="-0.2,1.2" xLabel="z (weighted sum)" yLabel="output" />
-</Figure>
-
-<Box kind="intuition">
-
-The step is a light switch: only off or on. The sigmoid is a dimmer: turning the knob a little always changes the brightness a little. Learning needs the dimmer, because it learns by small turns of the knob.
-
-</Box>
-
-**Advantages.** Smooth and differentiable, so gradient descent works; output can be read as a probability of "yes"; good for the output of a yes/no classifier.
-
-**Disadvantages.** For very large or very small totals the curve is flat, so the learning signal almost vanishes (the **vanishing gradient** problem in deep networks); outputs are always positive, which slows learning; the exponential is a little costly. That is why modern hidden layers usually use tanh or ReLU, covered in the activation-functions topic. <Cite id="gfdl-ch6" loc="§6.3.2" />
-
-| | Perceptron | Sigmoid neuron |
-|---|---|---|
-| Activation | Hard step | Smooth S-curve |
-| Output | 0 or 1 only | Any value between 0 and 1 |
-| Meaning of output | A decision | A probability-like confidence |
-| Trained by | Perceptron learning rule | Gradient descent with backpropagation |
-| Can be stacked deep and trained | No | Yes |
-
-## Gradient descent
-
-<Box kind="definition">
-
-**Gradient descent:** a method that trains a network by repeatedly moving every weight a small step in the direction that makes the loss smaller. <Cite id="gfdl-ch4" loc="§4.3" />
-
-</Box>
-
-**Why it is needed.** A network may have millions of weights, far too many to set by hand or by trial. Gradient descent tells us, for every weight at once, which way to move it.
-
-**Analogy.** Walking down a hill in thick fog. You cannot see the bottom, but you can feel which way the ground slopes under your feet, so you take a small step downhill, again and again, until the ground is flat.
-
-**How it works, step by step.**
-
-1. Start with small random weights.
-2. **Forward pass:** feed the training examples in and get the outputs.
-3. **Loss:** measure how wrong the outputs are.
-4. **Gradient:** for each weight, find the slope of the loss, that is, whether increasing the weight makes the loss go up or down (backpropagation does this).
-5. **Update:** move each weight a small step against its slope (downhill). The step size is the learning rate.
-6. Repeat until the loss stops falling.
-
-The one update rule you should know: new weight = old weight minus learning rate times slope,
-
-$$
-w \leftarrow w - \eta\,\frac{\partial L}{\partial w}
-$$
-
-where $\dfrac{\partial L}{\partial w}$ is the slope of the loss $L$ with respect to the weight $w$, and $\eta$ is the learning rate. If the slope is positive we decrease $w$; if negative we increase it. <Cite id="gfg-gradient-descent" />
-
-```mermaid
-%% caption: The gradient-descent loop. Each pass measures the error, finds which way each weight should move, and takes a small step downhill.
+%% caption: The perceptron learning algorithm. The loop stops when every training example is classified correctly.
 flowchart TD
-  A["Start with random weights"] --> B["Forward pass: compute outputs"]
-  B --> C["Compute the loss"]
-  C --> D["Find the slope of the loss for every weight"]
-  D --> E["Move each weight a small step downhill"]
-  E --> F{"Loss still falling?"}
-  F -- "yes" --> B
-  F -- "no" --> G["Stop: trained weights"]
+  A["Initialize weights randomly"] --> B["Take one training sample"]
+  B --> C["Calculate Net and predict output"]
+  C --> D{"Prediction correct?"}
+  D -- "Yes" --> E["Next sample"]
+  D -- "No" --> F["Update weights"]
+  F --> E
+  E --> G{"All samples correct?"}
+  G -- "No" --> B
+  G -- "Yes" --> H["Stop"]
 ```
 
-**Advantages.** Simple, general (works for any network with smooth activations), and scales to millions of weights.
+The **delta learning rule** updates weights during training: $\Delta w = \eta\,(t - y)\,x$, where $\eta$ is the learning rate, $t$ the target output, $y$ the actual output and $x$ the input. It is used to reduce error and improve learning. <Cite id="class-dl-chp1" loc="slide 16" />
 
-**Disadvantages.** The learning rate must be chosen well (too big overshoots, too small is slow); it can get stuck in flat regions or poor local minima; plain full-batch gradient descent is slow on big data. The variants (stochastic, mini-batch, momentum, Adam) fix these and are covered in the gradient-descent topic.
+<Img id="class-perceptron-mlp-delta-rule" caption="Delta learning rule: change in weight = learning rate × (target − actual) × input." />
 
-## Feedforward neural networks and the MLP
+Perceptron: advantages are a simple architecture, fast computation, easy to train. Disadvantages are that it cannot handle sequence data, has no memory of past inputs, and is limited for complex tasks. <Cite id="class-dl-chp1" loc="slide 13" />
+
+## Logic gates with a perceptron
+
+**AND gate.** AND gives output 1 only when all inputs are 1. The teacher's perceptron uses $w_1 = 1$, $w_2 = 1$, bias 0 and threshold $\theta = 2$. Sum $= x_1w_1 + x_2w_2 + \text{Bias}$. If Sum ≥ θ the output is 1, else 0. <Cite id="class-dl-chp1" loc="slide 18" />
+
+<Img id="class-perceptron-mlp-and-diagram" caption="AND perceptron: weights 1 and 1, bias 0, threshold 2." />
+
+| $x_1$ | $x_2$ | Sum | Output |
+|---|---|---|---|
+| 0 | 0 | 0 | 0 (0 < 2) |
+| 0 | 1 | 1 | 0 (1 < 2) |
+| 1 | 0 | 1 | 0 (1 < 2) |
+| 1 | 1 | 2 | 1 (2 ≥ 2) |
+
+<Img id="class-perceptron-mlp-and-table" caption="Truth table and working of the AND perceptron." />
+
+**OR gate:** weights 1 and 1, bias 0, threshold θ = 1, so the output is 1 when at least one input is 1. **NOT gate:** one input with weight −1, threshold 0: input 0 gives sum 0 ≥ 0 so output 1; input 1 gives sum −1 < 0 so output 0. **NAND gate:** weights −1 and −1, bias 0, threshold −1.5. The sums are 0, −1, −1, −2, and only −2 is below −1.5, so the output is 0 only for the input (1, 1) and 1 otherwise. (The teacher's slide 21 also adds a bias of −1, which makes the sums −1, −2, −2, −3 and gives the wrong outputs; drop that extra bias.) <Cite id="class-dl-chp1" loc="slide 19" /> <Cite id="class-dl-chp1" loc="slide 20" /> <Cite id="class-dl-chp1" loc="slide 21" />
+
+## Linear separability and the XOR problem
+
+- **Linearly separable:** data can be separated by a straight line (a single perceptron can solve it). Examples: AND, OR, NAND. <Cite id="class-dl-m1" loc="p. 5" />
+- **Non-linearly separable:** data cannot be separated by a straight line, so it needs an MLP (multiple layers). Example: XOR. <Cite id="class-dl-chp1" loc="slide 14" />
+
+<Img id="class-perceptron-mlp-linear-sep" caption="AND: one straight line separates the classes, so a single perceptron is enough." />
+
+**XOR** gives 1 when exactly one input is 1, otherwise 0. The four points (0,0)=0, (0,1)=1, (1,0)=1, (1,1)=0 cannot be split by one line; however the line is drawn, one point is always misclassified. <Cite id="class-dl-m1" loc="p. 6" />
+
+<Img id="class-perceptron-mlp-xor-fail" caption="Three straight lines, and every time one XOR point is on the wrong side." />
+
+A **shallow network** has one input layer and one output layer; it can solve only linear problems and cannot solve XOR. <Cite id="class-dl-chp1" loc="slide 16" />
+
+## The multi-layer perceptron (MLP)
 
 <Box kind="definition">
 
-**Feedforward neural network:** a network in which information flows in one direction only, from the input layer through one or more hidden layers to the output layer. There are no loops or feedback connections. When every neuron in one layer is connected to every neuron in the next, it is called a **multilayer perceptron (MLP)** or a fully connected (dense) network. <Cite id="gfdl-ch6" />
+**Multi-Layer Perceptron (MLP)** consists of fully connected dense layers that transform input data from one dimension to another. It is called multi-layer because it contains an input layer, one or more hidden layers and an output layer. The purpose of an MLP is to model complex relationships between inputs and outputs. <Cite id="class-dl-m1" loc="p. 17" />
 
 </Box>
 
-**Why it is needed.** One neuron draws only one straight line. Real problems (recognizing digits, predicting prices) need curved, complicated boundaries. Stacking neurons in layers lets the network build complicated decisions out of simple ones.
+- **Input layer:** each neuron corresponds to an input feature (three input features means three neurons).
+- **Hidden layers:** any number of layers with any number of nodes; they process the information from the input layer (they extract useful features).
+- **Output layer:** gives the final prediction; with multiple outputs it has that many neurons. <Cite id="class-dl-m1" loc="p. 17" /> <Cite id="class-dl-chp1" loc="slide 22" />
 
-**Analogy.** A factory assembly line. Raw material enters at one end, each station does one job and passes the result forward, and the finished product leaves at the other end. Nothing is ever sent back to an earlier station while a product is being made.
+<Img id="class-perceptron-mlp-mlp-structure" caption="MLP: what it is, its layers, why it is needed and the basic working steps." />
 
-**The basic architecture.**
+**Basic working steps of an MLP:** input is given to the input layer; each layer multiplies inputs with weights; bias is added; the activation function is applied; the output is passed to the next layer; the final output is produced. For each neuron $z = \sum_i w_i x_i + b$ and the output is $f(z)$. <Cite id="class-dl-chp1" loc="slide 22" />
 
-1. **Input layer.** One node per input feature. It does no calculation; it just passes the numbers on.
-2. **Hidden layers.** Each neuron computes a weighted sum of the previous layer's outputs, adds its bias, and applies a non-linear activation (sigmoid, tanh, ReLU). "Hidden" means we never see their correct values in the data; the network invents useful in-between features (for images: edges, then shapes, then objects).
-3. **Output layer.** Gives the final answer: one sigmoid neuron for yes/no, several softmax neurons for many classes, or a plain linear neuron for a number.
-4. **Weights and biases** on every connection are the parameters that training adjusts.
-5. **Activation functions** add the non-linearity; without them the whole network would collapse into one straight-line model.
+MLP: advantages are that it solves non-linear problems like XOR, has higher accuracy and learns complex patterns. Disadvantages are more computation, more data needed, slower training and a complex structure. <Cite id="class-dl-chp1" loc="slide 22" />
 
-<Figure caption="A feedforward network (MLP) with 3 inputs, two hidden layers of 4 neurons, and 2 outputs. Every arrow goes left to right: there is no loop back. Each neuron is connected to every neuron in the next layer.">
-  <NetworkFigure layers="3,4,4,2" title="Multilayer perceptron" labels="Input,Hidden 1,Hidden 2,Output" />
-</Figure>
+### XOR with an MLP (2-2-1 network)
 
-**How it works (the forward pass in words).** The input values enter the input layer. Each hidden neuron weighs and adds the values it receives, adds its bias, applies its activation and sends the result forward. The next layer does the same with these new values, and so on until the output layer gives the answer. The whole network is a chain of such layers; the number of layers in the chain is its **depth**, which is where the word "deep" comes from. <Cite id="gfdl-ch6" />
+The hidden layer creates a **non-linear decision boundary**, so XOR becomes solvable. The network has two inputs, a hidden layer of two neurons $h_1, h_2$ and one output neuron $Y$. Each neuron applies weights plus bias and then an activation (step or sigmoid). <Cite id="class-dl-chp1" loc="slide 23" /> <Cite id="class-dl-chp1" loc="slide 24" />
 
-**How it learns.** Forward pass to get the output, a loss to measure the error, backpropagation to find how much each weight caused the error, gradient descent to nudge each weight; repeat over many epochs. These steps are covered in the backpropagation and gradient-descent topics. <Cite id="rumelhart1986" />
+<Img id="class-perceptron-mlp-xor-mlp" caption="The 2-2-1 network for XOR: two inputs, two hidden neurons, one output." />
 
-**Sum 3: size of a network.** Exams sometimes ask how many weights a network has. In Keras each fully connected layer is a `Dense` layer, and Keras prints this count in `model.summary()`. <Cite id="keras-dense" />
+<Img id="class-perceptron-mlp-xor-boundary" caption="A single perceptron cannot separate the XOR points; an MLP with a hidden layer can." />
 
-<Sum>
+**Working weights (corrected).** Use $h_1$ as an OR neuron and $h_2$ as an AND neuron, and let the output be "$h_1$ and not $h_2$":
+$w_{11} = w_{21} = 20,\ b_1 = -10$; $w_{12} = w_{22} = 20,\ b_2 = -30$; $w_{31} = 20,\ w_{32} = -20,\ b_3 = -10$ (sigmoid in every neuron).
 
-<Given>
+| $x_1$ | $x_2$ | $h_1$ (OR) | $h_2$ (AND) | $Y$ |
+|---|---|---|---|---|
+| 0 | 0 | low | low | 0 |
+| 0 | 1 | high | low | 1 |
+| 1 | 0 | high | low | 1 |
+| 1 | 1 | high | high | 0 |
 
-the MLP in the figure above, with layer sizes 3 (input), 4 (hidden 1), 4 (hidden 2), 2 (output), every layer fully connected to the next.
-
-</Given>
-
-<Find>
-
-the number of weights, biases and total trainable parameters.
-
-</Find>
-
-<Steps>
-
-1. **Rule.** Between a layer of $n$ neurons and a layer of $m$ neurons there are $n \times m$ weights (one per arrow) and $m$ biases (one per receiving neuron). The input layer has no biases because it does no calculation.
-2. **Input to hidden 1.** $3 \times 4 = 12$ weights and 4 biases.
-3. **Hidden 1 to hidden 2.** $4 \times 4 = 16$ weights and 4 biases.
-4. **Hidden 2 to output.** $4 \times 2 = 8$ weights and 2 biases.
-5. **Add up.** Weights $12 + 16 + 8 = 36$. Biases $4 + 4 + 2 = 10$. Total $36 + 10 = 46$.
-
-</Steps>
-
-<Answer>
-
-36 weights + 10 biases = 46 trainable parameters.
-
-</Answer>
-
-<Box kind="verify">
-
-Count per neuron instead of per layer. Each hidden-1 neuron receives 3 inputs and has 1 bias, so $3 + 1 = 4$ parameters, and 4 such neurons give $4 \times 4 = 16$. Each hidden-2 neuron receives 4 inputs plus 1 bias, so 5 parameters, and $4 \times 5 = 20$. Each output neuron also receives 4 inputs plus 1 bias, 5 parameters, and $2 \times 5 = 10$. Total $16 + 20 + 10 = 46$, the same as before.
-
-</Box>
-
-</Sum>
+<Img id="class-perceptron-mlp-xor-design" caption="Names of the weights and biases in the 2-2-1 network. See the corrected values above." />
 
 <Box kind="pitfall">
 
-Without a non-linear activation, stacking layers is useless: a straight-line function of a straight-line function is still a straight line, so a 10-layer linear network can do no more than one layer. The non-linearity in the hidden layers is what gives an MLP its power.
+The teacher's slide 24 lists $w_{32} = 20$, $b_3 = -30$ and marks $h_1$ low, $h_2$ high for input (0,1). With those numbers the output for (0,1) would be $\sigma(20 \cdot 1 + 20 \cdot 0 - 30) = \sigma(-10) \approx 0$, not 1. Use the corrected values above in the exam. <Cite id="class-dl-chp1" loc="slide 24" />
 
 </Box>
 
-**Types of feedforward network.**
+```mermaid
+%% caption: How the two hidden neurons turn XOR into a simple rule. Hidden neuron 1 fires for OR, hidden neuron 2 fires for AND, and the output says OR but not AND.
+flowchart LR
+  A["x1, x2"] --> B["h1 = OR (b1 = -10)"]
+  A --> C["h2 = AND (b2 = -30)"]
+  B --> D["Y = h1 and not h2 (w31 = 20, w32 = -20, b3 = -10)"]
+  C --> D
+```
 
-- **Single-layer** (the perceptron): input connected straight to the output; linear boundaries only.
-- **Multilayer (MLP):** one or more hidden layers; any boundary.
-- **Deep feedforward network:** an MLP with many hidden layers.
-- Specialized feedforward networks such as **CNNs** (shared local filters for images) and **RBF networks** are covered in the types-of-networks topic.
+## Sigmoid neuron
 
-**Advantages.**
+A sigmoid neuron is an artificial neuron that uses a sigmoid function to give output values between 0 and 1. A perceptron gives only 0 or 1; the sigmoid neuron gives a smooth output, where a small change in input gives a small change in output, which helps better learning. $y = \dfrac{1}{1 + e^{-(w^Tx + b)}}$. <Cite id="class-dl-chp1" loc="slide 26" />
 
-- Can learn non-linear patterns; in theory can approximate any continuous function (next section).
-- Simple to design and to train with backpropagation.
-- Works for both classification and regression.
-- Fast at prediction time: one pass forward, no loops.
+| $z = w^Tx + b$ | −4 | −2 | 0 | 2 | 4 |
+|---|---|---|---|---|---|
+| $y$ | 0.018 | 0.119 | 0.500 | 0.881 | 0.982 |
 
-**Disadvantages.**
-
-- No memory: each input is handled on its own, so it is a poor fit for sequences (text, speech); RNNs are used there.
-- Fully connected layers need very many weights for images and ignore that nearby pixels belong together; CNNs are used there.
-- Needs a lot of labelled data and can overfit.
-- Works like a black box: hard to explain why it gave an answer.
-
-**Applications.** Credit scoring and loan-default prediction from tabular data, medical diagnosis from test results, simple digit recognition, house-price prediction, and as the final classification layers inside CNNs. <Cite id="gfg-feedforward" /> <Cite id="ibm-neural-networks" />
-
-## Representation power of MLPs and feedforward networks
-
-"Representation power" asks: *which functions can a network express at all, if we could choose the best weights?* It is about what is possible, not about how easy it is to learn.
-
-**Step 1: one perceptron.** Only linearly separable functions: AND, OR, NOT, but not XOR.
-
-**Step 2: Boolean functions with one hidden layer.** Any Boolean function (any truth table) can be built with one hidden layer of perceptrons. One simple construction uses one hidden neuron for each input pattern that should give 1, and the output neuron ORs them. The catch is size: with $n$ inputs there are $2^n$ patterns, so this may need up to $2^n$ hidden neurons, which grows exponentially. <Cite id="gfdl-ch6" loc="§6.4.1" /> <Cite id="nptel-dl" />
-
-**Step 3: real-valued functions, the universal approximation theorem.**
+## Deep feedforward networks
 
 <Box kind="definition">
 
-**Universal approximation theorem:** a feedforward network with a linear output layer and at least one hidden layer with a "squashing" activation (such as the sigmoid) can approximate any continuous function on a closed, bounded region as closely as we want, provided it has enough hidden neurons. Later results extended this to other activations, including ReLU. <Cite id="hornik1989" /> <Cite id="gfdl-ch6" loc="§6.4.1" />
+Deep feedforward networks, also called **feedforward neural networks** or multilayer perceptrons (MLPs), are the prototypical deep learning models. The goal of a feedforward network is to approximate some function $f^*$. For a classifier, $y = f^*(x)$ maps an input $x$ to a category $y$. A feedforward network defines a mapping $y = f(x; \theta)$ and learns the value of the parameters $\theta$ that result in the best function approximation. <Cite id="class-dl-m1" loc="p. 10" />
 
 </Box>
 
-**The intuition.** Two very steep sigmoid neurons, one stepping up and one stepping down a little later, together make a narrow "bump" (a block). Many blocks of different heights side by side make a staircase that can follow any smooth curve, like building a hill out of Lego bricks. More bricks give a closer fit.
+They are called **feedforward** because information flows through the function being evaluated from $x$, through the intermediate computations, and finally to the output $y$. There are no feedback connections in which outputs of the model are fed back into itself. When feedforward networks are extended to include feedback connections, they are called recurrent neural networks. <Cite id="class-dl-m1" loc="p. 10" />
 
-**Step 4: what the theorem does *not* promise.**
+They are called **networks** because they are typically represented by composing many functions in a chain, for example $f(x) = f^{(3)}(f^{(2)}(f^{(1)}(x)))$. Here $f^{(1)}$ is the first layer, $f^{(2)}$ the second, and the length of the chain gives the **depth** of the model; this is where the name "deep learning" comes from. The final layer is the output layer. The training data does not show the desired output for the other layers, so they are called **hidden layers**. <Cite id="class-dl-m1" loc="p. 11" />
 
-- **Size.** "Enough neurons" may mean an enormous, even exponential, number.
-- **Learning.** It says good weights *exist*, not that gradient descent will *find* them.
-- **Generalization.** A network that fits the training data perfectly may still do badly on new data (overfitting).
+<Img id="class-perceptron-mlp-ffnn-diagram" caption="A feedforward network: information flows only forward through input, hidden and output layers." />
 
-**Step 5: why depth helps.** Deep networks can represent many functions with far fewer neurons than a shallow one. Each extra layer can reuse and combine the features of the layer below, so a deep ReLU network can cut its input space into a number of linear pieces that grows exponentially with depth. <Cite id="montufar2014" /> There are simple functions that a network with two hidden layers represents with a modest number of neurons, but a network with one hidden layer needs a number of neurons that grows exponentially with the input size. <Cite id="eldan2016" /> In practice, deeper networks also tend to generalize better on many tasks. <Cite id="gfdl-ch6" loc="§6.4.1" />
+<Img id="class-perceptron-mlp-ffnn-steps" caption="The six steps of a feedforward network and the formula for each neuron." />
 
-| | Shallow and wide (1 hidden layer) | Deep (many hidden layers) |
-|---|---|---|
-| Can represent any continuous function? | Yes, in theory | Yes |
-| Neurons needed | Often enormous | Far fewer for the same function |
-| Features learned | One level only | Built up level by level (edges, shapes, objects) |
-| Training | Simple | Harder (vanishing gradients), solved with ReLU, good initialization, normalization |
+```mermaid
+%% caption: Data in a feedforward network flows in one direction only. There is no loop back.
+flowchart LR
+  A["Input x"] --> B["Hidden layer 1: f1"]
+  B --> C["Hidden layer 2: f2"]
+  C --> D["Output layer: f3"]
+  D --> E["Prediction y"]
+```
 
-<Box kind="exam">
+Key features: no backward flow of data, no cycles or loops, and the output depends only on the current input. Examples: predicting pass or fail, handwritten digit recognition, spam email detection. Limitations: needs labeled data, depends on data quality and cannot learn time-based patterns. <Cite id="class-dl-chp1" loc="slide 28" />
 
-For "representation power of MLPs" write five points: (1) one perceptron = linear boundaries only, cannot do XOR; (2) one hidden layer can do any Boolean function, but may need up to $2^n$ neurons; (3) universal approximation theorem; (4) caveats: size, learnability, generalization; (5) depth gives the same power with far fewer neurons. Draw the XOR network as your example.
+### Hidden units and the design of the network
+
+- **Hidden units:** the neurons of the hidden layers. Each one computes a weighted sum of its inputs, adds a bias and applies an activation function. Their purpose is to learn important patterns: the first hidden layer finds edges, the next finds corners and contours, and so on. <Cite id="class-dl-chp1" loc="slide 28" /> <Cite id="class-dl-m1" loc="p. 12" />
+- **Choosing the type of hidden unit:** rectified linear units are an excellent default choice. It is usually impossible to predict in advance which will work best, so the design is trial and error: train a network and evaluate it on a validation set. <Cite id="class-dl-m1" loc="p. 15" />
+- **Architecture design:** the architecture is the overall structure of the network: how many units it has and how they are connected. Most networks are a chain of layers, so the main choices are the **depth** of the network and the **width** of each layer. Deeper networks often use far fewer units per layer and far fewer parameters and often generalize better, but are often harder to optimize. The ideal architecture is found by experiment, watching the validation error. <Cite id="class-dl-m1" loc="p. 23" />
+- **Other considerations:** layers need not form a chain; **skip connections** from layer $i$ to layer $i+2$ or higher make it easier for the gradient to flow from the output layers to the layers near the input. Specialized networks also use fewer connections between layers to reduce parameters and computation. <Cite id="class-dl-m1" loc="p. 25" />
+
+<Img id="class-perceptron-mlp-brain-hierarchy" caption="Hidden layers learn step by step: edges, then corners and contours, then object parts, then the object. The brain areas V1 and V2 work the same way." />
+
+## Representation power of MLPs
+
+Representation power is the ability of a neural network to approximate a wide variety of functions. Feedforward neural networks are universal function approximators. <Cite id="class-dl-m1" loc="p. 16" />
+
+<Box kind="definition">
+
+**Universal approximation theorem:** a feedforward network with a linear output layer and at least one hidden layer with any activation function (such as the logistic sigmoid) can approximate any measurable function from one finite-dimensional space to another with any desired non-zero amount of error, provided that the network is given enough hidden units. <Cite id="class-dl-m1" loc="p. 24" />
 
 </Box>
 
-## Perceptron versus MLP at a glance
+<Img id="class-perceptron-mlp-uat" caption="Universal approximation theorem, as written in the class notes." />
 
-| | Perceptron | MLP (feedforward network) |
-|---|---|---|
-| Layers | Input and one output neuron | Input, one or more hidden, output |
-| Activation | Step (0 or 1) | Smooth non-linear (sigmoid, tanh, ReLU) |
-| Decision boundary | One straight line | Any shape (curves, islands) |
-| XOR | Impossible | Easy (2 hidden neurons) |
-| Training | Perceptron learning rule | Backpropagation with gradient descent |
-| Typical use | Simple linear yes/no, logic gates | Classification and regression on real data |
+1. **Linear versus non-linear:** without a hidden layer the model is linear and can only draw a straight-line decision boundary. With a hidden layer it can draw a curved boundary. The hidden layer introduces non-linearity by applying activation functions to weighted sums. <Cite id="class-dl-chp1" loc="slide 30" />
+2. **One hidden layer** with a non-linear activation can approximate any continuous function.
+3. **More hidden layers** can model more complex functions and decision boundaries; depth can reduce the number of units needed. A single layer is enough to represent any function, but the layer may be infeasibly large and may fail to learn and generalize correctly. <Cite id="class-dl-m1" loc="p. 24" />
+4. **Hierarchical feature learning:** each hidden layer learns higher-level features from the previous layer (edges, then shapes, then objects). <Cite id="class-dl-chp1" loc="slide 30" />
 
-Further reading: <Cite id="gfg-mlp" /> <Cite id="gfg-uat" /> <Cite id="d2l-mlp-activations" /> <Cite id="cs231n-nn1" /> <Cite id="mlm-mlp-crash" /> <Cite id="tp-ann-building-blocks" /> <Cite id="wiki-mlp" /> <Cite id="wiki-feedforward" /> <Cite id="wiki-uat" /> <Cite id="wiki-ann-history" />
+Factors that affect representation power: number of hidden layers, number of neurons, the (non-linear) activation function, and depth versus width. <Cite id="class-dl-m1" loc="p. 16" />
+
+<Img id="class-perceptron-mlp-rep-more-layers" caption="More hidden layers give more complex decision boundaries." />
+
+<Img id="class-perceptron-mlp-rep-hierarchy" caption="Hierarchical feature learning: edges, shapes, objects, then the decision." />
 
 ## Where this was asked
 
 | If the question says | What to write | Seen as |
 |---|---|---|
-| "Design AND gate using perceptron" | Truth table, perceptron formula, choose $w_1 = w_2 = 1$, $b = -1.5$, check all four rows, the line picture, optionally the learning rule | <PYQ id="2023-12/q1a" /> |
-| "What are feedforward neural networks?" | Definition (one-way flow, no loops), why needed, how the forward pass works, diagram, advantages, disadvantages, uses | <PYQ id="2024-05/q1a" /> |
-| "Representation power of MLPs" | Perceptron limit (XOR), Boolean functions with $2^n$ neurons, universal approximation theorem, caveats, depth | <PYQ id="2024-12/q1a" /> |
-| "Basic architecture of feedforward neural network" | The diagram, the role of input, hidden and output layers, weights, biases, activation, the forward pass, uses | <PYQ id="2025-05/q1a" /> |
+| "Design AND gate using Perceptron" | Weights 1 and 1, threshold 2, the truth table with sums | <PYQ id="2023-12/q1a" /> |
+| "What are Feed Forward Neural Networks?" and "Explain basic architecture of feedforward neural network" | Definition, no feedback, input, hidden and output layer, working steps, diagram | <PYQ id="2024-05/q1a" /> <PYQ id="2025-05/q1a" /> |
+| "Comment on the representation power of MLPs" | Universal approximation theorem, depth and width, hierarchical features | <PYQ id="2024-12/q1a" /> |
+| Hidden units and their purpose | Neurons that compute weighted sum plus activation; they learn patterns | <PYQ id="assignment-1/q1a" /> |
+| Role of each layer in a feedforward network | Input, hidden and output layer jobs, with a flow diagram | <PYQ id="assignment-1/q1b" /> |
+| XOR with an MLP | 2-2-1 network, corrected weights, truth table | <PYQ id="assignment-1/q1c" /> |
 
 ## Quick revision
 
-- Perceptron: weigh the inputs, add the bias, output 1 if the total is at least 0, else 0. It draws one straight line.
-- AND: $w_1 = w_2 = 1$, $b = -1.5$. OR: $w_1 = w_2 = 1$, $b = -0.5$.
-- Learning rule: change weights only on a mistake, $w_i \leftarrow w_i + \eta(t - y)x_i$; it converges if the data is linearly separable.
-- XOR is not linearly separable; it needs a hidden layer (OR and AND, then "OR but not AND").
-- Sigmoid $\sigma(z) = 1/(1 + e^{-z})$ is a smooth step, so gradient descent can work; drawback: vanishing gradients.
-- Gradient descent: move each weight a small step downhill on the loss, $w \leftarrow w - \eta\,\partial L / \partial w$.
-- Feedforward / MLP: input, hidden, output layers; one-way flow; no memory; good for tabular data.
-- Network size: $n \times m$ weights plus $m$ biases for each pair of layers; the 3-4-4-2 network has 46 parameters.
-- Universal approximation: one hidden layer, enough neurons, any continuous function, but possibly huge; depth is more efficient.
+- Perceptron: simplest neural network for binary classification; Net $= \sum w_ix_i + b$; output 1 if Net ≥ 0 else 0.
+- AND: weights 1 and 1, threshold 2. OR: threshold 1. NOT: weight −1. NAND: weights −1, −1, threshold −1.5.
+- A single perceptron solves linearly separable problems only. XOR needs a hidden layer.
+- MLP: input layer + one or more hidden layers + output layer, fully connected.
+- Feedforward network: $y = f(x;\theta)$, no feedback; the chain length is the depth; the layers that are not the output are hidden layers.
+- XOR in a 2-2-1 MLP: $h_1$ = OR, $h_2$ = AND, $Y$ = $h_1$ and not $h_2$.
+- Representation power: one hidden layer with non-linear activation is enough to approximate any continuous function; depth makes it efficient.
+
+**Conclusion.** A perceptron is one neuron with one straight-line boundary. Stacking neurons in layers gives an MLP, which can learn non-linear patterns such as XOR, and a deep feedforward network learns features step by step from simple to complex. <Cite id="class-dl-chp1" loc="slide 22" />

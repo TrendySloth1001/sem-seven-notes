@@ -1,396 +1,549 @@
 ---
 title: "Loss functions"
 module: 2
-summary: "Loss function 'network kitna galat tha?' ko ek number mein badal deta hai, aur training ka kaam hai us number ko chhota karna. Numbers predict karne ke liye squared error use hota hai aur classes predict karne ke liye cross-entropy."
+summary: "Network ko loss function kyun chahiye, aur class mein padhaaye gaye loss functions: regression ke liye MAE, MSE, MSLE; do classes ke liye binary cross entropy, hinge, squared hinge; kai classes ke liye categorical, sparse categorical cross entropy aur KL divergence, formulas, examples, kab kaun sa use karein, loss vs cost, aur accuracy, precision, recall, F1."
 keyIdeas:
-  - "Loss ek number hai jo batata hai ki prediction sahi answer se kitna door hai. Jitna kam, utna achha."
-  - "Training sirf loss ko kam karti hai, isliye loss hi decide karta hai ki 'good' ka matlab kya hai, aur uska gradient har weight ko batata hai ki kis taraf move karna hai."
-  - "Mean squared error (MSE) squared differences ka average leta hai. Ye regression (numbers predict karna) ke liye sahi hai aur bade errors ko bahut zyada punish karta hai."
-  - "Cross-entropy correct class ko di gayi probability ka minus log hai. Ye classification ke liye sahi hai aur confident galat answers ko bahut zor se punish karta hai."
-  - "Sigmoid ya softmax output ke saath cross-entropy simple gradient p − y deta hai, isliye network bahut galat ho tab bhi learning fast rehti hai; MSE atak sakta hai."
-  - "Output aur loss ko pair mein choose karo: linear + MSE, sigmoid + binary cross-entropy, softmax + categorical cross-entropy."
+  - "A loss function is a mathematical function that measures the difference between the predicted output and the actual output. Ye network ko batata hai ki uski prediction kitni galat hai. Training ka goal loss minimize karna hai: kam loss matlab behtar model."
+  - "A loss function refers to the error of one training example, while a cost function calculates the average error across the entire training set."
+  - "Regression: MAE = (1/n) Σ |y − ŷ| sab errors ko barabar maanta hai; MSE = (1/n) Σ (y − ŷ)² bade errors ko zyada penalize karta hai; MSLE relative error par kaam karta hai."
+  - "Classification: do classes ke liye sigmoid ke saath binary cross entropy BCE = −[y log ŷ + (1 − y) log(1 − ŷ)]; kai classes ke liye softmax ke saath categorical cross entropy; integer labels ho to sparse categorical cross entropy."
+  - "Task ke hisaab se chunein: regression ke liye MSE ya MAE, binary classification ke liye binary cross entropy, multi-class ke liye categorical cross entropy. Cross entropy classification ke liye theek hai kyunki ye confident galat prediction ko bahut zyada penalize karta hai."
 references:
-  - gfdl-ch5
-  - gfdl-ch6
-  - golik2013
-  - nptel-dl
-  - cs231n-nn2-losses
-  - cs231n-linear-classify
-  - d2l-linear-regression-loss
-  - d2l-softmax-regression
-  - gfg-loss-functions-dl
-  - gfg-common-loss-functions
-  - gfg-mse
-  - gfg-cross-entropy
-  - gfg-binary-cross-entropy
-  - mlm-loss-functions
-  - av-loss-functions
-  - ibm-loss-function
-  - keras-losses
-  - keras-probabilistic-losses
-  - keras-regression-losses
-  - pytorch-mseloss
-  - pytorch-crossentropyloss
-  - pytorch-bceloss
-  - pytorch-huberloss
-  - wiki-loss-function
-  - wiki-mse
-  - wiki-mae
-  - wiki-huber-loss
-  - wiki-cross-entropy
-  - wiki-hinge-loss
+  - class-dl-chp2
+  - class-dl-m2
+  - class-dl-m1
 ---
 
-Naye ideas se pehle, jo purane ideas chahiye woh yahan hain. Agar aapko pehle se pata hain, toh next section pe chale jao.
+Ye syllabus <Syl m="2" /> hai, "loss functions: squared error loss, cross entropy; choosing the output function and the loss function".
 
-## Pehle basics
+## Loss function kyun chahiye
 
-- Neural network ek input leta hai (ek photo, numbers ki list) aur ek **prediction** deta hai, jise $\hat{y}$ ("y-hat") likhte hain.
-- Har training example ka **true answer** (yaani **target** ya **label**) bhi humein pata hota hai, jise $y$ likhte hain.
-- Network ke adjust hone wale numbers uske **weights** hain. **Training** ka matlab hai weights ko aise badalna ki prediction true answer ke paas aa jaaye.
-- **Gradient** ek slope hai: ye batata hai ki ek weight ko thoda sa hilane pe error kitna badalta hai. **Gradient descent** har weight ko thoda sa downhill move karta hai, us direction mein jahan error kam hota hai.
-- **Probability** 0 se 1 ke beech ka number hai. Classifier aam taur pe probabilities deta hai, jaise "0.9 ki ye email spam hai".
-- $\ln$ natural logarithm hai. Bas itna yaad rakho: $\ln 1 = 0$, aur jaise-jaise $p$ 0 ke paas jaata hai, $\ln p$ ek bada negative number ban jaata hai.
-
-## Loss function kya hai
+Network prediction kar sakta hai, lekin akeli prediction kaafi nahi. Galat prediction ho to use pata hona chahiye ki galti chhoti thi ya badi, aur weights kitne update karne hain. Error naape bina network khud ko improve nahi kar sakta. <Cite id="class-dl-chp2" loc="slide 26" />
 
 <Box kind="definition">
 
-**Loss function** true answer aur prediction leta hai aur **ek number** return karta hai jo batata hai ki prediction kitna galat hai. Zero matlab perfect; bada number matlab zyada galat.
-
-**Cost function** (ya objective) saare training examples ka average loss hai. Kai books "loss" aur "cost" ko ek hi cheez ke liye use karti hain.
+A **loss function** is a mathematical function that measures the difference between the predicted output and the actual output. It tells the neural network how wrong its prediction is. <Cite id="class-dl-chp2" loc="slide 26" />
 
 </Box>
 
-Darts ka game socho. Bull's-eye sahi answer hai, aapka dart prediction hai, aur loss bull's-eye se doori hai. Jab tak koi naape nahi ki aap kitna door the, aap apna throw improve nahi kar sakte. Loss function wahi measuring tape hai. Ye <Syl m="2" /> mein loss ka topic hai.
+- **Small loss** matlab prediction correct answer ke paas hai. **Large loss** matlab door hai. Training ka goal loss minimize karna hai, taaki network behtar predictions kare. <Cite id="class-dl-chp2" loc="slide 26" />
+- Simple terms mein, loss function ye evaluate karne ka tareeka hai ki aapka algorithm dataset ko kitna achha model kar raha hai. Ye machine learning algorithm ke parameters ka mathematical function hai. Jo naap nahi sakte use improve nahi kar sakte. Kam loss matlab behtar model; zyada loss matlab poor model. <Cite id="class-dl-chp2" loc="slide 27" />
 
-Exam mein English mein likho: "A loss function takes the true answer and the prediction and returns one number that says how wrong the prediction is."
+**DNN mein loss function ka step-by-step role.** <Cite id="class-dl-chp2" loc="slide 26" />
 
-## Training mein loss kaise use hota hai
+1. **Input** network ko diya jaata hai (red, round, 180 g).
+2. **Forward propagation:** network output predict karta hai (185 g).
+3. **Actual output** pata hai (180 g).
+4. **Loss function** error naapta hai: $\lvert 185 - 180 \rvert = 5$ g.
+5. **Backpropagation:** error peeche bheja jaata hai weights update karne ke liye.
+6. **Update weights** taaki loss kam ho.
+7. **Repeat** kai inputs ke liye jab tak loss chhota na ho jaaye.
 
-1. **Forward pass:** network current weights se input leke prediction banata hai.
-2. **Loss compute karo:** loss function prediction ko true answer se compare karke ek number deta hai.
-3. **Backward pass:** backpropagation har weight ke liye nikalta hai ki us weight ne loss mein kitna contribute kiya (uska gradient).
-4. **Update:** gradient descent har weight ko thoda sa us direction mein khiskata hai jahan loss kam ho.
-5. **Repeat** karo bahut saare examples aur epochs tak, jab tak loss girna band na ho jaaye.
+<Img id="class-loss-functions-why" caption="Training mein loss function ke saat steps: prediction 185 g, actual 180 g, loss 5 g, backpropagation, weight update, repeat." />
 
 ```mermaid
-%% caption: Training mein loss kahan baithta hai. Loss prediction aur target ko compare karta hai; uska gradient peeche jaake weights badalta hai; phir loop repeat hota hai.
-flowchart TD
-  A["Input x"] --> B["Network, current weights ke saath"]
-  B --> C["Prediction ŷ"]
-  C --> D["Loss: kitna galat?"]
-  T["True answer y"] --> D
-  D --> E["Backpropagation: har weight ka gradient"]
-  E --> F["Gradient descent: har weight ko thoda downhill move karo"]
-  F --> B
+%% caption: Training loop. Loss wo signal hai jo backpropagation ko batata hai ki weights kaise badalne hain.
+flowchart LR
+  A["Input"] --> B["Prediction (forward pass)"]
+  B --> C["Loss: actual se compare"]
+  C --> D["Backpropagation (gradients)"]
+  D --> E["Weights update"]
+  E --> A
 ```
 
-<Img id="img-dl-n1-training-loop" caption="Training loop: forward pass aur loss, phir gradients aur weight update, tab tak dohraya jaata hai jab tak loss girna band na ho jaaye." />
+## Loss vs cost, aur learning rate
 
-## Loss function kyun important hai (significance)
+Cost (ya loss) function actual $y$ aur predicted $y$ ke beech ka difference, yaani error, naapta hai. Ye model ko feedback deta hai taaki wo parameters adjust karke error minimize kare, steepest descent (negative gradient) ki direction mein tab tak chalte hue jab tak cost zero ke paas na pahunch jaaye. Dono terms synonymous maane jaate hain, lekin ek chhota difference hai: **loss function ek training example ka error hota hai, jabki cost function poore training set ka average error nikaalta hai.** <Cite id="class-dl-m1" loc="p. 28" />
 
-1. **Ye performance naapta hai.** "Network kitna achha hai?" ko ek single number mein badal deta hai jise training ke dauraan track kar sakte hain aur models ke beech compare kar sakte hain.
-2. **Ye learning chalata hai.** Loss ka gradient hi weights ko milne wala sirf ek signal hai. Loss nahi, toh gradient nahi, toh learning nahi.
-3. **Ye decide karta hai ki "good" ka matlab kya hai.** Network bilkul wahi seekhta hai jo loss reward karta hai. Squared error se network average answer predict karta hai; absolute error se beech wala (median) answer. <Cite id="gfdl-ch6" loc="§6.2.1.2" />
-4. **Ye task aur output layer ke hisaab se hona chahiye.** Galat match wala loss bahut chhote gradients de sakta hai, aur network bahut galat ho tab bhi training atak jaati hai. <Cite id="gfdl-ch6" loc="§6.2.1" />
-5. **Ye control karta hai ki kaunse errors sabse zyada matter karte hain,** jaise outliers ya overconfident galtiyon ko sabse zyada punish karna hai ya nahi.
+Ye bhi: cost function = loss (jaise binary cross entropy) + regularization term. <Cite id="class-dl-m2" loc="p. 32" />
 
-**Achha loss kaisa hota hai:** perfect prediction pe zero aur prediction jitna kharab, utna bada; smooth, taaki useful slope mile; output ke type (number ya probability) se matched; aur kuch unusual examples se dominate na ho, jab tak wahi na chahiye.
+**Learning rate** (step size ya alpha bhi kehte hain) wo step ka size hai jo minimum tak pahunchne ke liye liya jaata hai. Ye aam taur par chhoti value hoti hai. High learning rate bade steps deta hai lekin minimum ko overshoot karne ka risk hai. Low learning rate chhote steps deta hai: precision zyada milti hai, lekin iterations ki sankhya efficiency kam kar deti hai, kyunki minimum tak pahunchne mein zyada time aur computation lagta hai. <Cite id="class-dl-m1" loc="p. 29" /> <Cite id="class-dl-chp2" loc="slide 8" />
+
+| | Loss function | Cost function |
+|---|---|---|
+| Kiska error naapta hai | Ek training example | Poora training set (average) |
+| Example | Ek fruit ke liye $\lvert 185 - 180 \rvert = 5$ g | Saare fruits ke losses ka mean |
 
 ## Loss functions ke types
 
+Alag machine learning problems ko alag loss functions chahiye. <Cite id="class-dl-chp2" loc="slide 27" />
+
 ```mermaid
-%% caption: Do families. Syllabus squared error aur cross-entropy ka naam leta hai; baaki common variants hain.
+%% caption: Class ke loss functions, problem ke type ke hisaab se grouped.
 flowchart TD
-  A["Loss functions"] --> R["Regression losses, number predict karo"]
-  A --> C["Classification losses, class predict karo"]
-  R --> R1["Mean squared error"]
-  R --> R2["Mean absolute error"]
-  R --> R3["Huber loss"]
-  C --> C1["Binary cross-entropy"]
-  C --> C2["Categorical cross-entropy"]
-  C --> C3["Hinge loss"]
+  A["Loss functions"] --> B["Regression"]
+  A --> C["Binary classification"]
+  A --> D["Multi-class classification"]
+  B --> B1["MAE"]
+  B --> B2["MSE"]
+  B --> B3["MSLE"]
+  C --> C1["Binary cross entropy (BCE)"]
+  C --> C2["Hinge loss"]
+  C --> C3["Squared hinge loss"]
+  D --> D1["Categorical cross entropy (CCE)"]
+  D --> D2["Sparse categorical cross entropy (SCCE)"]
+  D --> D3["KL divergence"]
 ```
 
-## Regression losses (number predict karna)
+## 1. Regression loss functions
 
-### Mean squared error (squared error loss)
+Regression loss function tab use hota hai jab model continuous numerical values predict kare (fruit ka weight, house price, temperature). Ye predicted value aur actual value ka difference naapta hai. Classification loss functions classes ya probabilities compare karte hain, isliye 180 g aur 185 g jaise numbers ke beech ka error sahi nahi naap sakte. <Cite id="class-dl-chp2" loc="slide 28" />
 
-**Ye kya hai.** Har example ke liye true value aur prediction ka difference lo, use square karo, aur saare examples pe in squares ka average lo.
+### Mean absolute error (MAE)
 
-$$
-\text{MSE} = \frac{1}{n}\sum_{i=1}^{n} (y_i - \hat{y}_i)^2
-$$
+<Box kind="definition">
 
-Yahan $n$ examples ki ginti hai, $y_i$ true value aur $\hat{y}_i$ prediction. Square karne se har error positive ho jaata hai aur bade errors chhote errors se kahin zyada count hote hain: 2 ka error 4 ka padta hai, jabki 0.5 ka error sirf 0.25 ka. Kai books **sum of squared errors** ke aage $\dfrac{1}{2}$ sirf isliye lagati hain kyunki usse slope saaf aata hai.
-
-**Worked example (MSE).**
-
-Given: true house prices (lakhs) $y = [3, 5, 2]$, predictions $\hat{y} = [2.5, 5, 4]$, toh $n = 3$.
-
-To find: mean squared error.
-
-1. Har error nikalo, $y - \hat{y}$: $3 - 2.5 = 0.5$, $5 - 5 = 0$, $2 - 4 = -2$. Kyun: har prediction kitna door hai, ye yahi batata hai.
-2. Har error ko square karo: $0.5^2 = 0.25$, $0^2 = 0$, $(-2)^2 = 4$. Kyun: square karne se minus sign hat jaata hai aur bada error bahut zyada count hota hai.
-3. Squares ko jodo: $0.25 + 0 + 4 = 4.25$. Kyun: ye saare houses ka total squared error hai.
-4. $n = 3$ se divide karo: $4.25 / 3 = 1.4167$. Kyun: MSE average hai, isliye sirf zyada houses hone se nahi badhta.
-
-**MSE ≈ 1.417 lakh²** (unit squared hai kyunki errors square kiye the).
-
-<Box kind="verify">
-
-Average ko house-wise todke dekho: sirf house 3 deta hai $4 / 3 = 1.333$, aur house 1 aur 2 milke dete hain $0.25 / 3 = 0.083$.
-
-$$
-\frac{4}{3} + \frac{0.25}{3} = \frac{4.25}{3} = 1.417
-$$
-
-wahi answer. Ye sabse chhote squared error (0) aur sabse bade (4) ke beech bhi hai, jaisa average ko hona chahiye. Dhyan do ki lagbhag poora loss us ek bade error se aa raha hai.
+**MAE** measures the average absolute difference between the predicted value and the actual value. It ignores the positive (+) and negative (−) signs. $\text{MAE} = \dfrac{1}{n}\sum_{i=1}^{n} \lvert y_i - \hat y_i \rvert$ <Cite id="class-dl-chp2" loc="slide 29" />
 
 </Box>
 
-**Advantages:**
+Plain error kyun nahi? Errors +5 aur −5 ka average 0 aa jaata, jabki dono predictions galat hain, aur isse model ki performance ka galat idea milta. MAE har error ko average se pehle positive bana deta hai, isliye saare errors barabar contribute karte hain. <Cite id="class-dl-chp2" loc="slide 29" />
 
-- Smooth hai, har jagah slope hai jo prediction paas aane pe chhota hota jaata hai, isliye training aaram se settle hoti hai.
-- Bade errors ko zor se punish karta hai, jo sahi hai jab badi galtiyan sach mein bahut kharab hon.
-- **Linear output** ke liye natural loss hai: ise minimize karna maximum likelihood ke barabar hai jab errors bell-shaped (Gaussian) curve follow karein. <Cite id="gfdl-ch6" loc="§6.2.1.1" /> <Cite id="gfdl-ch5" loc="§5.5.1" />
+<Sum>
 
-**Disadvantages:**
+<Given>
 
-- **Outliers ke liye bahut sensitive**: kuch ajeeb values poore model ko apni taraf mod deti hain.
-- Sigmoid ya softmax output wale classifiers ke liye kharab: output saturate hone pe dheere seekhta hai (neeche dekho).
+actual weights 180, 200, 160, 150 g aur predicted weights 185, 195, 170, 145 g.
 
-**Applications:** house prices, temperature, stock values, photo se age predict karna; kai autoencoders ka reconstruction loss.
+</Given>
 
-### Mean absolute error
+<Find>
 
-**Ye kya hai.** Har error ka sign hata do (−2 ban jaata hai 2), phir average lo. Errors apne size ke proportion mein count hote hain: double error ka cost double, chaar guna nahi. Upar wale house example pe MAE $= (0.5 + 0 + 2) / 3 \approx 0.833$ lakh.
+MAE.
 
-**Advantages:** MSE se kahin kam outliers se pareshaan hota hai; padhna aasaan, kyunki answer wali unit mein hi hota hai.
+</Find>
 
-**Disadvantages:** har non-zero error ke liye slope ka size same hai aur zero pe sharp corner hai, isliye last ki fine-tuning kam smooth hoti hai.
+<Steps>
 
-**Applications:** noisy data wala regression, jaise delivery-time ya demand forecasting.
+1. **Absolute errors:** $\lvert 180 - 185 \rvert = 5$, $\lvert 200 - 195 \rvert = 5$, $\lvert 160 - 170 \rvert = 10$, $\lvert 150 - 145 \rvert = 5$.
+2. **Add karo:** $5 + 5 + 10 + 5 = 25$.
+3. **$n = 4$ se average:** $25/4 = 6.25$.
 
-### Huber loss
+</Steps>
 
-**Ye kya hai.** Dono ka mix: chhote errors ke liye squared error jaisa aur bade errors ke liye absolute error jaisa behave karta hai, ek chosen threshold $\delta$ (delta) pe switch karke. Toh zero ke paas MSE jaisa smooth, par outliers ke against MAE jaisa robust. <Cite id="wiki-huber-loss" /> <Cite id="pytorch-huberloss" />
+<Answer>
 
-**Advantages:** dono ka best. **Disadvantage:** ek aur number ($\delta$) choose karna padta hai. **Applications:** kuch outliers wala regression; reinforcement learning (DQN agent).
+MAE $= 6.25$ g. <Cite id="class-dl-chp2" loc="slide 30" />
 
-<Img id="img-dl-n1-huber-vs-mse" caption="Neela squared error hai, hara Huber loss. Zero ke paas dono same hain, par bade errors pe Huber sirf seedhi line mein badhta hai, isliye outliers kam nuksaan karte hain." />
+</Answer>
 
-## Classification losses (class predict karna)
+<Box kind="verify">
 
-### Binary cross-entropy (log loss)
+Dusre order mein absolute errors ka mean: $(10 + 5 + 5 + 5)/4 = 25/4 = 6.25$. Same.
 
-**Ye kya hai.** Yes/no problem mein network sigmoid se $p$ deta hai, yaani "yes" (class 1) ki probability. Binary cross-entropy hai **network ne correct answer ko jo probability di, uska minus log**.
+</Box>
 
-$$
-L = -\bigl[\,y\ln p + (1-y)\ln(1-p)\,\bigr]
-$$
+</Sum>
 
-Yahan $y$ true label hai, 1 ya 0. Ek time pe sirf ek term on hota hai: true answer 1 hai toh loss $-\ln p$; 0 hai toh loss $-\ln(1-p)$.
+<Img id="class-loss-functions-mae-table" caption="4 samples ka MAE example: absolute errors 5, 5, 10, 5 se MAE = 25 / 4 = 6.25 g." />
 
-**Ye kaise behave karta hai** (true label 1):
+**MAE tab use karo** jab numerical values predict karni hon, har error ki importance barabar ho aur simple, interpretable measure chahiye. **Advantages:** samajhna aur calculate karna easy, MSE se kam outlier-sensitive, output data ki same unit mein. **Disadvantages:** chhote aur bade errors ko barabar maanta hai, bade mistakes ko strongly penalize nahi karta, classification ke liye suitable nahi. <Cite id="class-dl-chp2" loc="slide 31" />
 
-| Network says $p$ | Loss | Meaning |
+### Mean squared error (MSE)
+
+<Box kind="definition">
+
+**MSE** is a regression loss function that measures the average of the squared differences between the predicted value and the actual value. By squaring the error, larger errors receive a much higher penalty than smaller errors. $\text{MSE} = \dfrac{1}{n}\sum_{i=1}^{n} (y_i - \hat y_i)^2$ <Cite id="class-dl-chp2" loc="slide 32" />
+
+</Box>
+
+MAE ke baad MSE kyun? MAE har error ko barabar maanta hai, lekin kai applications mein 20 g ka error 2 g ke error se bahut zyada serious hota hai. Errors 2 g aur 20 g ke squares 4 aur 400 hain, isliye bade error ko bahut zyada penalty milti hai aur network use jaldi kam karta hai. <Cite id="class-dl-chp2" loc="slide 32" />
+
+<Img id="class-loss-functions-mse-penalty" caption="MSE har error ko square karta hai: 2 g ka 4 aur 20 g ka 400, isliye bade errors ko bahut zyada penalty." />
+
+<Sum>
+
+<Given>
+
+wahi chaar samples: actual 180, 200, 160, 150 aur predicted 185, 195, 170, 145.
+
+</Given>
+
+<Find>
+
+MSE.
+
+</Find>
+
+<Steps>
+
+1. **Errors:** $-5$, $5$, $-10$, $5$ (actual minus predicted).
+2. **Har ka square:** $25$, $25$, $100$, $25$.
+3. **Add:** $25 + 25 + 100 + 25 = 175$.
+4. **$n = 4$ se average:** $175/4 = 43.75$.
+
+</Steps>
+
+<Answer>
+
+MSE $= 43.75$. <Cite id="class-dl-chp2" loc="slide 33" />
+
+</Answer>
+
+<Box kind="verify">
+
+Bada error 10, total $175$ mein se $100$ deta hai, aadhe se zyada, jabki wo 4 mein se sirf 1 sample hai. Isse dikhta hai MSE bade errors ko kaise punish karta hai.
+
+</Box>
+
+</Sum>
+
+<Img id="class-loss-functions-mse-table" caption="4 samples ka MSE example: squared errors 25, 25, 100, 25 se MSE = 175 / 4 = 43.75." />
+
+**MSE tab use karo** continuous values ke liye jab bade prediction errors ko zyada penalize karna ho (house price, medical measurements, temperature). **Advantages:** bade errors ko strongly penalize karta hai, smooth aur gradient descent se optimize karna easy. **Disadvantages:** outliers ke prati sensitive, aur output original unit mein nahi hota kyunki error squared hai. <Cite id="class-dl-chp2" loc="slide 34" />
+
+<Img id="class-loss-functions-mae-vs-mse" caption="MAE vs MSE: MAE har error ko barabar importance deta hai (−10 se 10), MSE bade errors ko zyada penalty deta hai (−10 se 100)." />
+
+### Mean squared logarithmic error (MSLE)
+
+<Box kind="definition">
+
+**MSLE** is a regression loss function that measures the error after applying a logarithm to both the predicted and actual values. It focuses on the **relative** difference rather than only the absolute difference. $\text{MSLE} = \dfrac{1}{n}\sum_{i=1}^{n} \big(\log(1 + y_i) - \log(1 + \hat y_i)\big)^2$ <Cite id="class-dl-chp2" loc="slide 35" />
+
+</Box>
+
+Kyun? Do farms ka error 10 fruits hai: Farm A actual 100, predicted 110; Farm B actual 1000, predicted 1010. Same error Farm A ke liye significant hai aur Farm B ke liye bahut chhota. Logs ke saath difference Farm A ke liye $\log(101) - \log(111) \approx -0.095$ hai lekin Farm B ke liye sirf lagbhag $-0.010$. Hum 1 add karte hain kyunki $\log(0)$ defined nahi hai. <Cite id="class-dl-chp2" loc="slide 35" />
+
+<Img id="class-loss-functions-msle-farms" caption="Same error 10 fruits, lekin Farm A (100 fruits) ke liye Farm B (1000 fruits) se kahin zyada matter karta hai. MSLE relative difference dekhta hai." />
+
+**MSLE tab use karo** jab target values positive hon aur range bahut badi ho, aur relative error absolute error se zyada important ho (population, sales, website visitors). **Use mat karo** negative target values ke saath ya jab exact absolute error important ho. <Cite id="class-dl-chp2" loc="slide 37" />
+
+| | MAE | MSE | MSLE |
+|---|---|---|---|
+| Uses | Absolute difference | Squared difference | Values ka log, phir squared difference |
+| Focus | Saare errors barabar | Bade errors ko zyada penalty | Relative (percentage) error |
+| Bade values ke prati sensitive | Kam | Bahut | Kam |
+| Negative values handle kare | Yes | Yes | No |
+
+## 2. Binary classification loss functions
+
+Do classes mein network probability deta hai (jaise Apple = 0.85). MAE, MSE aur MSLE numbers ke liye bane hain, class predictions ke liye nahi, isliye aisa loss function chahiye jo predicted probability ko actual class se compare kare. <Cite id="class-dl-chp2" loc="slide 38" />
+
+### Binary cross entropy (BCE, log loss)
+
+<Box kind="definition">
+
+**Binary Cross Entropy (BCE)** is a loss function used to measure the error in binary classification problems. It compares the predicted probability with the actual class. $\text{BCE} = -\big(y \log(\hat y) + (1 - y)\log(1 - \hat y)\big)$, jahan $y$ actual class (0 ya 1) aur $\hat y$ predicted probability (0 se 1) hai. <Cite id="class-dl-chp2" loc="slide 40" />
+
+</Box>
+
+- $y = 1$ ho to loss $-\log(\hat y)$ hai, isliye high $\hat y$ se low loss. $y = 0$ ho to loss $-\log(1 - \hat y)$ hai, isliye low $\hat y$ se low loss. <Cite id="class-dl-chp2" loc="slide 40" />
+- Correct prediction se small loss; wrong prediction se large loss. Network loss se weights update karta hai.
+- Sigmoid output layer ke saath use hota hai (apple ya not apple, spam ya not spam, disease ya no disease, pass ya fail, fraud ya not fraud). Regression ya multi-class ke liye **use mat karo**. <Cite id="class-dl-chp2" loc="slide 40" />
+
+<Img id="class-loss-functions-bce-intuition" caption="BCE formula, symbols aur intuition: y = 1 par high ŷ se low loss, y = 0 par low ŷ se low loss." />
+
+<Img id="class-loss-functions-bce-table" caption="Good vs bad predictions: correct aur confident se very small loss, unsure se medium loss, wrong aur confident se very large loss." />
+
+<Sum>
+
+<Given>
+
+ek sample jiska actual class $y = 1$. Case A: predicted probability $\hat y = 0.95$. Case B: $\hat y = 0.10$. (Natural log.)
+
+</Given>
+
+<Find>
+
+har case mein BCE.
+
+</Find>
+
+<Steps>
+
+1. **$y = 1$ ke liye** loss $-\ln(\hat y)$ reh jaata hai kyunki $(1 - y) = 0$.
+2. **Case A:** $-\ln(0.95) = 0.0513$.
+3. **Case B:** $-\ln(0.10) = 2.3026$.
+
+</Steps>
+
+<Answer>
+
+Case A loss $= 0.051$ (very small, correct aur confident). Case B loss $= 2.303$ (very large, wrong aur confident). <Cite id="class-dl-chp2" loc="slide 39" />
+
+</Answer>
+
+<Box kind="verify">
+
+$e^{-0.0513} = 0.950$ aur $e^{-2.3026} = 0.100$, isliye dono logs sahi hain. Ranking teacher ki table se match karti hai: 0.95 se very small loss, 0.10 se very large loss.
+
+</Box>
+
+</Sum>
+
+### Hinge loss aur squared hinge loss
+
+**Hinge loss** mainly Support Vector Machines (SVMs) ke saath use hota hai. Labels $+1$ aur $-1$ hote hain, $\hat y$ real-valued score hai (probability nahi), aur $\text{Loss} = \max(0,\ 1 - y\hat y)$. Large margin wali correct prediction ($y\hat y > 1$) ka loss 0; wrong ya boundary ke paas wali prediction ka loss zyada. Ye do classes ke beech clear margin ko badhava deta hai aur probabilities nahi deta. <Cite id="class-dl-chp2" loc="slide 41" /> <Cite id="class-dl-chp2" loc="slide 42" />
+
+**Squared hinge loss** improved version hai: $\text{Loss} = \big(\max(0,\ 1 - y\hat y)\big)^2$. Ye hinge error ko square karta hai, isliye bade mistakes ko bahut zyada penalty milti hai. <Cite id="class-dl-chp2" loc="slide 43" />
+
+<Img id="class-loss-functions-hinge-compare" caption="Hinge vs squared hinge: margin 0.5 par 0.5 aur 0.25; margin −1 par 2 aur 4; margin −2 par 3 aur 9." />
+
+| Margin $y\hat y$ | Hinge loss | Squared hinge loss |
 |---|---|---|
-| 0.9 | 0.105 | Confident aur sahi: chhota loss |
-| 0.5 | 0.693 | Unsure: medium loss |
-| 0.1 | 2.303 | Confident aur galat: bada loss |
+| 2 (good) | 0 | 0 |
+| 1 (on boundary) | 0 | 0 |
+| 0.5 (small margin) | 0.5 | 0.25 |
+| −1 (wrong) | 2 | 4 |
+| −2 (very wrong) | 3 | 9 |
 
-<Img id="img-dl-n1-log-loss" caption="True label 1 ke liye cross-entropy, network ki di hui probability p ke against. p 1 ke paas ho to loss 0 ke paas hai, aur p 0 ki taraf jaye to loss tezi se badhta hai." />
-
-Jaise $p$ 0 ki taraf jaata hai, loss bina limit ke badhta hai, isliye confident galat answer ko bahut zor se punish kiya jaata hai. Weather forecaster socho: jisne baarish wale din "100% sunny" bola, uski credibility "60% sunny" bolne wale se kahin zyada girni chahiye.
-
-**Worked example (binary cross-entropy).**
-
-Given: network do emails ke liye $p = 0.9$ ("90% spam") kehta hai. Email A sach mein spam hai ($y = 1$); email B spam nahi hai ($y = 0$).
-
-To find: har email ka loss.
-
-1. Email A, $y = 1$: sirf pehla term on hai, toh $L = -\ln p = -\ln 0.9$. Kyun: correct answer (spam) ko di gayi probability 0.9 hai.
-2. Calculate karo: $\ln 0.9 = -0.105$, toh $L_A = 0.105$. Kyun: minus sign negative log ko positive loss bana deta hai.
-3. Email B, $y = 0$: sirf doosra term on hai, toh $L = -\ln(1 - p) = -\ln 0.1$. Kyun: correct answer (not spam) ko sirf $1 - 0.9 = 0.1$ probability mili.
-4. Calculate karo: $\ln 0.1 = -2.303$, toh $L_B = 2.303$. Kyun: minus sign negative log ko positive loss bana deta hai.
-
-**Loss A ≈ 0.105, loss B ≈ 2.303** (koi unit nahi). Wahi confident "0.9" galat hone pe lagbhag 22 guna zyada mehnga padta hai.
-
-<Box kind="verify">
-
-Email B ne correct class ko 0.1 probability di, toh uska loss table ki $p = 0.1$ wali row ke barabar hona chahiye: 2.303. Hai. Ulta chalke, $e^{-0.105} \approx 0.900$, jo wahi probability wapas deta hai jisse shuru kiya tha.
-
-</Box>
-
-### Categorical cross-entropy (multi-class)
-
-**Ye kya hai.** Wahi idea $K$ classes ke liye. Network har class ke liye probability deta hai (softmax se), aur true label **one-hot** likha jaata hai: correct class ke liye 1 aur baaki ke liye 0. Ek ke alawa saare terms gayab ho jaate hain, toh loss bas correct class ko di gayi probability ka minus log hai.
-
-$$
-L = -\sum_{k=1}^{K} y_k \ln p_k = -\ln p_{\text{correct}}
-$$
-
-Binary cross-entropy do classes wala special case hai. Dono maximum likelihood se aate hain: cross-entropy minimize karne se correct labels ki probability jitni ho sake utni badi hoti hai. <Cite id="gfdl-ch6" loc="§6.2.1.1" /> <Cite id="d2l-softmax-regression" />
-
-**Worked example (categorical cross-entropy).**
-
-Given: teen classes (cat, dog, bird). Softmax output hai $p = [0.2, 0.7, 0.1]$. Photo sach mein dog ki hai, toh one-hot label $y = [0, 1, 0]$.
-
-To find: categorical cross-entropy loss.
-
-1. Har label ko uski probability ke log se multiply karo: $0 \times \ln 0.2 = 0$, $1 \times \ln 0.7 = \ln 0.7$, $0 \times \ln 0.1 = 0$. Kyun: one-hot label correct class ke alawa har class ko off kar deta hai.
-2. Inhe jodo aur aage minus lagao: $L = -\ln 0.7$. Kyun: formula yahi hai, aur sirf dog wala term bacha.
-3. Calculate karo: $\ln 0.7 = -0.357$, toh $L = 0.357$. Kyun: minus sign negative log ko positive loss bana deta hai.
-
-**Loss ≈ 0.357** (koi unit nahi).
-
-<Box kind="verify">
-
-Probabilities ka total $0.2 + 0.7 + 0.1 = 1$ hai, toh softmax output valid hai. Ulta chalke, $e^{-0.357} \approx 0.700$, jo dog ki probability hai. Aur 0.7, 0.5 aur 0.9 ke beech hai, toh loss upar wali table ke 0.693 aur 0.105 ke beech hona chahiye; 0.357 hai.
-
-</Box>
-
-**Cross-entropy ke advantages:**
-
-- Jab network confidently galat ho, theek tab strong correction, isliye training fast hoti hai.
-- Probability outputs (sigmoid, softmax) ke saath naturally kaam karta hai aur achhi probabilities deta hai.
-
-**Disadvantages:**
-
-- **Mislabelled** examples isse kheench sakte hain, kyunki woh confident galtiyon jaise dikhte hain.
-- Probabilities strictly 0 aur 1 ke beech chahiye; software zero ka log lene se bachne ke liye chhote safeguards lagata hai.
-
-**Applications:** spam filters aur medical yes/no tests (binary); digit aur image recognition, aur language models mein next-word prediction (categorical).
-
-### Hinge loss (completeness ke liye)
-
-Support vector machines aur margin classifiers mein use hota hai. Ye zero loss tabhi deta hai jab correct class **safe margin se** jeete, sahi par bahut kareeb ho toh chhota loss, aur galat ho toh badhta hua loss. Ye probabilities nahi deta. <Cite id="cs231n-linear-classify" /> <Cite id="wiki-hinge-loss" />
-
-<Img id="img-dl-n1-hinge-vs-01" caption="Hinge loss (neela) score 1 pe 0 tak seedhi line mein girta hai, yaani use safe margin chahiye. Zero-one loss (hara) sirf sahi ya galat ginta hai." />
-
-<Figure caption="Ek example ka loss jiska true label 1 hai, network ki di gayi probability p ke against. Squared error kabhi 1 se upar nahi jaata. Cross-entropy p ke 0 ki taraf jaane pe tezi se upar jaata hai, isliye confident galat answer bahut mehnga padta hai.">
-  <CurvePlot curves="mse-loss,ce-loss" x="0,1" y="0,5" xLabel="predicted probability p of the correct class" yLabel="loss" />
-</Figure>
-
-## Classification ke liye MSE versus cross-entropy
-
-Sigmoid output wale classifier ke liye MSE hi kyun na use karein? Jawab correction signal ki strength mein hai.
-
-1. Sigmoid output **flat** (saturate) ho jaata hai jab network bahut sure ho, tab bhi jab woh **galat** answer ke baare mein bahut sure ho, jaise correct class ko lagbhag 0 probability dena.
-2. **MSE** ke saath, weights tak pahunchne wala gradient sigmoid ke slope se multiply hota hai. Flat region mein woh slope lagbhag zero hai, toh network bahut galat hote hue bhi mushkil se badalta hai.
-3. **Cross-entropy** ke saath, logarithm sigmoid ke andar wale exponential ko cancel kar deta hai. Sigmoid ke input ke respect mein gradient bas "predicted probability minus true label", $p - y$, ban jaata hai, jo network bahut galat ho tab bada hota hai. <Cite id="gfdl-ch6" loc="§6.2.2.2" />
-4. Toh cross-entropy theek us waqt fast seekhta rehta hai jab network ko correction ki sabse zyada zaroorat hai, jabki MSE atak jaata hai.
-
-<Img id="img-dl-n1-bce-vs-mse" caption="True label 1 ke liye loss. Binary cross-entropy (laal) output galat hone pe tezi se badhta hai, jabki mean squared error (neela) chhota rehta hai, isliye uska push kamzor hota hai." />
-
-**Worked example: spam filter numbers mein.** Justification mein jo "suitable example" maanga jaata hai, woh yahi hai. "Push" sigmoid ke input ke respect mein gradient hai; bada push matlab weights mein bada correction.
-
-Given: ek email jo sach mein spam hai ($y = 1$); sigmoid output use $p = 0.02$ deta hai. MSE ke liye ek example ka loss $(y - p)^2$ lo.
-
-To find: har loss function ke under loss aur push.
-
-1. Cross-entropy loss: $-\ln 0.02 = 3.912$. Kyun: correct class ko di gayi probability ka minus log.
-2. MSE loss: $(1 - 0.02)^2 = 0.98^2 = 0.9604$. Kyun: target se squared doori; probability ke liye ye kabhi 1 se zyada nahi hota.
-3. Cross-entropy push: $p - y = 0.02 - 1 = -0.98$. Kyun: sigmoid output ke saath cross-entropy gradient bas prediction minus label hai.
-4. Is point pe sigmoid slope: $p(1 - p) = 0.02 \times 0.98 = 0.0196$. Kyun: MSE ka gradient is slope se hokar jaata hai, aur ye bahut chhota hai kyunki yahan sigmoid flat hai.
-5. MSE push: $(y - p)^2$ ka slope $2(p - y) = -1.96$ hai; ise sigmoid slope se multiply karo: $-1.96 \times 0.0196 = -0.0384$. Kyun: chain rule dono slopes ko multiply karta hai.
-6. Compare karo: $0.98 / 0.0384 \approx 25.5$. Kyun: ye batata hai cross-entropy kitne guna zyada zor se push karta hai.
-
-**Cross-entropy: loss ≈ 3.91, push = −0.98. MSE: loss ≈ 0.96, push ≈ −0.038. Cross-entropy lagbhag 25 guna zyada zor se push karta hai.**
-
-<Box kind="verify">
-
-Numbers daalne se pehle dono pushes ko divide karo:
-
-$$
-\frac{p - y}{2(p - y)\,p(1 - p)} = \frac{1}{2\,p(1 - p)} = \frac{1}{2 \times 0.0196} = \frac{1}{0.0392} \approx 25.5
-$$
-
-wahi ratio. Dono pushes negative hain, jo sahi bolta hai "score badhao" taaki $p$ upar 1 ki taraf jaaye. Aur cross-entropy loss match karta hai
-
-$$
-\ln 0.02 = \ln 2 - \ln 100 = 0.693 - 4.605 = -3.912
-$$
-
-se.
-
-</Box>
-
-Goodfellow et al. kehte hain ki jab output unit saturate hota hai, toh gradient-based training mein MSE aur MAE "often lead to poor results", aur ye ek reason hai ki cross-entropy zyada popular hai. <Cite id="gfdl-ch6" loc="§6.2.1.2" /> Golik et al. speech recognition networks ke liye dono ko detail mein compare karte hain. <Cite id="golik2013" />
-
-| | Mean squared error | Cross-entropy |
-|---|---|---|
-| Idea | Target se average squared doori | Correct class ki probability ka minus log |
-| Used for | Regression: numbers predict karna | Classification: classes predict karna |
-| Paired output layer | Linear | Sigmoid (binary) ya softmax (multi-class) |
-| Prediction is | Koi bhi real number | 0 aur 1 ke beech probability |
-| Size of loss | Error ke square ke saath badhta hai; probabilities ke liye max 1 | Unbounded: confident galat answers pe bahut bada |
-| Gradient with a sigmoid output | Sigmoid ke slope se multiply: saturate hone pe tiny | $p - y$: bahut galat hone pe bada rehta hai |
-| Effect on training | Classifiers ke liye slow ya atki hui learning | Classifiers ke liye fast, steady training |
-| Probability meaning | Gaussian noise ke under maximum likelihood | Class labels ke liye maximum likelihood |
-| Sensitive to | Outliers (squared) | Overconfident galtiyan aur galat labels (log) |
-
-<Box kind="exam">
-
-**Cross-entropy MSE se kab zyada appropriate hai?** Jab bhi output ek **class** ho aur network sigmoid ya softmax se **probabilities** de. Example: spam filter ek email ko, jo sach mein spam hai, sirf 0.02 probability deta hai. Cross-entropy bada loss (lagbhag 3.9) aur correct karne ka strong push deta hai; MSE 1 se kam loss deta hai aur, kyunki wahan sigmoid flat hai, lagbhag 25 guna kamzor push, toh filter mushkil se seekhega.
-
-**MSE kab sahi hai?** Jab output ek **number** ho, jaise kal ka temperature ya house price, linear output layer ke saath.
-
-Exam mein English mein likho: "Cross-entropy is more appropriate than MSE whenever the output is a class and the network outputs probabilities through sigmoid or softmax."
-
-</Box>
-
-## Output layer aur loss saath mein choose karna
-
-| Task | Output layer | Loss | Keras name | PyTorch name |
-|---|---|---|---|---|
-| Number predict karo (regression) | Linear | MSE (ya MAE, Huber) | `MeanSquaredError` | `nn.MSELoss` |
-| Yes ya no (binary) | 1 sigmoid unit | Binary cross-entropy | `BinaryCrossentropy` | `nn.BCELoss` |
-| $K$ classes mein se ek (multi-class) | $K$ softmax units | Categorical cross-entropy | `CategoricalCrossentropy` | `nn.CrossEntropyLoss` |
-| Kai yes/no tags (multi-label) | Har tag ke liye 1 sigmoid | Har tag pe binary cross-entropy | `BinaryCrossentropy` | `nn.BCELoss` |
-
-```mermaid
-%% caption: Output aur loss ko ek pair ki tarah choose karna. Har output layer ka ek matching loss hai.
-flowchart LR
-  A["Answer kis type ka hai"] --> B["Ek number"]
-  A --> C["Yes ya no"]
-  A --> D["K classes mein se ek"]
-  B --> B1["Linear output + MSE"]
-  C --> C1["Sigmoid output + binary cross-entropy"]
-  D --> D1["Softmax output + categorical cross-entropy"]
-```
-
-<Cite id="keras-losses" /> <Cite id="pytorch-crossentropyloss" />
+<Cite id="class-dl-chp2" loc="slide 44" />
 
 <Box kind="pitfall">
 
-- PyTorch ka `nn.CrossEntropyLoss` **raw scores (logits)** expect karta hai, softmax probabilities nahi: softmax step woh khud lagata hai. Usse pehle softmax layer lagana ek common bug hai. Keras mein yahi choice `from_logits` option hai. <Cite id="pytorch-crossentropyloss" /> <Cite id="keras-probabilistic-losses" />
-- In notes mein cross-entropy natural log use karta hai. Doosra base use karne se loss bas ek constant se scale hota hai.
-- Loss ko accuracy se confuse mat karo. Accuracy sahi answers ginti hai; woh smooth nahi hai, isliye usse gradients compute nahi ho sakte.
+Teacher ki overview slide mein MAE, MSE, MSLE aur hinge loss ke average ke aage minus sign likha hai, jaise $L = -\frac{1}{n}\sum \lvert y_i - \hat y_i \rvert$. Ye typing error hai: in losses mein leading minus nahi hota (leading minus sirf cross entropy mein hota hai). Is note ke formulas use karo. <Cite id="class-dl-chp2" loc="slide 27" />
 
 </Box>
 
-## Ye kahan poocha gaya
+## 3. Multi-class classification loss functions
 
-| If the question says | What to write | Seen as |
+Binary losses sirf do classes ke liye hain. Do se zyada classes ho to network ek saath kai classes ki probabilities predict karta hai (Apple 0.10, Banana 0.15, Orange 0.65, Mango 0.10). Loss check karta hai ki sahi class ki probability sabse high hai ya nahi: sahi class highest to small loss, koi aur class highest to large loss. Output layer softmax hai. <Cite id="class-dl-chp2" loc="slide 45" />
+
+### Categorical cross entropy (CCE)
+
+<Box kind="definition">
+
+**Categorical Cross Entropy (CCE)** is a loss function used for multi-class classification. It compares the predicted probabilities with the actual class and measures the prediction error. $\text{CCE} = -\sum_{i=1}^{n} y_i \log(\hat y_i)$, jahan $y_i$ one-hot actual class hai (sahi class ke liye 1, baaki 0) aur $\hat y_i$ softmax se predicted probability. <Cite id="class-dl-chp2" loc="slide 46" /> <Cite id="class-dl-chp2" loc="slide 47" />
+
+</Box>
+
+<Sum>
+
+<Given>
+
+classes Apple, Banana, Orange, Mango. Actual fruit Orange hai, isliye $y = (0, 0, 1, 0)$. Softmax Case A mein $\hat y = (0.05, 0.10, 0.80, 0.05)$ aur Case B mein $(0.70, 0.10, 0.10, 0.10)$ predict karta hai.
+
+</Given>
+
+<Find>
+
+har case mein CCE.
+
+</Find>
+
+<Steps>
+
+1. **Sum mein sirf sahi class bachti hai**, kyunki baaki ke liye $y_i = 0$: $\text{CCE} = -\ln(\hat y_{\text{Orange}})$.
+2. **Case A:** $-\ln(0.80) = 0.223$.
+3. **Case B:** $-\ln(0.10) = 2.303$.
+
+</Steps>
+
+<Answer>
+
+Case A $= 0.223$ (small: Orange ki probability sabse high). Case B $= 2.303$ (large: Apple galat tareeke se highest hai). <Cite id="class-dl-chp2" loc="slide 46" />
+
+</Answer>
+
+<Box kind="verify">
+
+$e^{-0.223} = 0.800$ aur $e^{-2.303} = 0.100$. Sahi class ki probability badhne par loss girta hai.
+
+</Box>
+
+</Sum>
+
+<Img id="class-loss-functions-cce-example" caption="CCE formula, symbols aur example: actual Orange 0, 0, 1, 0; predicted 0.05, 0.10, 0.80, 0.05; loss small." />
+
+**CCE tab use karo** jab multi-class classification ho, softmax output layer ho aur one-hot labels hon. Regression, binary classification ya integer labels ke liye **use mat karo**. <Cite id="class-dl-chp2" loc="slide 47" />
+
+### Sparse categorical cross entropy (SCCE)
+
+**SCCE** multi-class classification ka loss function hai jo one-hot encoded labels ki jagah **integer labels** leta hai (Apple = 0, Banana = 1, Orange = 2, Mango = 3). Mathematical concept CCE jaisa hi hai; difference sirf label representation ka hai. Bahut classes hon to ye memory bachata hai aur training simple karta hai. <Cite id="class-dl-chp2" loc="slide 48" /> <Cite id="class-dl-chp2" loc="slide 49" />
+
+<Img id="class-loss-functions-sce-labels" caption="SCCE one-hot vectors ki jagah integer labels use karta hai, isse memory bachti hai." />
+
+### KL divergence
+
+**Kullback-Leibler (KL) divergence** naapta hai ki ek probability distribution dusre se kitna alag hai. Similar distributions ka KL divergence small aur alag distributions ka large hota hai. Ye sirf sahi class nahi, poori distribution compare karta hai, aur knowledge distillation, variational autoencoders, generative models aur language models mein use hota hai. $\text{KL}(P \,\|\, Q) = \sum_x P(x)\log\dfrac{P(x)}{Q(x)}$. <Cite id="class-dl-chp2" loc="slide 50" /> <Cite id="class-dl-chp2" loc="slide 27" />
+
+<Img id="class-loss-functions-kl-example" caption="KL divergence actual distribution P ko predicted distribution Q se compare karta hai." />
+
+<Sum>
+
+<Given>
+
+actual $P = (0.70, 0.20, 0.10)$ aur predicted $Q = (0.60, 0.25, 0.15)$ apple, banana, orange ke liye.
+
+</Given>
+
+<Find>
+
+$\text{KL}(P \,\|\, Q)$.
+
+</Find>
+
+<Steps>
+
+1. **Apple:** $0.70 \ln(0.70/0.60) = 0.70 \times 0.1542 = 0.1079$.
+2. **Banana:** $0.20 \ln(0.20/0.25) = 0.20 \times (-0.2231) = -0.0446$.
+3. **Orange:** $0.10 \ln(0.10/0.15) = 0.10 \times (-0.4055) = -0.0405$.
+4. **Add:** $0.1079 - 0.0446 - 0.0405 = 0.0228$.
+
+</Steps>
+
+<Answer>
+
+$\text{KL}(P \,\|\, Q) \approx 0.023$, small, kyunki dono distributions paas hain.
+
+</Answer>
+
+<Box kind="verify">
+
+KL divergence kabhi negative nahi hota aur sirf $P = Q$ par 0 hota hai. Hume chhota positive number mila, jaisa paas wali distributions ke liye expected hai.
+
+</Box>
+
+</Sum>
+
+<Box kind="pitfall">
+
+Teacher ki detail slide 51 mein formula $\sum_x P(x)\log\frac{Q(x)}{P(x)}$ likha hai. Log ke andar $Q/P$ hone se sum negative aa jaata. Sahi form $P(x)\log\frac{P(x)}{Q(x)}$ hai, jaisa overview slide mein hai. <Cite id="class-dl-chp2" loc="slide 51" />
+
+</Box>
+
+## Squared error vs cross entropy
+
+Class notes dono main losses ko seedha compare karte hain. <Cite id="class-dl-m2" loc="p. 14" />
+
+| | Squared error loss (MSE) | Cross entropy loss |
 |---|---|---|
-| "Significance of loss functions; different types while training a network" | Definition, darts analogy, training-loop steps aur diagram, significance list; phir MSE, MAE, Huber, binary aur categorical cross-entropy (aur hinge), har ek ka kaam, advantages, disadvantages aur use (formulas sirf squared error aur cross-entropy ke liye); output-and-loss table | <PYQ id="2024-12/q5a" /> |
-| "Role of a loss function; compare MSE and cross-entropy; when is cross-entropy better" | Training mein role; har loss kya karta hai, formula ke saath; comparison table; saturated sigmoid ke saath MSE kyun atakta hai aur cross-entropy kyun nahi, words mein; spam-filter justification | <PYQ id="2025-05/q5a" /> |
+| Use hota hai | Regression (continuous target values) | Classification (categorical target values) |
+| Formula | $L = \frac{1}{n}\sum (y_i - \hat y_i)^2$ | $L = -\frac{1}{n}\sum [y_i \log\hat y_i + (1 - y_i)\log(1 - \hat y_i)]$ |
+| Output range | Koi bhi real value | 0 se 1 (probabilities) |
+| Output layer | Linear activation | Sigmoid (binary) ya softmax (multi-class) |
+| Penalty | Quadratic: chhote errors ke liye kam sensitive | Logarithmic: confident galat prediction par bahut high penalty |
+| Kab | Numbers predict karne hon (house price) | Classes predict karni hon (cat ya dog) |
 
-## Conclusion
+<Img id="class-loss-functions-mse-ce-compare-mse" caption="Squared error loss: parabola curve aur true value 3 ke liye example squared errors." />
 
-Loss function network ka measuring tape aur uska akela teacher hai: answer number ho toh MSE choose karo, aur class ho toh cross-entropy.
+<Img id="class-loss-functions-ce-curve" caption="Cross entropy loss: y = 1 aur y = 0 ke liye curve, aur example table (true 1 ke saath 0.9 se 0.105; true 1 ke saath 0.1 se 2.303)." />
 
-Exam mein English mein likho: "The loss function is the network's measuring tape: use MSE when the answer is a number and cross-entropy when the answer is a class."
+**Cross entropy MSE se kab zyada appropriate hai?** Jab task classification ho aur network probabilities (sigmoid ya softmax) de. Cross entropy 0 aur 1 ke beech ki probabilities ke saath kaam karta hai, confident galat predictions ko bahut zyada penalize karta hai, aur better gradient behavior se faster convergence deta hai. MSE continuous outputs ke liye theek hai. <Cite id="class-dl-m2" loc="p. 14" />
+
+## Output function aur loss ko saath chunna
+
+Output function final prediction banata hai (model kya kehta hai); loss function naapta hai ki prediction kitni galat hai. Dono match hone chahiye: sigmoid ke saath binary cross entropy aur softmax ke saath categorical cross entropy. <Cite id="class-dl-chp2" loc="slide 52" /> <Cite id="class-dl-chp2" loc="slide 53" />
+
+<Img id="class-loss-functions-choose-guide" caption="Quick guide: regression mein linear output ke saath MSE ya MAE; binary mein sigmoid ke saath binary cross entropy; multi-class mein softmax ke saath categorical cross entropy." />
+
+| Problem type | Output layer | Loss function |
+|---|---|---|
+| Regression | Linear | MAE, MSE ya MSLE |
+| Binary classification | Sigmoid | Binary cross entropy |
+| Binary classification (SVM) | Decision score (sigmoid nahi) | Hinge ya squared hinge |
+| Multi-class (one-hot labels) | Softmax | Categorical cross entropy |
+| Multi-class (integer labels) | Softmax | Sparse categorical cross entropy |
+| Probability distribution comparison | Softmax | KL divergence |
+
+<Cite id="class-dl-chp2" loc="slide 54" />
+
+```mermaid
+%% caption: Problem ke type se loss function kaise chunein.
+flowchart TD
+  A["Network kya predict karta hai?"] --> B["Ek number"]
+  A --> C["Do classes mein se ek"]
+  A --> D["Kai classes mein se ek"]
+  B --> B1["Linear output: MSE, MAE, MSLE"]
+  C --> C1["Sigmoid output: binary cross entropy"]
+  D --> D1["Softmax output: categorical cross entropy"]
+  D --> D2["Integer labels: sparse categorical cross entropy"]
+```
+
+<Img id="class-loss-functions-choose-flow" caption="Loss function kaise chunein aur simple training flow: input, model, prediction, actual, loss, update weights, repeat." />
+
+## Classifier ko naapna: accuracy, precision, recall aur F1
+
+Loss ke alawa classifier ko **model accuracy measurement tools** se bhi judge karte hain. <Cite id="class-dl-m2" loc="p. 15" />
+
+- **True Positives (TP):** positive examples jo positive label hue. **False Positives (FP):** negative examples jo positive label hue. **True Negatives (TN):** negative examples jo negative label hue. **False Negatives (FN):** positive examples jo negative label hue.
+- **Confusion matrix:** TP, FP, TN aur FN values wali matrix.
+- **Accuracy:** total results mein sahi results ka proportion. $\text{Accuracy} = \dfrac{TP + TN}{TP + FP + TN + FN}$.
+- **Precision** batata hai ki selected objects mein se kitne sahi the: $\dfrac{TP}{TP + FP}$. **Recall** batata hai ki sahi objects mein se kitne select hue: $\dfrac{TP}{TP + FN}$.
+- **F1 score** precision aur recall ka harmonic average hai: $F1 = 2\cdot\dfrac{\text{precision}\cdot\text{recall}}{\text{precision} + \text{recall}}$. F1 0 matlab worst aur 1 matlab best. <Cite id="class-dl-m2" loc="p. 16" />
+
+<Img id="class-loss-functions-f1-formulas" caption="Precision = TP / (TP + FP) aur recall = TP / (TP + FN)." />
+
+<Img id="class-loss-functions-f1-score" caption="F1 score = 2 × precision × recall / (precision + recall)." />
+
+| | Classified positive | Classified negative |
+|---|---|---|
+| Positive class | TP | FN |
+| Negative class | FP | TN |
+
+**Accuracy gumraah kyun kar sakti hai.** Teacher ke example mein TP = 0, FN = 25, FP = 0, TN = 125 hai. Accuracy $= 125/150 = 83\%$, phir bhi har positive example galat classify hua, isliye model bahut bura hai. Recall $0/25 = 0$ hai. Precision $0/0$ hai, jo undefined hai (ise 0 maante hain), aur F1 score 0 hai. <Cite id="class-dl-m2" loc="p. 16" />
+
+<Box kind="pitfall">
+
+Teacher us example ke liye "both precision and recall are 0.0" likhte hain. Recall sach mein 0 hai, lekin precision $0/(0+0)$ hai, jo undefined hai; jab kuch bhi positive predict na hua ho tab usual convention mein ise 0 maante hain. <Cite id="class-dl-m2" loc="p. 16" />
+
+</Box>
+
+<Sum>
+
+<Given>
+
+class ka example <Cite id="class-dl-m2" loc="p. 17" />: y_true = 0 1 0 0 1 0 1 1 1 aur y_pred = 0 1 1 1 0 0 1 1 0.
+
+</Given>
+
+<Find>
+
+accuracy, precision, recall aur F1.
+
+</Find>
+
+<Steps>
+
+1. **Pair by pair compare karo (true, predicted):** (0,0) TN, (1,1) TP, (0,1) FP, (0,1) FP, (1,0) FN, (0,0) TN, (1,1) TP, (1,1) TP, (1,0) FN.
+2. **Count:** TP = 3, TN = 2, FP = 2, FN = 2 (total 9).
+3. **Accuracy** $= (3 + 2)/9 = 5/9 = 0.556$.
+4. **Precision** $= 3/(3 + 2) = 0.6$. **Recall** $= 3/(3 + 2) = 0.6$.
+5. **F1** $= 2 \times 0.6 \times 0.6 / (0.6 + 0.6) = 0.72/1.2 = 0.6$.
+
+</Steps>
+
+<Answer>
+
+Accuracy 55.6%, precision 0.6, recall 0.6, F1 0.6: ek moderate model.
+
+</Answer>
+
+<Box kind="verify">
+
+Counts jud kar total hote hain: $3 + 2 + 2 + 2 = 9$. F1 ko $2TP/(2TP + FP + FN) = 6/(6 + 2 + 2) = 0.6$ bhi likh sakte hain. Same.
+
+</Box>
+
+</Sum>
+
+```mermaid
+%% caption: Confusion matrix ke chaar counts kaise chaar scores ban jaate hain.
+flowchart LR
+  A["TP, FP, TN, FN"] --> B["Accuracy = (TP + TN) / total"]
+  A --> C["Precision = TP / (TP + FP)"]
+  A --> D["Recall = TP / (TP + FN)"]
+  C --> E["F1 = precision aur recall ka harmonic mean"]
+  D --> E
+```
+
+## Ye kahan pucha gaya
+
+| Agar question kahe | Kya likhna hai | Kab aaya |
+|---|---|---|
+| "Comment on the significance of loss functions and explain different types" | Definition, training mein role, regression, binary aur multi-class types formulas ke saath | <PYQ id="2024-12/q5a" /> |
+| "Discuss the role of a loss function. Compare MSE and cross-entropy ... when is cross-entropy more appropriate?" | Role, comparison table, probabilities wali classification, chhota example | <PYQ id="2025-05/q5a" /> |
+| Loss vs cost, learning rate ka effect | Loss = ek example, cost = average; high rate overshoot karta hai, low rate slow | <PYQ id="assignment-1/q1d" /> |
+| True aur predicted labels ki list se accuracy aur F1 | Confusion counts, accuracy, precision, recall, F1, interpretation | <PYQ id="assignment-1/q2d" /> |
+| Probabilities se cross-entropy loss | Sahi class ki probability ka $-\ln$, average, interpretation | <PYQ id="assignment-1/q2e" /> |
 
 ## Quick revision
 
-- Loss = ek prediction kitna galat hai, uska ek number; cost = poore data pe average.
-- Loss performance naapta hai, apne gradient se learning chalata hai, aur "good" ka matlab decide karta hai.
-- MSE $= \dfrac{1}{n}\sum (y-\hat{y})^2$: regression; bade errors aur outliers dominate karte hain.
-- MAE: outliers ke against robust. Huber: chhota error ho toh squared, bada ho toh absolute.
-- Binary cross-entropy $= -[y\ln p + (1-y)\ln(1-p)]$; categorical $= -\ln p_{\text{correct}}$. Confident galat answers bahut mehnge padte hain.
-- Sigmoid/softmax outputs ke saath cross-entropy ka gradient $p - y$ hai; MSE ka sigmoid ke slope se chhota ho jaata hai aur atak jaata hai.
-- Pairs: linear + MSE, sigmoid + binary CE, softmax + categorical CE.
+- Loss function: batata hai ki prediction kitni galat hai; goal ise minimize karna. Loss = ek example, cost = training set ka average.
+- Regression: MAE $= \frac{1}{n}\sum \lvert y - \hat y \rvert$ (barabar importance); MSE $= \frac{1}{n}\sum (y - \hat y)^2$ (bade errors penalized); MSLE (relative error, positive values).
+- Binary: BCE $= -[y\log\hat y + (1 - y)\log(1 - \hat y)]$ sigmoid ke saath. Hinge $\max(0, 1 - y\hat y)$ SVM ke liye.
+- Multi-class: CCE (one-hot labels) softmax ke saath; SCCE (integer labels); KL divergence do distributions compare karta hai.
+- Pairing: linear ke saath MSE ya MAE, sigmoid ke saath BCE, softmax ke saath CCE.
+- Accuracy $= (TP+TN)/\text{total}$; precision $= TP/(TP+FP)$; recall $= TP/(TP+FN)$; F1 $= 2PR/(P+R)$.
+
+**Conclusion.** Loss function training ka dil hai: ye error naapta hai, optimizer use weights update karne ke liye use karta hai, aur sahi loss (output function se match karke) problem ke type se chuna jaata hai. <Cite id="class-dl-chp2" loc="slide 26" />

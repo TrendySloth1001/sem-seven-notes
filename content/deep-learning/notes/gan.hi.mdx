@@ -1,386 +1,262 @@
 ---
-title: "Generative adversarial networks"
+title: "Generative adversarial networks (GAN)"
 module: 6
-summary: "GAN do networks ka ek game hai: ek generator jo random noise se fake data banata hai, aur ek discriminator jo fake aur real mein farak pakadne ki koshish karta hai. Dono ek doosre ko harakar better hote hain, jab tak fakes real jaise na dikhne lagein."
+summary: "GAN kya hai aur iski zaroorat kyun hai, iske do networks (generator aur discriminator), architecture, training loop, training ke baad kya hota hai, vanilla GAN ki limitations (training instability, mode collapse, difficult training), class ki applications, aur DeepFakes ke ethical issues."
 keyIdeas:
-  - "GAN naya data (faces, pictures, sounds) banata hai jo uske training data jaisa dikhta hai, aur isko labels ki zaroorat nahi hoti."
-  - "Generator random noise ko ek fake sample mein badalta hai. Discriminator batata hai ki sample real hone ki probability kitni hai."
-  - "Dono baari-baari train hote hain: pehle discriminator fakes pakadna seekhta hai, phir generator discriminator ko bewakoof banana seekhta hai."
-  - "Ideal end point pe fakes bilkul real data jaise ho jaate hain aur discriminator sirf guess kar sakta hai: har cheez ke liye 0.5 output deta hai."
-  - "Vanilla GANs train karna mushkil hai: mode collapse, vanishing gradients aur non-convergence main problems hain."
-  - "Uses: image generation, image-to-image translation, super-resolution, data augmentation aur deepfakes."
+  - "A Generative Adversarial Network (GAN) is a deep learning model used to generate new data that looks similar to real training data."
+  - "GAN mein do neural networks ek dusre ke against kaam karte hain: Generator random noise leta hai aur fake sample banata hai; Discriminator real aur fake samples dekhta hai aur predict karta hai ki har sample real hai ya fake."
+  - "Training loop: generator banata hai, discriminator check karta hai, loss nikalta hai, dono networks backpropagation se update hote hain, generator realistic samples banane tak repeat. Training ke baad sirf trained generator use hota hai."
+  - "Vanilla GAN ke issues: training instability (dono networks ke goals opposite), mode collapse (generator bahut milte-julte outputs banata hai), aur difficult training (learning rate, architecture, batch size aur balance ki careful tuning chahiye)."
+  - "Applications: image generation, DeepFake, image-to-image translation, super-resolution, image restoration, synthetic data, video generation, art, medical imaging, text-to-image. Misuse se misinformation, identity misuse, fraud aur non-consensual content aata hai."
 references:
-  - goodfellow2014
-  - gfdl-ch20
-  - goodfellow2016-tutorial
-  - radford2015
-  - mirza2014
-  - salimans2016
-  - arjovsky2017
-  - arjovsky2017-principled
-  - metz2016
-  - isola2017
-  - zhu2017
-  - ledig2017
-  - karras2019
-  - kingma2013-vae
-  - nptel-dl
-  - d2l-gan
-  - d2l-dcgan
-  - gfg-gan
-  - gfg-gan-mode-collapse
-  - gfg-dcgan
-  - gfg-cgan
-  - gfg-vae
-  - google-gan-structure
-  - google-gan-training
-  - google-gan-loss
-  - google-gan-problems
-  - mlm-gan-intro
-  - mlm-gan-apps
-  - mlm-gan-failure
-  - ibm-gan
-  - av-gan
-  - pytorch-dcgan
-  - wiki-gan
-  - wiki-mode-collapse
-  - wiki-deepfake
-  - keras-dcgan
-  - tf-dcgan
-  - mlm-gan-loss
-  - aws-gan
+  - class-dl-chp6
 ---
 
-Naye ideas se pehle, woh purane ideas jo tumhe chahiye. Agar pehle se aate hain, to next section pe jao.
+Ye syllabus <Syl m="6" /> hai: generative adversarial network ka architecture aur uski applications.
 
-## Pehle basics
-
-- Neural network ek bada formula hai jisme bahut saare adjust hone wale numbers hote hain, jinhe **weights** kehte hain. Training matlab weights ko adjust karna taaki **loss** kam ho. Loss ek number hai jo batata hai network kitna galat hai.
-- **Classifier** ek network hai jo input dekhkar ek probability deta hai. **Sigmoid** output ke saath ye 0 aur 1 ke beech ka number deta hai, jaise "0.9 = 90% sure hai ki ye cat hai".
-- **Binary cross-entropy** yes/no classifier ka usual loss hai. Ye confident galat answers ko bahut zyada punish karta hai, aur confident sahi answers ko lagbhag bilkul nahi.
-- **Backpropagation** har weight ke liye nikalta hai ki use kis taraf thoda sa khiskaana hai taaki loss kam ho. **Gradient descent** phir us direction mein ek chhota step leta hai.
-- **Random noise** ka yahan matlab bas random numbers ki ek list hai, jaise 100 numbers jo bell curve se liye gaye hain. Alag random list = alag output.
-
-**Discriminative vs generative models.** GANs doosre group mein aate hain, isliye pehle farak samajh lo.
-
-| | Discriminative model | Generative model |
-|---|---|---|
-| Question it answers | "Ye cat hai ya dog?" | "Cats kaise dikhti hain? Ek nayi bana ke dikhao." |
-| What it learns | Classes ke beech ki boundary | Data khud kaisa dikhta hai |
-| Output | Ek label ya probability | Ek bilkul naya sample |
-| Needs labels? | Usually haan | Usually nahi |
-| Examples | Logistic regression, CNN classifier | GAN, variational autoencoder (VAE) |
-
-## Idea: ek forger aur ek detective
-
-Socho ek forger hai jo nakli notes chhaapta hai, aur ek police detective hai jo notes check karta hai.
-
-- Shuru mein forger kharab hai, aur detective har fake aasaani se pakad leta hai.
-- Forger dekhta hai ki fakes kis wajah se pakde gaye, aur better notes chhaapta hai.
-- Ab detective ko dhyaan se dekhna padta hai, aur woh real notes ki aur baareek details seekhta hai.
-- Forger phir improve karta hai, aur aise hi chalta rehta hai.
-
-Agar ye chalta rahe, to forger itne acche notes chhaapne lagta hai ki detective sirf guess kar sakta hai. Original GAN paper bilkul yahi picture use karta hai: generator "a team of counterfeiters" hai aur discriminator police hai. <Cite id="goodfellow2014" />
-
-**Generative adversarial network (GAN)** is game ko do neural networks mein daal deta hai. "Generative" kyunki ye data generate karta hai, "adversarial" kyunki dono networks opponents hain. Ise Ian Goodfellow aur colleagues ne 2014 mein introduce kiya. Ye syllabus <Syl m="6" /> hai: GAN architecture, aur applications jaise image generation aur deepfakes.
+## GAN kya hai?
 
 <Box kind="definition">
 
-**Generative adversarial network (GAN):** do neural networks ka pair jo ek game ki tarah saath mein train hote hain. **Generator** random noise ko ek fake sample mein badalta hai. **Discriminator** ek sample dekhta hai aur batata hai ki uske real hone ki probability kitni hai. Discriminator ko real aur fake alag karna sikhaya jaata hai, aur generator ko discriminator ko bewakoof banana.
-
-Neeche use hone wale short names: $G$ = generator, $D$ = discriminator, $z$ = random noise, $G(z)$ = ek fake sample, $x$ = ek real sample, $D(x)$ = discriminator ki probability ki $x$ real hai.
+**GAN** stands for **Generative Adversarial Network**. A GAN is a deep learning model used to **generate new data** that looks similar to real training data. <Cite id="class-dl-chp6" loc="slide 2" /> <Cite id="class-dl-chp6" loc="slide 3" />
 
 </Box>
 
-Exam mein English mein likho: "A GAN is a pair of neural networks, a generator and a discriminator, trained together as a two-player game."
+Jo models mainly existing data ko classify ya predict karte hain unse alag, GANs naya data generate karna seekh sakte hain. **Generative** matlab aisa naya data banana jo us data jaisa dikhe jisse model ne seekha. Agar GAN ko bahut saari real human face images dein, to wo patterns seekhta hai aur aisa naya face bana sakta hai jo training data mein tha hi nahi. Important word hai "Generative". <Cite id="class-dl-chp6" loc="slide 2" />
 
-**Iski zaroorat kyun hai?**
+<Img id="class-gan-what" caption="Real images jaate hain, GAN patterns seekhta hai aur naya image generate karta hai. Generative matlab aisa naya data banana jo seekhe hue data jaisa dikhe." />
 
-- Humein aksar **naya** data chahiye jo real dikhe: game ke liye naye faces, classifier train karne ke liye extra medical scans, blurry photo ka sharp version.
-- Kai purane generative models ko har possible image ki exact probability likhni aur calculate karni padti thi. Badi pictures ke liye ye bahut mushkil hai, aur results aksar blurry aate the.
-- GAN ye step skip kar deta hai. Isko bas ek network chahiye jo samples **banata** hai aur ek doosra network jo unhe **judge** karta hai. Judge ka feedback us mushkil probability calculation ki jagah le leta hai. Book kehti hai: GAN learning ko "neither approximate inference nor approximation of a partition function gradient" chahiye, jo do mushkil steps purane models ko chahiye the. <Cite id="gfdl-ch20" loc="§20.10.4" />
-- Isko **labels bhi nahi chahiye**: bas real examples ka ek dher.
+**Generative model.** Generative model data se seekhta hai aur aisa naya data banata hai jo seekhe hue jaisa dikhe. Ye training data ke underlying patterns seekhta hai (digits ke liye: shape, curves, thickness, general structure, appearance mein variations) aur unse naye examples generate karta hai. Generated image kisi ek training image ki copy nahi hoti; ye model ne jo seekha uske base par naya sample hai. <Cite id="class-dl-chp6" loc="slide 4" />
+
+## GANs ki zaroorat kyun hai?
+
+Traditional machine learning existing data ko samajhne mein great hai, lekin ye mainly recognize, predict ya classify karta hai. GANs ek step aage jaate hain: ye naya data bhi generate kar sakte hain. <Cite id="class-dl-chp6" loc="slide 5" />
+
+| Aspect | Traditional model | GAN |
+|---|---|---|
+| Main focus | Existing data ko recognize karta hai | Naya data generate karta hai |
+| Task type | Classification, prediction | Generation |
+| Example question | "What is this?" ("Is this a human face?") | "Can I create something like this?" ("How can I create a new human face?") |
+
+<Cite id="class-dl-chp6" loc="slide 5" /> Short mein: traditional ML batata hai ki kuch kya hai; GANs kuch naya banane mein help karte hain.
+
+## Basic idea: do networks jo compete karte hain
+
+GAN mein **do neural networks hote hain jo ek dusre ke against kaam karte hain**. <Cite id="class-dl-chp6" loc="slide 6" />
+
+- **Generator (G):** naya (fake) data banata hai jo real dikhe. Ye random noise leta hai aur fake (synthetic) sample banata hai. <Cite id="class-dl-chp6" loc="slide 3" />
+- **Discriminator (D):** data check karta hai aur decide karta hai ki wo real hai ya fake. Ye real aur fake samples dekhta hai aur predict karta hai ki sample real hai ya fake. <Cite id="class-dl-chp6" loc="slide 3" />
+
+Wo compete karte hain: generator discriminator ko fool karne ki koshish karta hai (fake ko real jaisa dikhata hai); discriminator fake ko detect karne ki koshish karta hai (fake pakadta hai). Dono time ke saath improve karte hain, aur ye competition generator ko zyada realistic data banane mein help karta hai. <Cite id="class-dl-chp6" loc="slide 6" />
+
+**Simple example: fake currency.** Generator us insaan jaisa hai jo fake currency banata hai ("I will create a fake note that looks like a real note"). Discriminator examiner jaisa hai ("I will examine the note and decide whether it is real or fake"). <Cite id="class-dl-chp6" loc="slide 6" />
+
+<Img id="class-gan-competition" caption="Competition: generator discriminator ko fool karna chahta hai, discriminator fake detect karna chahta hai, aur dono time ke saath improve hote hain." />
+
+```mermaid
+%% caption: GAN ka idea paanch lines mein. Loop kai baar repeat hota hai.
+flowchart TD
+  A["Generator banata hai"] --> B["Discriminator check karta hai"]
+  B --> C["Feedback (loss)"]
+  C --> D["Generator improve hota hai"]
+  D --> E["Repeat"]
+  E --> A
+```
 
 ## GAN architecture
 
-GAN ke paanch parts hain. Unhe usi order mein padho jisme data flow hota hai.
+Generator **random noise** se fake images banata hai. Discriminator check karta hai ki image real hai ya fake. Ise images do sources se milti hain: **real data** (training images) aur **generated data** (generator ki fake images). <Cite id="class-dl-chp6" loc="slide 7" />
 
-1. **Random noise $z$ (latent vector).** Random numbers ki ek chhoti list, jaise bell curve se 100 numbers. Ye ek naye sample ka "seed" hai. $z$ badlo to alag face milega.
-2. **Generator $G$.** Ek neural network jo $z$ ko real data ke same shape ke sample mein badalta hai, jaise $64 \times 64$ colour picture. Ye **real data kabhi nahi dekhta**. Ye sirf discriminator ke feedback se seekhta hai.
-3. **Real data $x$.** Training set ke examples, jaise faces ki real photos. Labels ki zaroorat nahi.
-4. **Discriminator $D$.** Ek classifier. Iska input ek sample hai, real ya fake. Iska output 0 aur 1 ke beech ka ek number hai (sigmoid se): 1 ke paas matlab "mujhe lagta hai ye real hai", 0 ke paas matlab "mujhe lagta hai ye fake hai".
-5. **Loss aur feedback.** Discriminator ka answer sach (real ya fake) se compare hota hai. Error se discriminator directly update hota hai, aur ye error discriminator ke **through** peeche generator tak jaata hai taaki generator update ho.
-
-<Img id="img-dl-n3-gan-architecture" caption="Poora GAN: noise generator mein jaata hai, aur discriminator fake aur real samples ko judge karta hai." />
+<Img id="class-gan-architecture" caption="Basic GAN architecture: random noise generator mein jaata hai, jo fake image banata hai. Discriminator ko fake image aur real image milti hain aur wo real ya fake batata hai." />
 
 ```mermaid
-%% caption: GAN architecture. Generator noise ko fake sample banata hai. Discriminator real aur fake dono dekhta hai aur "real" ki probability deta hai. Uski galtiyan dono networks ke liye learning signal ban jaati hain.
+%% caption: GAN architecture. Discriminator generator ki fake image aur dataset ki real image dono dekhta hai.
 flowchart LR
-  Z["Random noise z, jaise 100 numbers"] --> G["Generator G"]
-  G --> F["Fake sample G(z)"]
-  R["Training set se real data x"] --> D["Discriminator D"]
+  N["Random noise"] --> G["Generator (fake data banata hai)"]
+  G --> F["Fake image"]
+  R["Real image (dataset se)"] --> D["Discriminator (real ya fake?)"]
   F --> D
-  D --> P["Input real hone ki probability, 0 se 1"]
-  P --> L["Loss: kya D sahi tha?"]
-  L -- "D ko update karo fakes pakadne ke liye" --> D
-  L -- "G ko update karo D ko fool karne ke liye" --> G
+  D --> O["Real / Fake"]
 ```
 
-**Dono networks ke roles side by side.**
+**Random noise.** Generator ka input random noise hota hai, jo aam taur par random numbers ka **vector** hota hai, jaise [0.2, −0.7, 1.1, 0.4, ...]. Ye image jaisa nahi dikhta; ye sirf ek starting point hai. Generator ise realistic-looking image mein badalta hai, aur **alag noise se alag results** aate hain. <Cite id="class-dl-chp6" loc="slide 8" />
 
-| | Generator $G$ | Discriminator $D$ |
+**Generator aur discriminator ka role** <Cite id="class-dl-chp6" loc="slide 9" />
+
+| | Generator (G) | Discriminator (D) |
 |---|---|---|
-| Job | Real dikhne wale fakes banana | Real aur fake alag karna |
-| Input | Random noise $z$ | Ek sample, real ya fake |
-| Output | Ek fake sample (jaise image) | "Real" ki ek probability |
-| Analogy | Forger | Detective |
-| Wins when | $D$ uske fakes ko "real" bole | Real aur fake ko sahi label kare |
-| Kept after training? | Haan, yahi useful part hai | Nahi, phenk diya jaata hai |
+| Zimmedari | Fake ya generated data banana | Check karna ki input real hai ya generated |
+| Input | Random noise ya latent vector | Dataset ki real image ya generator ki generated image |
+| Output | Generated image | REAL ya FAKE |
+| Goal | Generated image ko itna realistic banana ki discriminator fool ho jaaye | Real images ko generated images se sahi alag pehchaanna |
+| Isse aise socho | Ek artist jo realistic painting banane ki koshish karta hai | Art critic jo check karta hai ki painting genuine hai ya fake |
 
-**Andar se dono networks kaise dikhte hain.**
+<Img id="class-gan-generator-role" caption="Generator: input random noise ya latent vector, output generated image, goal discriminator ko fool karna." />
 
-- **Original (vanilla) GAN** mein dono mostly simple fully connected networks (multilayer perceptrons) hain. 2014 paper ne inhe chhoti images pe test kiya jaise handwritten digits (MNIST), faces aur CIFAR-10 (CIFAR-10 ke liye ek chhota convolutional version bhi try kiya). <Cite id="goodfellow2014" />
-- Badi pictures ke liye **DCGAN** (deep convolutional GAN) convolution layers use karta hai. Discriminator ek normal CNN hai jo picture ko chhota karte-karte ek number tak le aata hai. Generator ulta chalta hai: $z$ se shuru karta hai aur **transposed convolutions** se har layer pe picture badi karta hai, jaise $4 \times 4 \to 8 \times 8 \to 16 \times 16 \to 32 \times 32 \to 64 \times 64$. <Cite id="radford2015" /> <Cite id="pytorch-dcgan" /> <Cite id="tf-dcgan" /> <Cite id="keras-dcgan" />
+<Img id="class-gan-discriminator-role" caption="Discriminator: input real image ya generated image, output REAL ya FAKE, goal dono ko alag pehchaanna." />
 
-<Figure caption="Ek chhota vanilla GAN, do fully connected networks ki tarah. Generator (left) 3 noise numbers ko 6-number fake sample mein badhata hai. Discriminator (right) 6-number sample ko ek output tak chhota karta hai: uske real hone ki probability. Real GANs mein bahut zyada neurons hote hain.">
-  <NetworkFigure layers="3,5,6" title="Generator G" labels="Noise z,Hidden,Fake sample" />
-  <NetworkFigure layers="6,4,1" title="Discriminator D" labels="Sample,Hidden,P(real)" />
-</Figure>
+## GAN ki training kaise hoti hai
 
-**DCGAN design rules** (Radford et al., 2015), 10-mark answer mein likhne layak:
+<Img id="class-gan-training-loop" caption="GAN training loop: noise, generator, fake image, discriminator (real image ke saath), loss, backpropagation, G aur D dono update, repeat." />
 
-- Koi pooling layer nahi: discriminator chhota karne ke liye **strided convolutions** use karta hai, aur generator bada karne ke liye **transposed convolutions**.
-- Dono networks mein **batch normalization**, jo training ko steady rakhta hai.
-- Deep versions mein koi fully connected hidden layer nahi.
-- Generator mein **ReLU**, sirf output pe **tanh** (taaki pixel values −1 aur 1 ke beech rahein).
-- Discriminator mein **Leaky ReLU**.
+1. Generator ko **random noise** milta hai.
+2. Generator ek **fake image** banata hai.
+3. Discriminator ko fake image milti hai aur wo **real images** bhi dekhta hai aur compare karta hai.
+4. Discriminator **real ya fake** predict karta hai.
+5. Prediction se **loss** nikalta hai (discriminator galti kare to loss badhta hai; sahi ho to loss low).
+6. **Backpropagation** feedback deti hai.
+7. **Generator aur discriminator dono ke parameters update** hote hain.
+8. Process tab tak **repeat** hota hai jab tak generator realistic samples na banaye. <Cite id="class-dl-chp6" loc="slide 2" /> <Cite id="class-dl-chp6" loc="slide 10" />
 
-```mermaid
-%% caption: DCGAN shapes. Generator noise vector ko transposed convs se image tak badhata hai. Discriminator image ko strided convs se ek probability tak chhota karta hai.
-flowchart LR
-  Z["Noise, 100 numbers"] --> P["Chhote 4×4 block mein reshape"]
-  P --> U["Transposed convs badhate hain: 8, 16, 32, 64"]
-  U --> I["Fake image 64×64×3, tanh"]
-  I --> S["Strided convs chhota karte hain, leaky ReLU"]
-  S --> O["Sigmoid: P(real)"]
-```
+**Do losses.** Discriminator chahta hai ki real images real classify hon aur fake images fake; wo galti kare to uska loss badhta hai. Generator chahta hai ki discriminator uski generated image ko real classify kare; discriminator "fake" kahe to generator ka loss badhta hai. Discriminator ka loss kam matlab behtar separation; generator ka loss kam matlab behtar fooling. <Cite id="class-dl-chp6" loc="slide 10" /> <Cite id="class-dl-chp6" loc="slide 12" />
 
-## Game ek formula mein
+**Feedback ke baad kya hota hai.** Discriminator ka feedback generator ko batata hai ki wo kitna galat tha. Pehli koshish mein face poor hota hai aur discriminator "fake" kehta hai; loss aur backpropagation generator ko update karte hain; agli iterations mein face better, even better aur aakhir mein realistic ho jaata hai. Generator apne aap better nahi hota; wo isliye better hota hai kyunki training process discriminator ke through use feedback deti hai. <Cite id="class-dl-chp6" loc="slide 10" /> <Cite id="class-dl-chp6" loc="slide 11" />
 
-Is topic mein sirf yahi section ek formula rakhta hai. Pehle words samjho; formula tabhi likho jab question "architecture in detail" ya "working" pooche, jahan iski ek line marks dilaati hai.
-
-Dono networks ek hi score share karte hain, jise **value function** $V(D, G)$ kehte hain. Words mein:
-
-- Pehla part $D$ ko reward deta hai jab woh real data ko "real" bole.
-- Doosra part $D$ ko reward deta hai jab woh fake data ko "fake" bole.
-- $D$ score ko **bada** karna chahta hai (accha judge banna). $G$ ise **chhota** karna chahta hai, doosre part pe $D$ ko fool karke.
-
-Kyunki ek player same score ko maximize karta hai aur doosra minimize, ise **minimax** game kehte hain. Exam mein likhne layak yahi ek formula hai: <Cite id="goodfellow2014" /> <Cite id="gfdl-ch20" loc="§20.10.4" />
-
-$$
-\min_G \max_D \; V(D,G) = \mathbb{E}_{x \sim p_{\text{data}}}\big[\ln D(x)\big] + \mathbb{E}_{z \sim p_z}\big[\ln\big(1 - D(G(z))\big)\big]
-$$
-
-- $x \sim p_{\text{data}}$: training data ka ek real example. $z \sim p_z$: random noise.
-- $\mathbb{E}[\dots]$: "bahut saare examples ka average".
-- $D(x)$: $D$ ki probability ki real sample real hai. $D$ chahta hai ye 1 ke paas ho.
-- $D(G(z))$: $D$ ki probability ki fake real hai. $D$ chahta hai ye 0 ke paas ho; $G$ chahta hai 1 ke paas ho.
-
-**Ek chhota example, real numbers ke saath.** Maan lo $D$ ek real sample ko 0.9 aur ek fake sample ko 0.2 deta hai. Tab $V = \ln(0.9) + \ln(1 - 0.2) = -0.1054 - 0.2231 = -0.3285$. Agar $D$ better ho jaye aur fake ko 0.1 de, to $V = \ln(0.9) + \ln(0.9) = -0.2108$, jo bada hai, aur $D$ yahi chahta hai. Agar $G$ $D$ ko fool kare aur fake ko 0.6 mile, to $V = \ln(0.9) + \ln(0.4) = -0.1054 - 0.9163 = -1.0217$, jo chhota hai, aur $G$ yahi chahta hai. End point check: agar $D$ har cheez ko 0.5 de, to $V = \ln(0.5) + \ln(0.5) = -1.3863$, jo $-2 \ln 2$ hai.
-
-<Box kind="intuition">
-
-Ye asal mein binary cross-entropy hi hai, bas bhes badal ke. Discriminator ek normal classifier hai jisme real ka label 1 aur fake ka label 0 hai. Nayi cheez bas itni hai ki "fake" examples ek doosra network bana raha hai jo lagataar better hota ja raha hai.
-
-</Box>
-
-**Ideal end point.** Paper prove karta hai ki agar dono networks kaafi bade hon aur perfectly train hon, to game tab khatam hota hai jab fakes bilkul real data ki tarah spread ho jaate hain. Tab discriminator unhe alag nahi kar pata aur har sample ke liye $0.5$ ("50-50, main sirf guess kar sakta hoon") output deta hai. Training ke baad discriminator phenk diya jaata hai. Hum sirf generator rakhte hain, aur use naya random $z$ dekar naye samples banate hain. <Cite id="goodfellow2014" />
-
-## GAN train kaise hota hai
-
-Dono networks **baari-baari** train hote hain, ek saath nahi. Loop ka ek round:
-
-<Img id="img-dl-n3-gan-training-targets" caption="Discriminator ko kya bolna sikhaya jaata hai: generator ke fake ke liye 0, real image ke liye 1. Generator apne fakes ko 1 ki taraf dhakelna seekhta hai." />
-
-1. **Discriminator train karo** ($G$ ko frozen rakho).
-   - Real examples ka ek mini-batch lo aur unhe label 1 (real) do.
-   - Noise ko $G$ se pass karke fakes ka batch banao, aur unhe label 0 (fake) do.
-   - $D$ ko update karo taaki woh fakes pakadne mein better ho. Ye normal classifier training hai.
-2. **Generator train karo** ($D$ ko frozen rakho).
-   - Naya noise lo aur naye fakes banao.
-   - Unhe $D$ se pass karo. **$D$ ke through $G$ tak** backpropagate karo, lekin sirf $G$ ke weights badlo, taaki $D$ fakes ko zyada real rate kare.
-3. **Repeat** karo bahut saare epochs tak. Jab fakes acche dikhne lagein tab ruko. Log usually samples dekhkar judge karte hain, kyunki sirf loss values se pata nahi chalta kab rukna hai.
-
-```mermaid
-%% caption: GAN training loop. Discriminator aur generator baari-baari seekhte hain. Jab ek seekhta hai, doosra frozen rehta hai.
-flowchart TD
-  A["Real data ka batch aur noise ka batch lo"] --> B["G fakes ka batch banata hai"]
-  B --> C["D train karo: real = 1, fake = 0, G frozen"]
-  C --> E["Naya noise, G naye fakes banata hai"]
-  E --> F["G train karo: D fakes ko real bole, D frozen"]
-  F --> H{"Kya fakes kaafi acche hain?"}
-  H -- "Nahi" --> A
-  H -- "Haan" --> I["D phenk do, G rakho naye samples ke liye"]
-```
-
-<Cite id="goodfellow2014" /> <Cite id="google-gan-training" /> <Cite id="d2l-gan" />
-
-**Ek practical trick: non-saturating loss.** Training ke shuru mein fakes kharab hote hain, to $D$ unhe confidently reject karta hai. Original formula ke saath generator ko tab lagbhag koi learning signal nahi milta, jaise ek student jise har test mein "0" milta hai bina kisi comment ke. Paper ka fix: generator ka goal "$D$ ko kam sure karo ki fake fake hai" se badal ke "$D$ ko zyada sure karo ki fake real hai" kar do. Dono same direction mein push karte hain, lekin naya wala strong signal deta hai bilkul tab jab generator kharab hai. Goodfellow ki book ye reason deti hai: signal bada rehta hai "even in the situation when the discriminator confidently rejects all generator samples". <Cite id="goodfellow2014" /> <Cite id="gfdl-ch20" loc="§20.10.4" /> <Cite id="mlm-gan-loss" />
-
-<Figure caption="Non-saturating generator loss, us probability ke against jo D ek fake ko deta hai. Left side pe ye bahut steep hai, jahan fakes kharab hain aur aasaani se pakde jaate hain, isliye generator ko strong push bilkul tab milta hai jab use chahiye.">
-  <CurvePlot curves="ce-loss" x="0.01,1" y="0,4.7" xLabel="D(G(z)): probability D gives to the fake" yLabel="Generator loss" />
-</Figure>
-
-## Vanilla GANs ki problems
-
-"Vanilla GAN" matlab original 2014 GAN: fully connected networks aur upar wala minimax loss. Ye chhoti images pe kaam karta hai lekin train karna famously mushkil hai. Book seedha kehti hai ki "stabilization of GAN learning remains an open problem". <Cite id="gfdl-ch20" loc="§20.10.4" />
-
-```mermaid
-%% caption: Vanilla GANs ki main problems. Inme se zyaadatar ek hi root cause se aati hain: do networks opposite directions mein kheench rahe hain.
-flowchart TD
-  R["Do networks ek doosre ke against train"] --> A["Non-convergence: losses swing karte rehte hain"]
-  R --> B["Mode collapse: wahi kuch outputs"]
-  R --> C["Vanishing gradients: D bahut strong"]
-  R --> E["G-D imbalance: settings pe sensitive"]
-  R --> F["Evaluate karna mushkil: loss kam batata hai"]
-```
-
-**1. Non-convergence (game kabhi settle nahi hota).** Normal training ek loss pe neeche ki taraf jaati hai. Yahan do players opposite directions mein push karte hain, aur simple gradient steps balance point tak pahunchne ki **guarantee nahi** dete. Woh uske around ghoom sakte hain, jaise do log baari-baari rassi kheench rahe hon. Practice mein losses upar-neeche swing karte hain, aur sample quality better hone ke baad kharab bhi ho sakti hai. <Cite id="gfdl-ch20" loc="§20.10.4" />
-
-**2. Mode collapse.** "Mode" data mein ek typical kind ka example hai, jaise MNIST mein har digit 0 se 9. Mode collapse mein generator ek ya kuch outputs dhoondh leta hai jo discriminator ko fool karte hain, aur sirf wahi banata rehta hai, to variety khatam ho jaati hai. Example: saare das digits pe trained GAN sirf bahut acche 1s banata hai. Original paper ise "Helvetica scenario" kehta hai: bahut saare alag noise inputs se same output. Ye warn karta hai ki ye tab ho sakta hai jab $G$ ko $D$ update kiye bina bahut zyada train kiya jaaye, lekin ye akela cause nahi hai. <Cite id="goodfellow2014" /> <Cite id="wiki-mode-collapse" /> <Cite id="gfg-gan-mode-collapse" />
-
-**3. Vanishing gradients.** Agar discriminator bahut jaldi bahut accha ho jaaye, to woh har fake ko poore confidence se reject karta hai, aur original generator loss flat ho jaata hai. Generator ko lagbhag koi signal nahi milta aur woh seekhna band kar deta hai. Arjovsky aur Bottou ne dikhaya kyun: jab real aur fake data lagbhag overlap nahi karte, to ek near-perfect discriminator exist karta hai aur generator ka gradient fade ho jaata hai. <Cite id="arjovsky2017-principled" /> <Cite id="google-gan-problems" />
-
-**4. Dono networks ka balance.** Agar $D$ bahut weak hai, to woh bekaar feedback deta hai aur $G$ kuch real nahi seekhta. Agar $D$ bahut strong hai, to gradients vanish ho jaate hain. Dono ko match rakhne ke liye learning rates, network sizes aur har ek ko kitne steps milte hain, inko dhyaan se choose karna padta hai, isliye results **hyperparameters pe bahut sensitive** hote hain. <Cite id="goodfellow2014" />
-
-**5. Evaluate karna mushkil.** GAN kabhi sample ki probability nahi likhta, isliye hum use test data pe simply score nahi kar sakte. Loss values nahi batati ki pictures acchi hain ya nahi. Log samples dekhte hain ya alag scores use karte hain jaise Inception Score. <Cite id="goodfellow2014" /> <Cite id="salimans2016" />
-
-**6. Low quality aur koi control nahi.** Fully connected vanilla GANs chhoti, blurry ya noisy images dete hain, aur tum ek particular kind ka output nahi maang sakte (jaise "ek 7 banao"), kyunki $G$ ko sirf random noise milta hai.
-
-**Common fixes** (exam mein har ek ki ek line kaafi hai):
-
-| Issue | Fix | Source |
-|---|---|---|
-| Vanishing gradients | Non-saturating generator loss; Wasserstein loss (WGAN) | <Cite id="goodfellow2014" /> <Cite id="arjovsky2017" /> |
-| Mode collapse | Minibatch discrimination (D poora batch dekhta hai, to notice karta hai jab saare fakes same hon); unrolled GANs; WGAN | <Cite id="salimans2016" /> <Cite id="metz2016" /> |
-| Non-convergence | Feature matching; one-sided label smoothing (real label 1 ki jagah 0.9); D ke inputs mein noise add karna; D ke weights ko penalize karna | <Cite id="salimans2016" /> <Cite id="google-gan-problems" /> |
-| Poor image quality, unstable training | DCGAN design rules: convolutions, batch normalization, ReLU / leaky ReLU | <Cite id="radford2015" /> |
-| No control over output | Conditional GAN: G aur D dono ko ek label do | <Cite id="mirza2014" /> |
+**Time ke saath improvement.** Early stage: generator lagbhag kuch nahi jaanta aur discriminator poor-quality fake ko aasani se pakad leta hai. Thodi aur training ke baad: generator better samples banata hai aur discriminator abhi bhi unhe detect kar leta hai. Kai iterations ke baad: samples realistic dikhte hain aur unhe alag pehchaanna mushkil ho jaata hai. <Cite id="class-dl-chp6" loc="slide 12" />
 
 <Box kind="pitfall">
 
-Ye mat likho ki GAN "always converges to the real data distribution". Ye sirf ideal case mein proven hai jahan networks unlimited hain aur $D$ har step pe perfectly train hota hai. Real neural networks ke saath training oscillate ya collapse ho sakti hai.
+"Finally the generator wins" mat likho. Ye likho: generator discriminator ko fool karna chahta hai aur discriminator fake ko detect karna chahta hai. Goal ye hai ki generator aise samples banaye jinhe discriminator real se alag pehchaanne mein mushkil mehsoos kare. <Cite id="class-dl-chp6" loc="slide 12" />
 
 </Box>
 
-## GAN ke types
+**Training ke baad.** Discriminator mainly training ke dauran chahiye. Training complete hone ke baad sirf trained generator use hota hai: naya random noise andar jaata hai aur generator apne aap naya image banata hai. <Cite id="class-dl-chp6" loc="slide 11" /> <Cite id="class-dl-chp6" loc="slide 27" />
 
-| Type | What changes | Main benefit | Source |
-|---|---|---|---|
-| **Vanilla GAN** (2014) | Fully connected G aur D, minimax loss | Original idea; simple | <Cite id="goodfellow2014" /> |
-| **DCGAN** (2015) | Convolutional G aur D, upar ke design rules ke saath | Steady training, better images; standard starting point | <Cite id="radford2015" /> <Cite id="gfg-dcgan" /> |
-| **Conditional GAN (cGAN)** (2014) | Dono networks ko ek label bhi milta hai, jaise digit class | Tum "ek 7 banao" maang sakte ho | <Cite id="mirza2014" /> <Cite id="gfg-cgan" /> |
-| **Wasserstein GAN (WGAN)** (2017) | D ek "critic" ban jaata hai jo realness score deta hai, probability nahi | Steady training; loss quality ko better track karta hai | <Cite id="arjovsky2017" /> |
-| **pix2pix** (2017) | Paired images pe conditional GAN | Sketch se photo, map se satellite image | <Cite id="isola2017" /> |
-| **CycleGAN** (2017) | Paired examples ke bina translation | Horse se zebra, summer se winter | <Cite id="zhu2017" /> |
-| **SRGAN** (2017) | Generator chhoti image ko upscale karta hai | Super-resolution: blurry se sharp | <Cite id="ledig2017" /> |
-| **StyleGAN** (2019) | Generator har layer pe style control karta hai | Bahut realistic faces, pose aur hair pe control | <Cite id="karras2019" /> |
+<Img id="class-gan-after-training" caption="Training ke baad: naya random noise trained generator (sirf G) mein jaata hai aur wo naya image banata hai." />
+
+```mermaid
+%% caption: Training ke dauran dono networks feedback loop ke saath kaam karte hain. Training ke baad sirf generator use hota hai.
+flowchart LR
+  subgraph T["Training ke dauran"]
+    A["Noise"] --> B["Generator"] --> C["Fake image"] --> D["Discriminator"] --> E["Loss"] --> F["G aur D update"]
+  end
+  subgraph U["Training ke baad"]
+    X["Naya noise"] --> Y["Trained generator"] --> Z["Naya image"]
+  end
+```
+
+## Vanilla GAN ke issues
+
+GANs powerful hain, lekin unhe train karna aasan nahi. <Cite id="class-dl-chp6" loc="slide 13" />
+
+1. **Training instability.** GAN mein do networks ek saath opposite objectives ke saath seekhte hain. Kabhi ek network dusre se bahut better ho jaata hai. Discriminator bahut strong ho to generator bahut poor hota hai aur lagbhag har generated image fake pakdi jaati hai. Generator bahut strong ho to wo tez improve hota hai aur discriminator struggle karta hai, fake images sahi pehchaan nahi paata. Dono ko balanced tareeke se improve hona chahiye, warna training unstable ho jaati hai.
+2. **Mode collapse.** Generator ko pata chal sakta hai ki sirf ek ya kuch hi types ke samples banana discriminator ko fool karne ke liye kaafi hai. Hum chahte hain kai alag faces; ho sakta hai baar-baar wahi face aaye. Mode collapse tab hota hai jab generator diverse samples ki jagah limited ya bahut milte-julte samples banata hai.
+3. **Difficult to train.** Training mein kai factors ka careful selection chahiye: learning rate, network architecture, batch size, training strategy aur generator aur discriminator ke beech balance. Chhote changes training ko kaafi affect kar sakte hain, isliye GANs ko kaafi experimentation chahiye ho sakta hai. Ye plug-and-play model nahi hai. <Cite id="class-dl-chp6" loc="slide 13" />
+
+<Img id="class-gan-instability" caption="Training instability: opposite goals; ek network dusre se bahut strong ho jaaye to training unstable ho jaati hai." />
+
+<Img id="class-gan-mode-collapse" caption="Mode collapse: kai alag faces ki jagah generator baar-baar wahi face banata hai." />
+
+| Problem | Matlab |
+|---|---|
+| Training instability | Generator aur discriminator balanced tareeke se nahi seekh paate |
+| Mode collapse | Generator limited ya milte-julte outputs banata hai |
+| Training difficulty | GANs ko careful tuning aur experimentation chahiye |
 
 ## GANs ki applications
 
-| Application | What the GAN does | Example |
+GANs sirf theoretical nahi hain; ye kai real-world applications mein use hote hain. <Cite id="class-dl-chp6" loc="slide 16" />
+
+| # | Application | Kya karti hai |
 |---|---|---|
-| **Image generation** | Noise se bilkul nayi realistic images banata hai | Aise logon ke faces jo exist hi nahi karte (StyleGAN) <Cite id="karras2019" /> |
-| **Image-to-image translation** | Ek kind ki picture ko doosri mein badalta hai | Sketch se photo, day se night (pix2pix); horse se zebra (CycleGAN) <Cite id="isola2017" /> <Cite id="zhu2017" /> |
-| **Super-resolution** | Chhoti, low-quality images mein realistic detail add karta hai | Purani photos ya CCTV frames sharp karna (SRGAN) <Cite id="ledig2017" /> |
-| **Text-to-image** | Ek sentence se picture banata hai | "A small bird with a red head" |
-| **Inpainting and photo editing** | Image ke missing ya damaged parts bharta hai | Koi object hatana, scratch repair karna |
-| **Data augmentation** | Jab real data kam ya private ho, extra training data banata hai | Classifier train karne ke liye synthetic medical scans |
-| **Face aging, pose and style** | Age, expression ya artistic style badalta hai | Face ko 30 saal bada dikhana |
-| **Video and 3D** | Agle video frames predict karta hai; 3D object shapes banata hai | Video prediction, 3D chairs |
-| **Deepfakes** | Video mein faces aur voices swap ya edit karta hai | Ek actor ka face doosre ki body pe lagana |
+| 1 | Image generation | Naye human faces, objects, animals, scenery generate karna; training data jaisi synthetic images |
+| 2 | DeepFake | Face swapping, face synthesis, facial expressions ya appearance manipulate karna |
+| 3 | Image-to-image translation | Ek type ki image ko dusre type mein badalna (sketch se realistic image, day se night, summer se winter) |
+| 4 | Image super-resolution | Low-resolution (blurry) image ko higher-resolution version mein badalna |
+| 5 | Image restoration | Noise hatana, damaged ya purani images restore karna, missing portions bharna (inpainting) |
+| 6 | Data augmentation ya synthetic data | Jab real data limited ya collect karna mushkil ho to additional training samples generate karna |
+| 7 | Video generation ya manipulation | Video frames generate ya modify karna; face aur expression manipulation |
+| 8 | Art aur creative content | Artistic images generate karna; naye visual styles aur designs banana |
+| 9 | Medical imaging | Research aur training ke liye synthetic medical images (jaise MRI ya CT style) generate karna |
+| 10 | Text-to-image generation | GAN-based research text descriptions se images generate karne ke liye bhi use hui hai |
 
-<Cite id="mlm-gan-apps" /> <Cite id="gfg-gan" /> <Cite id="ibm-gan" /> <Cite id="aws-gan" />
+<Img id="class-gan-apps-gen-deepfake" caption="Applications 1 aur 2: image generation aur DeepFake." />
 
-**Image generation thoda detail mein.** Bahut saari face photos pe training ke baad sirf generator rakha jaata hai. Har naya random noise vector ek naya face deta hai jo kabhi exist nahi karta tha. Ek noise vector se doosre tak smoothly move karne pe ek face smoothly doosre mein badalta hai, jo dikhata hai ki generator ne meaningful features (pose, smile, hair) seekhe hain, photos copy nahi kiye. <Cite id="radford2015" /> <Cite id="karras2019" />
+<Img id="class-gan-apps-i2i" caption="Application 3: image-to-image translation (sketch se realistic image)." />
 
-<Img id="img-dl-n3-gan-face" caption="StyleGAN2 ka banaya chehra. Ye insaan asli mein exist nahi karta: generator ne random noise se picture banayi." />
+<Img id="class-gan-apps-superres" caption="Application 4: image super-resolution." />
 
-<Img id="img-dl-n3-gan-cat" caption="StyleGAN2 ka ek aur output, is baar billi, jo dikhata hai ki GANs chehron ke saath jaanwar bhi bana sakte hain." />
+<Img id="class-gan-apps-restoration" caption="Application 5: image restoration (denoising, restoration, inpainting)." />
 
-**Deepfakes thoda detail mein.** **Deepfake** ek photo, video ya audio clip hai jisme kisi insaan ka face ya voice deep learning se replace ya change kiya gaya hai taaki woh real lage. Bahut saare deepfakes autoencoders se bante hain, aur kuch GANs bhi use karte hain: ek encoder-decoder ek insaan ke face ko doosre pe map karna seekhta hai, aur kuch tools ek GAN-style discriminator add karte hain jo result ko natural dikhne ki taraf push karta hai. <Cite id="wiki-deepfake" />
+<Img id="class-gan-apps-synthetic" caption="Application 6: data augmentation ya synthetic data." />
+
+<Img id="class-gan-apps-video-art" caption="Applications 7 aur 8: video generation ya manipulation, aur art aur creative content." />
+
+**Lagbhag har application ke liye same pattern.** Training: real training data (images, videos, text) GAN (generator + discriminator) ko jaata hai, loss dikhata hai ki wo kaisa perform kar raha hai, backpropagation learning signal deti hai, parameters update hote hain, generator better data banata hai aur discriminator phir check karta hai, aur loop repeat hota hai. Training ke baad: naya input (random noise, text ya condition) trained generator mein jaata hai, jo final output (image ya video) deta hai. <Cite id="class-dl-chp6" loc="slide 27" />
+
+<Img id="class-gan-pattern" caption="Yaad rakhne wala pattern: discriminator ke saath training loop, aur training ke baad akela generator." />
+
+### Image-to-image translation
+
+Image-to-image translation GANs se ek domain ki image ko dusre domain mein badalta hai (jaise sketch se realistic image). <Cite id="class-dl-chp6" loc="slide 19" />
+
+1. Generator ko source domain ki image do (ek sketch).
+2. Generator use target domain ki realistic-looking image mein badalta hai.
+3. Discriminator ko real target-domain image aur generated image dono milti hain aur wo poochta hai: "does this generated image look like a real image from the target domain?"
+4. Generated image realistic na dikhe to loss badhta hai aur generator ko feedback milta hai.
+5. Generator feedback se apne parameters update karta hai aur phir koshish karta hai.
+6. Kai iterations tak repeat karo, jab tak generator realistic images na banaye aur discriminator ko difference batana aasan na rahe. <Cite id="class-dl-chp6" loc="slide 19" />
+
+<Img id="class-gan-i2i-discriminator" caption="Discriminator step: ise real target-domain image aur generated image milti hain." />
+
+<Img id="class-gan-i2i-result" caption="Final result: sketch trained GAN mein jaata hai aur realistic-looking image nikalti hai." />
 
 ```mermaid
-%% caption: Face-swap deepfake kaise banta hai, outline mein. Shared encoder person A ka expression padhta hai aur person B pe trained decoder use B ke face ki tarah redraw karta hai. Optional discriminator swap ko natural banata hai.
+%% caption: GAN se image-to-image translation. Loop tab tak repeat hota hai jab tak generated image target domain ki real image jaisi na dikhe.
 flowchart LR
-  A["Person A ka video"] --> E["Encoder: face expression aur pose seekho"]
-  E --> Dc["Person B pe trained decoder"]
-  Dc --> S["Swapped face: B, A ke expression ke saath"]
-  S --> Di["Discriminator: kya ye real lagta hai?"]
-  Di -- "feedback" --> Dc
+  A["Sketch"] --> B["Generator"]
+  B --> C["Generated realistic image"]
+  D["Real target-domain image"] --> E["Discriminator"]
+  C --> E
+  E --> F["Loss aur feedback"]
+  F --> B
 ```
 
-| Good uses of deepfakes | Harms of deepfakes |
-|---|---|
-| Film dubbing aur special effects | Fake news aur political misinformation |
-| Education mein historical figures ko zinda dikhana | Fraud, jaise boss ki fake voice paise maangti hui |
-| Privacy: witness ka face chhupana | Real logon ke fake videos bina consent ke |
+### Dusre model ke liye synthetic data
 
-Isliye deepfake **detection** ek active research area hai, aur bahut saare countries inke baare mein laws bana rahe hain.
+Jab real data limited ho to GANs additional data samples generate kar sakte hain, jisse bada aur zyada diverse training dataset banta hai. Example: maano hamare paas sirf 500 real images hain. GAN ko inpar train karo, trained generator se random noise se naye samples banwao, discriminator se check karo, aur achhi synthetic images ko real images ke saath milakar bada training dataset banao. Synthetic images ko training data ki tarah use karne se pehle quality-check karna chahiye, kyunki saare generated samples achhe nahi hote. <Cite id="class-dl-chp6" loc="slide 22" />
 
-## Advantages aur disadvantages
+<Img id="class-gan-synthetic-result" caption="500 real images plus generator ki synthetic images milkar bada training dataset banati hain." />
 
-| Advantages | Disadvantages |
-|---|---|
-| Bahut sharp, realistic samples (kai purane generative models se sharp) | Unstable training; game shayad kabhi settle na ho |
-| Labels nahi chahiye, sirf real examples | Mode collapse: limited variety |
-| $G$ ke ek quick forward pass mein naya sample | Evaluate karna mushkil; loss quality ke baare mein kam batata hai |
-| Images ki exact probabilities compute karne ki zaroorat nahi | Bahut data, compute aur careful tuning chahiye |
-| Extend karna aasaan: conditional, translation, super-resolution | Misuse ho sakta hai (deepfakes) |
+### DeepFake aur baaki applications short mein
 
-## GAN vs variational autoencoder
+- **DeepFake** digitally generated ya manipulated media hai jismein kisi person ki appearance, voice ya dusri characteristics badal di jaati hain taaki content authentic lage (face swapping, facial expressions badalna, lip-sync manipulation). Goal Person A ka face generate karna hai jo Person B ke expressions aur movements follow kare. GANs historically DeepFake systems mein use hue hain, halanki modern DeepFake systems sirf GANs tak limited nahi hain. <Cite id="class-dl-chp6" loc="slide 18" />
+- **Super-resolution:** generator plausible fine details (textures, edges, patterns) jodta hai; wo exact original lost pixels wapas nahi laata. <Cite id="class-dl-chp6" loc="slide 20" />
+- **Restoration aur inpainting:** generator predict karta hai ki missing ya corrupted region mein kya plausibly aa sakta hai; result visually plausible hota hai lekin exact original image nahi. <Cite id="class-dl-chp6" loc="slide 21" />
+- **Video:** frames individually realistic hone chahiye, ek dusre ke saath consistent aur time ke saath smoothly badalne chahiye; key challenge temporal consistency hai. <Cite id="class-dl-chp6" loc="slide 23" />
+- **Art aur medical images:** generator training data se style aur characteristics seekhta hai aur naya original kaam banata hai, copies nahi; generated medical images synthetic hain aur apne aap medically accurate nahi, isliye research, development aur data augmentation ke liye hain, direct diagnosis ke liye nahi. <Cite id="class-dl-chp6" loc="slide 24" /> <Cite id="class-dl-chp6" loc="slide 25" />
+- **Text-to-image:** text ko numerical representation (embedding) mein badalte hain aur generator image banata hai; modern text-to-image systems mein diffusion-based approaches chhaaye hue hain. <Cite id="class-dl-chp6" loc="slide 26" />
 
-VAE syllabus mein named nahi hai, lekin ye Module 3 ke autoencoders pe based hai aur doosra famous generative model hai, isliye contrast ke liye useful hai. <Cite id="kingma2013-vae" /> <Cite id="gfg-vae" />
+## GANs aur DeepFakes ke ethical aur social issues
 
-| | GAN | Variational autoencoder (VAE) |
-|---|---|---|
-| Parts | Generator + discriminator | Encoder + decoder |
-| How it learns | Ek game: judge ko fool karo | Input ko rebuild karo aur hidden code smooth rakho |
-| Image quality | Usually zyada sharp | Aksar zyada blurry |
-| Training | Unstable, collapse ho sakta hai | Stable, ek loss neeche jaata hai |
-| Has an encoder (image to code)? | Nahi (basic version mein) | Haan |
+GAN technology useful aur harmful dono purposes ke liye use ho sakti hai. <Cite id="class-dl-chp6" loc="slide 14" />
 
-<Img id="img-dl-n3-gen-model-tree" caption="Generative models mein GANs kahan aate hain: wo data distribution ko implicitly, seedhe samples se seekhte hain, jabki VAE explicit approximate density seekhta hai." />
+1. **Misinformation:** manipulated images ya videos aisa dikha sakte hain ki kisi ne kuch kaha ya kiya jo kabhi hua hi nahi.
+2. **Identity misuse:** kisi ka face permission ke bina dusri image ya video mein daala ja sakta hai (privacy aur consent issues).
+3. **Fraud aur impersonation:** synthetic media se kisi ki nakal ki ja sakti hai, jisse financial loss aur scams ho sakte hain.
+4. **Non-consensual content:** kisi ka face ya identity consent ke bina manipulated content mein.
+5. **Digital media par bharosa mushkil:** sirf image ya video dekhna ye establish karne ke liye kaafi nahi ki wo genuine hai. Zaroori: DeepFake detection, media verification, digital provenance aur responsible AI practices.
 
-## Conclusion
-
-GAN do networks ko ek doosre ke against lagaakar realistic naya data banana seekhta hai: generator fakes banata hai aur discriminator unhe judge karta hai. Isko labels nahi chahiye aur ye bahut sharp samples deta hai, lekin training unstable hai, isliye DCGAN, WGAN aur conditional GAN jaise improved versions bane.
-
-Exam mein English mein likho: "A GAN learns to generate realistic data through a game between a generator and a discriminator; it needs no labels but its training is unstable."
-
-<Box kind="exam">
-
-"Explain the architecture/working of GAN and its applications" (10 marks) ke liye is order mein likho: definition aur forger-detective analogy, iski zaroorat kyun hai, labelled architecture diagram (noise, G, fake, real, D, probability, feedback), G aur D ke roles, minimax formula words mein explain karke, training steps, ideal end point ($D = 0.5$), advantages aur disadvantages, phir 5 se 6 applications har ek ke ek example ke saath, aur ek line ka conclusion.
-
-</Box>
+Positive uses: creative content generation, image restoration, synthetic training data, medical research, visual effects, research aur experimentation. <Cite id="class-dl-chp6" loc="slide 14" />
 
 ## Ye kahan pucha gaya
 
-| If the question says | What to write | Seen as |
+| Agar question kahe | Kya likhna hai | Kab aaya |
 |---|---|---|
-| "Explain the working of GAN" | Analogy, G aur D ke roles, architecture diagram, minimax idea, alternating training steps, end point $D = 0.5$ | <PYQ id="2023-12/q4b" /> |
-| "Issues faced by vanilla GAN models" | Vanilla GAN kya hai, phir non-convergence, mode collapse, vanishing gradients, G-D balance aur hyperparameters, evaluation, low quality; ek fixes table | <PYQ id="2024-05/q4b" /> |
-| "What are GANs, comment on applications" | Definition, short architecture aur training, phir examples ke saath applications table, deepfakes aur unke risks samet | <PYQ id="2024-05/q6b" /> |
-| "GAN architecture and its applications" ya "architecture of GAN in detail, applications" | Paanch parts, labelled diagram, G aur D ke andar (MLP ya DCGAN), loss, training loop, phir applications | <PYQ id="2024-12/q6b" /> <PYQ id="2025-05/q5b" /> |
+| "Explain the working of GAN" / "working principle with a suitable example" | Generator aur discriminator, noise, training loop, training ke baad, faces ya currency ka example | <PYQ id="2023-12/q4b" /> <PYQ id="assignment-2/q6a" /> |
+| "What are the issues faced by vanilla GAN models?" | Training instability, mode collapse, difficult to train | <PYQ id="2024-05/q4b" /> |
+| "What are GANs, comment on applications" / "Explain GAN architecture and its applications" | Definition, architecture diagram, roles, training, applications ki list ek-ek line ke saath | <PYQ id="2024-05/q6b" /> <PYQ id="2024-12/q6b" /> <PYQ id="2025-05/q5b" /> |
+| Additional training data ke liye GANs | Limited real data par train, synthetic samples generate, quality-check, merge | <PYQ id="assignment-2/q6b" /> |
+| Image-to-image translation ke liye GANs | Sketch se realistic image, discriminator feedback loop ke saath chhe steps | <PYQ id="assignment-2/q6c" /> |
+| Discriminator ka role | Real aur generated input, real ya fake output, goal, generator ko feedback | <PYQ id="assignment-2/q6d" /> |
 
 ## Quick revision
 
-- GAN = generator $G$ (noise → fake sample) + discriminator $D$ (sample → real ki probability). Opponents ki tarah train hote hain, jaise forger aur detective.
-- Zaroorat isliye ki ye bina labels ke aur bina exact image probabilities compute kiye realistic naya data banata hai.
-- Value function: $\min_G \max_D \; \mathbb{E}[\ln D(x)] + \mathbb{E}[\ln(1 - D(G(z)))]$. $D$ ise high chahta hai, $G$ low.
-- Training alternate hoti hai: $D$ ko real = 1 aur fake = 0 se update karo, phir $G$ ko update karo taaki $D$ "real" bole (D frozen).
-- Practice mein $G$ koshish karta hai ki $D$ "real" bole (non-saturating loss), taaki shuru mein weak signal na mile.
-- Ideal end point: fakes real data se match karte hain, har jagah $D = 0.5$. Phir $D$ phenk do.
-- Vanilla GAN issues: non-convergence, mode collapse (Helvetica scenario), vanishing gradients, G-D imbalance, evaluate karna mushkil, low quality.
-- Types: DCGAN, conditional GAN, WGAN, pix2pix, CycleGAN, SRGAN, StyleGAN.
-- Applications: image generation, image translation, super-resolution, inpainting, data augmentation, deepfakes.
+- GAN = Generative Adversarial Network: deep learning model jo real training data jaisa naya data generate karta hai.
+- Do networks: generator (noise se fake sample) aur discriminator (real ya fake?). Wo compete karte hain aur dono improve hote hain.
+- Training: generator banata hai, discriminator check karta hai, loss, backpropagation, dono update, repeat. Training ke baad sirf generator use hota hai.
+- Issues: training instability, mode collapse, difficult to train (tuning chahiye).
+- Applications: image generation, DeepFake, image-to-image translation, super-resolution, restoration, synthetic data, video, art, medical imaging, text-to-image.
+- Ethics: misinformation, identity misuse, fraud, non-consensual content, digital media par bharosa ka loss.
+
+**Conclusion.** GANs powerful generative models hain: generator discriminator se compete karke random noise se realistic data banana seekhta hai. Inki applications beneficial ho sakti hain, lekin realistic synthetic media privacy, consent, misinformation aur authenticity ki challenges bhi laata hai, isliye responsible use matter karta hai. <Cite id="class-dl-chp6" loc="slide 14" />
