@@ -1,453 +1,353 @@
 ---
 title: "Learning in a neural network: forward pass and backpropagation"
 module: 2
-summary: "How a network actually learns: it makes a guess (forward pass), measures how wrong it is (loss), works out how much each weight is to blame (backpropagation), and then nudges every weight to be a little less wrong (optimization)."
+summary: "How a network learns the way the class teaches it: forward propagation makes a prediction, the loss says how wrong it is, backpropagation calculates the gradient, and the optimizer uses the gradient to update the weights. The loop repeats until the loss is small. The note ends with the two gradient problems (vanishing and exploding) and their fixes."
 keyIdeas:
-  - "Learning is a loop of four steps: forward pass, loss, backward pass, weight update."
-  - "The forward pass turns the input into a prediction, layer by layer: weighted sum, then activation."
-  - "Backpropagation sends the error backwards from the output and uses the chain rule to find how much every weight is to blame (its gradient)."
-  - "Each weight is then moved a small step against its gradient: new w = w minus learning rate times gradient."
-  - "Backpropagation finds the gradients; the optimizer (gradient descent, momentum, Adam) decides how to use them."
-  - "Small slopes multiplied layer after layer make gradients vanish in deep sigmoid networks, and equal starting weights never learn different features."
+  - "Learning loop: Training data → Forward propagation → Prediction → Loss → Backpropagation → Optimizer → Update weights → Better prediction, repeated."
+  - "Forward propagation: information flows only forward (input → hidden layers → output). The loss function only tells how much error exists; it does not tell which weight to change."
+  - "Backpropagation allows the information from the cost to flow backwards through the network in order to compute the gradient. It only computes the gradient; another algorithm, such as SGD, uses it to learn."
+  - "Weight update: W_new = W_old − η · ∂L/∂W. If the gradient is positive or negative, move in the opposite direction of the slope; if it is zero, the model may have reached a minimum (or a saddle point)."
+  - "Vanishing gradient: the gradient becomes extremely small as it moves back, so earlier layers hardly learn. Exploding gradient: the gradient becomes extremely large, so learning is unstable."
 references:
-  - gfdl-ch6
-  - gfdl-ch8
-  - gfdl-ch4
-  - rumelhart1986
-  - hinton-lec6
-  - kingma2014
-  - cs231n-backprop
-  - nptel-dl
-  - d2l-backprop
-  - d2l-gd
-  - gfg-backprop
-  - gfg-forward-prop
-  - gfg-gradient-descent
-  - tp-backprop
-  - mlm-backprop
-  - ibm-backprop
-  - w3s-ml-learning
-  - pytorch-autograd
-  - keras-sgd
-  - wiki-backprop
-  - wiki-chain-rule
-  - wiki-gradient-descent
+  - class-dl-chp2
+  - class-dl-m1
+  - class-dl-m2
 ---
 
 Before the new ideas, here are the old ones you need. If you already know them, skip to the next section.
 
 ## The basics first
 
-- A **neuron** takes some numbers in, multiplies each by a **weight**, adds them up, adds a **bias**, and passes the total through an **activation function** (for example sigmoid, which squeezes any number into the range 0 to 1).
-- A **neural network** is many neurons arranged in **layers**: an input layer, one or more hidden layers, and an output layer.
-- The **weights and biases** are the adjustable numbers, together called the **parameters**. Learning means finding good values for them.
-- The **loss** is one number that says how wrong the network's answer is. Lower is better.
-- A **gradient** (slope) of the loss for a weight says how much the loss changes when that weight is changed a tiny bit, and in which direction.
-- The **learning rate**, written $\eta$ (eta), is how big a step we take when we change a weight.
-- One **epoch** is one full pass over all the training examples.
+- A **neuron** is the basic processing unit. It receives inputs, performs calculations and passes the result to the next layer. A **weight** shows the importance of each input (higher weight means more influence). A **bias** is an extra value added to improve learning. <Cite id="class-dl-chp2" loc="slide 4" />
+- An **activation function** decides the output of a neuron and helps the network learn complex patterns. <Cite id="class-dl-chp2" loc="slide 4" />
+- The **loss** is the error of the prediction. In the teacher's example the actual weight of a fruit is 180 g, the predicted weight is 220 g, so the loss is high. <Cite id="class-dl-chp2" loc="slide 57" />
+- The weights and biases are the **parameters**: the numbers the network learns.
 
 ## The big picture: how a network learns
 
-**What it is.** Training a neural network means repeating a simple loop: guess, check the mistake, find who caused it, correct. This is syllabus <Syl m="2" />, "Learning with backpropagation" in section 2.2.
+Training a network is a repeated loop of four jobs. The teacher draws it as one flow: <Cite id="class-dl-chp2" loc="slides 57 and 59" />
 
-**Why it is needed.** A new network starts with random weights, so its answers are random. Nobody can set millions of weights by hand. We need an automatic way to know, for every weight, "should this go up or down, and by how much?" The learning loop with backpropagation answers exactly that.
+1. **Forward propagation:** the input goes through the network and gives a prediction.
+2. **Loss calculation:** the prediction is compared with the actual value to find the error.
+3. **Backpropagation:** the error information flows backwards and gives the gradient.
+4. **Optimization:** the optimizer uses the gradient to update the weights.
 
-**Everyday analogy.** Think of learning to throw a ball into a basket. You throw (a guess). You see how far you missed (the error). You work out what to change: "my arm was too strong, my angle was fine" (who is to blame). Then you adjust a little and throw again.
-
-<Box kind="definition">
-
-**The learning process** is a loop with four steps, repeated for many examples and many epochs:
-
-1. **Forward propagation:** send the input through the network to get a prediction.
-2. **Loss calculation:** compare the prediction with the correct answer and get one number for the error.
-3. **Backpropagation:** work backwards from the loss to find how much each weight is to blame (its gradient).
-4. **Optimization (weight update):** change every weight a little in the direction that lowers the loss.
-
-</Box>
+As training continues, the loss decreases and the predictions become more accurate. <Cite id="class-dl-chp2" loc="slide 59" />
 
 ```mermaid
-%% caption: The training loop. Steps 1 and 2 go forwards through the network, step 3 goes backwards, step 4 changes the weights, and then the loop repeats with the next example or batch.
+%% caption: The learning loop of a neural network, as the teacher draws it. Each pass makes the prediction a little better.
 flowchart TD
-  A["Input x and correct answer y"] --> B["1. Forward pass: compute prediction ŷ"]
-  B --> C["2. Loss: how wrong is ŷ compared with y"]
-  C --> D["3. Backpropagation: gradient of the loss for every weight"]
-  D --> E["4. Optimizer: w ← w − η × gradient"]
-  E --> F{"Loss small enough or epochs finished?"}
-  F -- "No" --> A
-  F -- "Yes" --> G["Stop: the trained network"]
+  A["Training data"] --> B["Forward propagation"]
+  B --> C["Prediction"]
+  C --> D["Loss function"]
+  D --> E["Backpropagation"]
+  E --> F["Optimizer"]
+  F --> G["Update weights"]
+  G --> H["Better prediction"]
+  H -->|"repeat"| B
 ```
 
-Keep two ideas apart: **backpropagation only computes gradients**. It does not change any weight. The **optimizer** (plain gradient descent, momentum, Adam and so on) is what uses those gradients to change the weights. <Cite id="gfdl-ch6" loc="§6.5" />
+<Cite id="class-dl-chp2" loc="slide 59" />
+
+<Img id="class-backpropagation-simple-diagram" caption="The teacher's simple diagram: prediction, loss, backpropagation, gradient (slope), optimizer, update weights, and back to the start." />
+
+**Everyday analogy.** A student writes a practice test (forward pass), the teacher marks it (loss), the student works out which topics caused the mistakes (backpropagation), and studies those topics more (weight update). The next test is better.
+
+**The fruit example (teacher's).** The actual weight is 180 g and the first prediction is 220 g (loss is high). After each update the prediction moves closer: 220 g, 205 g, 193 g, 182 g, 180 g, and the loss decreases. <Cite id="class-dl-chp2" loc="slide 57" /> This is syllabus <Syl m="2" />.
 
 ## Step 1: forward propagation
 
-**What it is.** The input enters at the left and flows to the right, one layer at a time, until the output layer gives a prediction $\hat{y}$ (read "y-hat").
+<Box kind="definition">
 
-**How it works.** Every neuron in a layer does two small things:
-
-1. **Weighted sum:** multiply each incoming value by its weight, add them up and add the bias.
-2. **Activation:** pass that sum through the activation function (sigmoid, tanh, ReLU and so on). The result is the neuron's output, which becomes an input to the next layer.
-
-So a layer takes the outputs of the previous layer, forms one weighted sum per neuron, and squeezes each sum through the activation. The outputs of the last layer are the prediction.
-
-<Img id="img-dl-n2-bp-neuron" caption="One neuron: inputs times weights, added up, then passed through the activation function. Backpropagation finds the gradient for each of these weights." />
-
-<Img id="img-dl-n2-bp-network" caption="Many neurons joined layer by layer: every neuron feeds every neuron of the next layer, so the error has many paths to travel back along." />
-
-<Figure caption="A small fully connected network: 2 inputs, 3 hidden neurons, 1 output. In the forward pass numbers flow left to right along every line; in backpropagation the blame flows right to left along the same lines.">
-  <NetworkFigure layers="2,3,1" labels="Input,Hidden,Output" title="Forward: left to right. Backward: right to left." />
-</Figure>
-
-**Worked sum: the forward pass of one neuron.**
-
-<Sum>
-
-<Given>
-
-inputs 1 and 2, weights 0.5 and −0.25, bias 0.1, sigmoid activation $\sigma(z) = \dfrac{1}{1 + e^{-z}}$.
-
-</Given>
-
-<Find>
-
-the neuron's output.
-
-</Find>
-
-<Steps>
-
-1. First input times its weight: $1 \times 0.5 = 0.5$. *(Each input is scaled by how important it is.)*
-2. Second input times its weight: $2 \times (-0.25) = -0.5$. *(A negative weight pulls the sum down.)*
-3. Weighted sum plus bias: $z = 0.5 + (-0.5) + 0.1 = 0.1$. *(The neuron adds everything up.)*
-4. Activation: $e^{-0.1} \approx 0.9048$, so
-
-   $$
-   \begin{aligned}
-   \sigma(0.1) &= \frac{1}{1 + 0.9048} \\
-   &= \frac{1}{1.9048} \\
-   &\approx 0.525
-   \end{aligned}
-   $$
-
-   *(Sigmoid squeezes the sum into 0 to 1.)*
-
-</Steps>
-
-<Answer>
-
-the output is about 0.525.
-
-</Answer>
-
-<Box kind="verify">
-
-Sigmoid gives exactly 0.5 at $z = 0$, and near 0 it rises by about one quarter of $z$ (its slope there is 0.25). So
-
-$$
-\sigma(0.1) \approx 0.5 + 0.1 / 4 = 0.525
-$$
-
-Same answer by a different route, and it sits just above 0.5 as it should for a small positive sum.
+**Multilayer Feedforward Neural Network:** a neural network with one input layer, one or more hidden layers and one output layer, where data moves only forward (input to output). It processes the input through the hidden layers and gives the final output. <Cite id="class-dl-chp2" loc="slide 4" />
 
 </Box>
 
-</Sum>
+In the textbook's words: when we use a feedforward network to accept an input $x$ and produce an output $\hat y$, "information flows forward through the network". The inputs provide the initial information that then propagates up to the hidden units at each layer and finally produces $\hat y$. This is called **forward propagation**. During training, forward propagation continues until it produces a scalar cost $J(\theta)$. <Cite id="class-dl-m1" loc="p. 26" />
 
-A whole network is just this, repeated for every neuron. <Cite id="gfg-forward-prop" />
+<Img id="class-backpropagation-mlffnn-structure" caption="Structure of a multilayer feedforward network: input layer, two hidden layers, output layer, and the components (neuron, weight, bias, activation function)." />
 
-During the forward pass the network also **remembers** every weighted sum and output, because backpropagation will need them.
+How it works, the teacher's five steps (fruit example): <Cite id="class-dl-chp2" loc="slide 4" />
+
+1. Input features are given (colour = red, shape = round, weight = 180 g, texture = smooth).
+2. The input layer sends the data to Hidden Layer 1.
+3. Hidden Layer 1 processes the information and sends it to Hidden Layer 2.
+4. Hidden Layer 2 learns more complex patterns.
+5. The output layer predicts the fruit (Apple).
+
+<Img id="class-backpropagation-forward-steps" caption="The five steps of forward propagation for the fruit example." />
 
 ## Step 2: loss calculation
 
-**What it is.** The loss turns "how wrong" into one number. The syllabus names two:
+The loss function compares the prediction with the actual value. It only tells us **how much error exists**. It does not tell us which weight is wrong, how to update the weights or how to reach the minimum loss. <Cite id="class-dl-chp2" loc="slide 59" /> Module 1 adds that the cost (loss) function "measures the difference, or error, between actual y and predicted y", and that a loss function is the error of one training example while a cost function is the average error over the entire training set. <Cite id="class-dl-m1" loc="p. 28" />
 
-- **Squared error** (for predicting numbers): half the square of the difference between prediction and answer, $L = \dfrac{1}{2}(\hat{y} - y)^2$. Example: prediction 0.6, answer 1. Difference $0.6 - 1 = -0.4$; square $0.16$; half of it $0.08$. So **$L = 0.08$**. (Check: the sign of the difference does not matter, $(1 - 0.6)^2 / 2 = 0.16 / 2 = 0.08$ too.)
-- **Cross-entropy** (for classification): $L = -\ln p$, where $p$ is the probability the network gave to the correct class. It is small when $p$ is near 1 and very large when $p$ is near 0. Example: if $p = 0.9$, $L = -\ln 0.9 \approx 0.105$; if $p = 0.1$, $L = -\ln 0.1 \approx 2.303$.
+So the model needs "a guide": the gradient. <Cite id="class-dl-chp2" loc="slide 57" />
 
-For a batch of many examples we take the average loss. The loss is the starting point of the backward pass: it is the "mark" that tells the network how badly it did.
+<Img id="class-backpropagation-optimization-concept" caption="Why the loss function alone is not enough, and the new concept: the optimizer." />
 
-## The one tool backpropagation needs: the chain rule
+## The gradient: the guide the model needs
 
-**What it is.** If a change in A causes a change in B, and a change in B causes a change in C, then the effect of A on C is the two effects **multiplied**: $\dfrac{dC}{dA} = \dfrac{dC}{dB} \cdot \dfrac{dB}{dA}$.
+<Box kind="definition">
 
-**Everyday analogy.** A chain of gears. If gear B turns 3 times for each turn of gear A, and gear C turns 2 times for each turn of gear B, then C turns $3 \times 2 = 6$ times for each turn of A. <Cite id="wiki-chain-rule" /> <Cite id="gfdl-ch6" loc="§6.5.2" />
+**Gradient:** the slope of the loss function. It tells us which direction reduces the loss and how quickly the loss changes. The gradient acts like a guide for the optimizer. <Cite id="class-dl-chp2" loc="slide 57" />
 
-**Why it matters here.** The loss depends on the output, the output depends on the last weights and on the hidden outputs, the hidden outputs depend on earlier weights, and so on. So the gradient for any weight is a **product of small local slopes along the path** from that weight to the loss.
+</Box>
+
+<Img id="class-backpropagation-gradient-concept" caption="A gradient is the slope of the loss: positive slope on one side of the valley, negative on the other, zero at the minimum." />
+
+How the gradient guides the optimizer: <Cite id="class-dl-chp2" loc="slide 57" />
+
+- If the gradient is **positive**, move in the opposite direction.
+- If the gradient is **negative**, move in the opposite direction (of the slope).
+- If the gradient is **zero**, the model may have reached a minimum (or a saddle point).
+
+<Img id="class-backpropagation-how-solves" caption="How the gradient tells the optimizer what to do, and the fruit example where the prediction falls from 220 g to 180 g." />
+
+**Don't confuse (the teacher's table).** <Cite id="class-dl-chp2" loc="slide 57" />
+
+| | Loss function | Gradient |
+|---|---|---|
+| Tells | How much error (how bad) | Where to go and how to change |
+| Direction? | Does not give direction | Gives direction (increase or decrease) |
+| Speed? | Does not tell speed | Tells how fast the loss changes |
+| Weights? | Does not update weights | Helps the optimizer update weights |
+
+<Img id="class-backpropagation-gradient-types" caption="Positive, negative and zero gradient, with what each means for the weight." />
 
 ## Step 3: backpropagation
 
-**Definition.** Backpropagation ("backward propagation of errors") is the algorithm that computes the gradient of the loss with respect to every weight by passing an error signal from the output layer back towards the input layer, using the chain rule. <Cite id="rumelhart1986" /> <Cite id="gfdl-ch6" loc="§6.5" />
+<Box kind="definition">
 
-**Why it is needed.** The output layer can see its own mistake directly, but a hidden neuron has no "correct answer" of its own. Backpropagation tells each hidden neuron its fair share of the output's mistake.
+**Backpropagation (backprop):** the algorithm that allows the information from the cost to flow backwards through the network, in order to compute the gradient. <Cite id="class-dl-m1" loc="p. 26" />
 
-**Everyday analogy.** A team project gets a bad mark. The teacher tells the final editor how wrong the report was. The editor works out how much of that came from each section writer and passes the blame back to them. Each writer passes their share back to the people who gave them material. Everyone learns their own share of the blame without the teacher checking each person separately.
+</Box>
 
-**How it works, step by step.**
+The textbook is careful about what it does *not* do: "back-propagation refers only to the method for computing the gradient, while another algorithm, such as stochastic gradient descent, is used to perform learning using this gradient". It does the job using "a simple and inexpensive procedure", instead of evaluating a long expression for the gradient numerically. <Cite id="class-dl-m1" loc="p. 26" />
 
-1. **Error at the output.** Compare the prediction with the answer. Multiply "how wrong" by "how sensitive the output neuron is" (the slope of its activation). This is the output neuron's **error signal**, written $\delta$ (delta).
-2. **Gradients of the last layer.** For each weight going into the output, gradient = (error signal of the neuron it feeds) × (the input that came along that weight).
-3. **Pass the blame back.** Each hidden neuron collects the error signals of the neurons it feeds, each weighted by the connecting weight. A neuron that had a big weight to a very wrong output gets more blame.
-4. **Hidden error signal.** Multiply that collected blame by the hidden neuron's own activation slope.
-5. **Repeat** steps 2 to 4 layer by layer until the first layer is reached.
-6. **Hand the gradients to the optimizer**, which updates the weights.
-
-The key trick is **reuse**: each layer reuses the error signals already worked out for the layer after it, so nothing is computed twice.
+In the teacher's flow the gradient is calculated during backpropagation and then "used by optimizers to update weights and reduce the loss": <Cite id="class-dl-chp2" loc="slide 58" />
 
 ```mermaid
-%% caption: Backpropagation on one path. The forward pass (solid arrows) computes values; the backward pass (dotted arrows) carries the error signal back and turns it into a gradient for each weight.
+%% caption: Forward pass goes input to loss; backpropagation sends the gradient back; the optimizer updates the weights. This is the teacher's diagram redrawn.
 flowchart LR
-  X["Input x"] --> H["Hidden neuron h (weight w1)"]
-  H --> Y["Output ŷ (weight w2)"]
-  Y --> L["Loss: compare ŷ with y"]
-  L -.->|"how wrong × output slope"| D2["Output error signal δ2"]
-  D2 -.->|"δ2 × h"| G2["Gradient for w2"]
-  D2 -.->|"× w2 × hidden slope"| D1["Hidden error signal δ1"]
-  D1 -.->|"δ1 × x"| G1["Gradient for w1"]
+  X["Input x"] --> M["Model with weights W"]
+  M --> Y["Output y"]
+  Y --> L["Loss L"]
+  L -->|"backpropagation"| G["Compute gradient dL/dW"]
+  G --> O["Optimizer: GD, Adam, SGD"]
+  O --> U["Update weights: W new = W old - eta dL/dW"]
+  U -.-> M
 ```
 
-The one rule worth remembering in symbols: **gradient of a weight = error signal at its output end × input at its start**, $\dfrac{\partial L}{\partial w} = \delta \times \text{input}$. For sigmoid the slope is simply $a(1-a)$, computed from the output we already stored. <Cite id="gfdl-ch6" loc="§6.5.4" /> <Cite id="d2l-backprop" /> <Cite id="gfg-backprop" />
+<Cite id="class-dl-chp2" loc="slide 58" />
 
-<Img id="img-dl-n2-bp-graph" caption="The computational graph of a forward pass. Backpropagation walks this graph from J back to the weights W1 and W2, applying the chain rule at each box." />
+<Img id="class-backpropagation-forward-backward" caption="Forward pass to the loss, backpropagation to compute the gradient, then the optimizer updates the weights." />
 
-**Worked sum: one full training step (forward, loss, backward, update).** Only needed if a question gives numbers; theory questions need the steps above in words.
+## Step 4: optimization (updating the weights)
+
+The optimizer takes the gradient and changes the weights. The simplest optimizer is gradient descent: <Cite id="class-dl-chp2" loc="slide 58" />
+
+<Box kind="definition">
+
+$W_{new} = W_{old} - \eta \dfrac{\partial L}{\partial W}$, where $W$ is the weight, $\eta$ the learning rate, $L$ the loss and $\dfrac{\partial L}{\partial W}$ the gradient. <Cite id="class-dl-chp2" loc="slide 63" />
+
+</Box>
+
+A **large gradient** (steep slope) gives large weight updates and faster learning; a **small gradient** (flat slope) gives small updates and slower learning. <Cite id="class-dl-chp2" loc="slide 58" /> The different optimizers (SGD, momentum, AdaGrad, RMSProp, Adam) are explained in the note on gradient descent.
+
+<Img id="class-backpropagation-optimization-flow" caption="Quick flow: training data, forward propagation, prediction, loss, backpropagation, optimizer, update weights, better prediction." />
+
+**Sum 1: one full learning cycle on one weight (not in the class files; added to show the numbers).** The class gives the update rule but not the derivative of the loss, so here the loss is the simple squared error $L = (\hat y - y)^2$, whose gradient with respect to the weight is $2(\hat y - y)\,x$.
 
 <Sum>
 
 <Given>
 
-input $x = 1$, correct answer $y = 1$; one hidden sigmoid neuron with weight $w_1 = 0.5$ and one output sigmoid neuron with weight $w_2 = 0.5$ (no biases); squared error loss; learning rate $\eta = 1$.
+One neuron with no activation: $\hat y = w \cdot x$. Input $x = 2$, actual output $y = 4$, weight $w = 3$, learning rate $\eta = 0.1$. Loss $L = (\hat y - y)^2$.
 
 </Given>
 
 <Find>
 
-the loss, the gradients for $w_1$ and $w_2$, and the new weights after one update.
+one cycle: forward pass, loss, gradient, weight update, and the new loss.
 
 </Find>
 
 <Steps>
 
-1. Hidden weighted sum: $0.5 \times 1 = 0.5$. Hidden output
-
-   $$
-   \begin{aligned}
-   h &= \sigma(0.5) \\
-   &= \frac{1}{1 + e^{-0.5}} \\
-   &= \frac{1}{1 + 0.6065} \\
-   &= 0.6225
-   \end{aligned}
-   $$
-
-   *(Forward pass, first layer.)*
-2. Output weighted sum: $0.5 \times 0.6225 = 0.3112$. Prediction
-
-   $$
-   \begin{aligned}
-   \hat{y} &= \sigma(0.3112) \\
-   &= \frac{1}{1 + 0.7326} \\
-   &= 0.5772
-   \end{aligned}
-   $$
-
-   *(Forward pass, second layer.)*
-3. Loss:
-
-   $$
-   \begin{aligned}
-   \frac{1}{2}(0.5772 - 1)^2 &= \frac{1}{2}(-0.4228)^2 \\
-   &= \frac{1}{2} \times 0.1788 \\
-   &= 0.0894
-   \end{aligned}
-   $$
-
-   *(How wrong the guess is.)*
-4. Output slope:
-
-   $$
-   \begin{aligned}
-   \hat{y}(1 - \hat{y}) &= 0.5772 \times 0.4228 \\
-   &= 0.2440
-   \end{aligned}
-   $$
-
-   *(For sigmoid the slope comes straight from the stored output.)*
-5. Output error signal:
-
-   $$
-   \begin{aligned}
-   \delta_2 &= (\hat{y} - y) \times \text{slope} \\
-   &= -0.4228 \times 0.2440 \\
-   &= -0.1032
-   \end{aligned}
-   $$
-
-   *(How wrong × how sensitive the output neuron is.)*
-6. Gradient for $w_2$:
-
-   $$
-   \begin{aligned}
-   \delta_2 \times h &= -0.1032 \times 0.6225 \\
-   &= -0.0642
-   \end{aligned}
-   $$
-
-   *(Error signal at the end of the weight × input at its start.)*
-7. Hidden slope: $h(1 - h) = 0.6225 \times 0.3775 = 0.2350$. *(Same sigmoid rule for the hidden neuron.)*
-8. Hidden error signal:
-
-   $$
-   \begin{aligned}
-   \delta_1 &= \delta_2 \times w_2 \times \text{hidden slope} \\
-   &= -0.1032 \times 0.5 \times 0.2350 \\
-   &= -0.0516 \times 0.2350 \\
-   &= -0.0121
-   \end{aligned}
-   $$
-
-   *(Blame passed back through $w_2$, then scaled by the hidden slope.)*
-9. Gradient for $w_1$:
-
-   $$
-   \begin{aligned}
-   \delta_1 \times x &= -0.0121 \times 1 \\
-   &= -0.0121
-   \end{aligned}
-   $$
-
-   *(Same rule as step 6.)*
-10. Update with
-
-    $$
-    w \leftarrow w - \eta \times \text{gradient}
-    $$
-
-    : $w_2 = 0.5 - 1 \times (-0.0642) = 0.5642$ and $w_1 = 0.5 - 1 \times (-0.0121) = 0.5121$. *(A negative gradient means "raise this weight to lower the loss".)*
+1. **Forward propagation.** $\hat y = 3 \times 2 = 6$.
+2. **Loss.** $L = (6 - 4)^2 = 4$.
+3. **Backpropagation (gradient).** $\dfrac{\partial L}{\partial w} = 2(\hat y - y)\,x = 2 \times 2 \times 2 = 8$. It is positive, so a bigger $w$ means a bigger loss.
+4. **Optimizer (update).** $w_{new} = 3 - 0.1 \times 8 = 2.2$.
+5. **Forward pass again.** $\hat y = 2.2 \times 2 = 4.4$, so $L = (4.4 - 4)^2 = 0.16$.
 
 </Steps>
 
 <Answer>
 
-loss $= 0.0894$; gradients $-0.0642$ for $w_2$ and $-0.0121$ for $w_1$; new weights $w_2 = 0.5642$, $w_1 = 0.5121$.
+One cycle takes the loss from 4 to 0.16 and the prediction from 6 to 4.4 (the actual value is 4).
 
 </Answer>
 
 <Box kind="verify">
 
-**Check 1, nudge the weight.** A gradient is "change in loss ÷ change in weight". Run the forward pass again with $w_2 = 0.51$: loss $= 0.08875$. With $w_2 = 0.49$: loss $= 0.09003$. Slope
-
-$$
-\begin{aligned}
- &= (0.08875 - 0.09003) / 0.02 \\
-&= -0.00128 / 0.02 \\
-&= -0.064
-\end{aligned}
-$$
-
-matching $-0.0642$ from backpropagation. Doing the same for $w_1$ gives $-0.0121$ as well.
-
-**Check 2, plug the new weights back in.** $h = \sigma(0.5121) = 0.6253$;
-
-$$
-\begin{aligned}
-\hat{y} &= \sigma(0.5642 \times 0.6253) \\
-&= \sigma(0.3528) \\
-&= 0.5873
-\end{aligned}
-$$
-
-new loss $= \dfrac{1}{2}(0.5873 - 1)^2 = 0.0852$. It is lower than 0.0894, so the step really went downhill.
+The perfect weight is $w = 2$ because $2 \times 2 = 4$. The weight moved from 3 to 2.2, toward 2, and the loss fell, so the update went the right way.
 
 </Box>
 
 </Sum>
 
-Notice that $w_1$, further from the output, got a much smaller gradient than $w_2$ (0.0121 against 0.0642): that is the vanishing-gradient problem in miniature.
-
-## Step 4: optimization (updating the weights)
-
-**What it is.** The optimizer turns gradients into actual weight changes. The simplest one is **gradient descent**: move each weight a small step against its gradient.
-
-$$
-w \leftarrow w - \eta \, \frac{\partial L}{\partial w}
-$$
-
-In words: new weight = old weight − learning rate × gradient. The minus sign means "go downhill on the loss". In practice the gradient is computed on a small **mini-batch** of examples, and smarter optimizers such as **momentum**, **RMSProp** or **Adam** are often used. All of them still need the gradients that backpropagation provides; they are explained in the gradient descent note. <Cite id="gfdl-ch8" loc="§8.3.1" /> <Cite id="kingma2014" />
-
 ## Forward propagation versus backpropagation
 
-| Point | Forward propagation | Backpropagation |
+| | Forward propagation | Backpropagation |
 |---|---|---|
-| Direction | Input → output | Output → input |
-| What flows | Values (activations) | Error signals (blame) |
-| Purpose | Make a prediction | Find the gradient of every weight |
-| Main operation | Weighted sum, then activation | Chain rule: multiply local slopes |
-| Used when | Training and prediction | Training only |
-| Changes weights? | No | No (the optimizer does) |
+| Direction | Input to output | From the loss back through the layers |
+| Job | Makes the prediction (and the loss) | Calculates the gradient |
+| Uses | Weights, biases, activation functions | The loss and the slope of each part |
+| Changes the weights? | No | No, it only computes the gradient; the optimizer changes them |
 
-## Types of backpropagation
+<Cite id="class-dl-m1" loc="p. 26" />
 
-- **By how much data is used per update:** *stochastic (online)* backpropagation updates after every example; *batch* backpropagation after the whole dataset; *mini-batch* after a small group. Mini-batch is the usual choice. <Cite id="gfdl-ch8" loc="§8.1.3" />
-- **By network type:** *static* backpropagation for feedforward networks, where an input gives a fixed output (image classification); *recurrent* backpropagation for networks with feedback loops. Recurrent networks (RNNs) are usually trained with **backpropagation through time (BPTT)**, which unrolls the RNN over its time steps and then applies ordinary backpropagation (covered in module 5). <Cite id="gfg-backprop" />
+## The two gradient problems
 
-## Advantages and disadvantages
+Backpropagation sends the gradient backwards through many layers, and it can go wrong in two opposite ways.
 
-**Advantages**
+### Vanishing gradient
 
-- **Efficient:** finds all gradients in one backward pass, whose cost is of the same order as a forward pass (a small constant multiple of it). The slow alternative (nudge each weight and re-run the network) would need a million forward passes for a million weights. <Cite id="cs231n-backprop" />
-- **General:** works for any network built from differentiable pieces (dense, convolutional, recurrent layers).
-- **Automatic:** libraries do it for you; PyTorch's `autograd` runs it when you call `loss.backward()`. <Cite id="pytorch-autograd" />
-- **No settings of its own:** backpropagation is an exact recipe for the gradients; the settings to tune (learning rate, batch size) belong to the optimizer.
-- **Learns hidden features:** hidden layers discover useful internal features without being told what they are. <Cite id="rumelhart1986" />
+<Box kind="definition">
 
-**Disadvantages**
-
-- **Vanishing gradients:** slopes smaller than 1 multiplied layer after layer make early layers learn very slowly (see below).
-- **Exploding gradients:** slopes larger than 1 can make gradients huge and training unstable.
-- **Needs labelled data and differentiable functions.**
-- **Can get stuck** in poor low points, flat regions or saddle points, because it only sees the local slope. <Cite id="gfdl-ch8" loc="§8.2.2" />
-- **Sensitive to settings** such as learning rate and initial weights, and needs a lot of computation for big networks.
-
-## Applications
-
-Backpropagation trains almost every modern neural network: image classifiers (CNNs), speech recognition, machine translation and chatbots (RNNs and transformers), recommendation systems, medical image diagnosis and self-driving perception. <Cite id="ibm-backprop" />
-
-**History in one line.** Rumelhart, Hinton and Williams (1986) showed that this procedure trains networks with hidden layers to learn useful internal features, and made it widely known. Similar ideas had appeared earlier. <Cite id="rumelhart1986" /> <Cite id="wiki-backprop" />
-
-## Common problems to know
-
-<Box kind="pitfall">
-
-**Vanishing gradients.** The sigmoid's slope is at most 0.25 and almost 0 for large inputs. Backpropagation multiplies one such slope per layer, so after many sigmoid layers the blame reaching the early layers is tiny and they barely learn. Fixes: ReLU activation (slope 1 for positive inputs), good weight initialization and batch normalization.
+**Vanishing Gradient Problem:** it occurs when gradients become extremely small during backpropagation. Because of these tiny gradients, earlier layers receive almost no updates and stop learning. <Cite id="class-dl-chp2" loc="slide 64" />
 
 </Box>
 
-<Figure caption="The sigmoid (solid) and its derivative (dashed). The derivative never goes above 0.25, and it is close to 0 when the input is far from 0. Backpropagation multiplies by this derivative at every sigmoid layer, so gradients shrink as they travel back.">
-  <CurvePlot curves="sigmoid,sigmoid-derivative" x="-6,6" y="0,1.05" xLabel="z (weighted sum)" yLabel="value" />
-</Figure>
+**Why it happens.** During backpropagation the gradients travel from the output layer to the input layer. After passing through many layers the gradient becomes smaller and smaller. In the teacher's picture the gradient is 0.8 at the output layer, 0.3, 0.05 and then 0.001 at hidden layer 1, so **the first hidden layers receive almost zero gradient**. <Cite id="class-dl-chp2" loc="slide 64" />
 
-<Box kind="pitfall">
+Gradient descent is not the cause: the weight update is learning rate × gradient, so a very small gradient means a very small update. The weights hardly change, the loss decreases very slowly and training may stop before reaching the best solution. <Cite id="class-dl-chp2" loc="slide 64" />
 
-**All weights the same at the start.** If two hidden neurons start with exactly the same weights, they compute the same output and get exactly the same gradient, so they stay identical forever and can never learn different features. We therefore start with **small random** weights. This is called breaking symmetry. <Cite id="hinton-lec6" /> <Cite id="rumelhart1986" />
+<Img id="class-backpropagation-vanishing-concept" caption="The vanishing gradient problem: the gradient shrinks layer by layer, so the first hidden layers hardly learn." />
+
+```mermaid
+%% caption: The vanishing gradient flow from the teacher's example. The gradient shrinks as it moves from the output layer back toward the input layer.
+flowchart TD
+  A["Output layer: gradient 0.8"] --> B["Hidden layer 3: gradient 0.3"]
+  B --> C["Hidden layer 2: gradient 0.05"]
+  C --> D["Hidden layer 1: gradient 0.001"]
+  D --> E["Weights hardly update"]
+  E --> F["Learning slows down"]
+```
+
+<Cite id="class-dl-chp2" loc="slide 64" />
+
+**Where it occurs:** deep neural networks, recurrent neural networks and very deep architectures, especially when using sigmoid or tanh activation functions repeatedly. <Cite id="class-dl-chp2" loc="slide 64" /> **Effects:** slow training, early hidden layers stop learning, accuracy remains low, training takes many epochs, deep networks become difficult to train. <Cite id="class-dl-chp2" loc="slide 65" />
+
+The teacher explains the cause with the sigmoid curve: its derivative is always less than 1, with $0 < f'(z) \le 0.25$, so during backpropagation many small derivatives are multiplied together and the gradient gradually becomes almost zero. The tanh derivative $f'(z) = 1 - \tanh^2(z)$ is also at most 1, so in very deep networks the gradient can still vanish. <Cite id="class-dl-chp2" loc="slide 65" />
+
+<Img id="class-backpropagation-vanishing-sigmoid" caption="Why sigmoid and tanh make gradients vanish: their derivatives are always less than 1 (sigmoid at most 0.25)." />
+
+**Sum 2: how fast the gradient shrinks.** <Cite id="class-dl-chp2" loc="slide 65" />
+
+<Sum>
+
+<Given>
+
+The best case for a sigmoid layer: derivative $0.25$ at every layer. Gradient at the output is 1.
+
+</Given>
+
+<Find>
+
+the gradient after 5 layers and after 10 layers.
+
+</Find>
+
+<Steps>
+
+1. Each layer multiplies the gradient by 0.25.
+2. After 5 layers: $0.25^5 = 0.25 \times 0.25 \times 0.25 \times 0.25 \times 0.25 = 0.000977$.
+3. After 10 layers: $0.25^{10} = (0.25^5)^2 = 0.000977^2 \approx 0.00000095$.
+
+</Steps>
+
+<Answer>
+
+About 0.001 after 5 layers and about 0.000001 after 10 layers. Even in the best case the gradient is nearly zero in the early layers.
+
+</Answer>
+
+<Box kind="verify">
+
+$0.25^5 = 1/4^5 = 1/1024 = 0.000977$, and $1/4^{10} = 1/1{,}048{,}576 = 0.00000095$. Both agree.
 
 </Box>
 
-- **Local minima and flat regions.** For large networks, experts now think most local minima are already fairly good, and flat regions and saddle points (flat spots that are not a minimum) are often the bigger problem. <Cite id="gfdl-ch8" loc="§8.2.3" />
-- **Exploding gradients.** Clipping the gradient to a maximum size is a common fix.
+</Sum>
+
+**How to solve it** (the teacher's list): <Cite id="class-dl-chp2" loc="slide 65" />
+
+- **ReLU activation:** derivative of 1 for positive inputs, so gradients remain much larger.
+- **Leaky ReLU:** allows a small gradient even for negative inputs.
+- **Proper weight initialization:** He initialization (for ReLU), Xavier initialization (for sigmoid/tanh).
+- **Batch normalization:** keeps activations and gradients in a healthy range and speeds up training.
+- **LSTM / GRU:** used in recurrent networks, designed specifically to reduce the vanishing gradient problem in sequence data.
+
+<Img id="class-backpropagation-vanishing-solutions" caption="The five fixes for vanishing gradients: ReLU, Leaky ReLU, proper weight initialization, batch normalization, LSTM/GRU." />
+
+Module 1 describes the same two problems: with vanishing gradients the earlier layers "learn more slowly than later layers", until the weights stop changing; with exploding gradients the model weights grow too large and "will eventually be represented as NaN". <Cite id="class-dl-m1" loc="p. 31" />
+
+### Exploding gradient
+
+<Box kind="definition">
+
+**Exploding Gradient Problem:** it occurs when gradients become extremely large during backpropagation. Large gradients produce huge weight updates, making the neural network unstable. <Cite id="class-dl-chp2" loc="slide 66" />
+
+</Box>
+
+**How it happens.** Gradients pass through many layers and sometimes, instead of becoming smaller, they become larger and larger. In the teacher's picture the gradient is 2 at the output layer, 8, 40 and 200 at hidden layer 1. **Very large gradients lead to huge weight updates.** <Cite id="class-dl-chp2" loc="slide 66" />
+
+In the fruit example the predictions keep jumping because the weight updates are too large: 220 g, 350 g, 80 g, 500 g, 120 g. The model cannot learn properly. <Cite id="class-dl-chp2" loc="slide 66" />
+
+<Img id="class-backpropagation-exploding-concept" caption="The exploding gradient problem: the gradient grows layer by layer (2, 8, 40, 200) and causes huge weight updates." />
+
+**Causes:** very deep networks, poor weight initialization (too-large initial weights) and a large learning rate (the optimizer keeps overshooting). **Effects:** training becomes unstable, the loss increases instead of decreasing, the model fails to converge and weights may become extremely large. <Cite id="class-dl-chp2" loc="slide 67" />
+
+**How to solve it:** <Cite id="class-dl-chp2" loc="slide 67" />
+
+- **Gradient clipping:** set a maximum limit for the gradient; if it exceeds the limit it is clipped to a smaller value.
+- **Proper weight initialization** (He, Xavier).
+- **Smaller learning rate.**
+- **Batch normalization.**
+- **Better optimizers** such as RMSProp and Adam.
+
+The textbook adds that cliff structures are most common in recurrent networks, because they multiply many factors, one for each time step, and gradient clipping "intervenes to reduce the step size". <Cite id="class-dl-m2" loc="p. 47" />
+
+<Img id="class-backpropagation-exploding-solutions" caption="The five fixes for exploding gradients: gradient clipping, proper initialization, smaller learning rate, batch normalization, better optimizers." />
+
+### Vanishing versus exploding gradient
+
+<Img id="class-backpropagation-vanish-vs-explode" caption="Vanishing and exploding gradient compared on gradient, weight updates, training behaviour, common causes and solutions." />
+
+| | Vanishing gradient | Exploding gradient |
+|---|---|---|
+| What happens | Gradient becomes very small (close to 0) | Gradient becomes very large |
+| Weight updates | Tiny | Huge |
+| Training | Slow, may stop learning | Unstable, jumps a lot |
+| Loss | Decreases very slowly | May increase or fluctuate |
+| Common with | Sigmoid / tanh, very deep networks | Poor initialization, large learning rate, very deep networks |
+| Solved by | ReLU, Leaky ReLU, batch normalization, proper initialization, LSTM/GRU | Gradient clipping, proper initialization, lower learning rate, Adam / RMSProp |
+
+<Cite id="class-dl-chp2" loc="slides 65 to 67" />
+
+**Easy trick (the teacher's):** tiny baby steps = vanishing gradient; huge jumps = exploding gradient. <Cite id="class-dl-chp2" loc="slide 67" />
 
 ## Where this was asked
 
-| If the question says | What to write | Seen as |
+| Question | What to write | Solution |
 |---|---|---|
-| "Explain the learning process in a neural network", "how does it update its weights", "role of forward propagation, loss, backpropagation and optimization" | The four-step loop with its diagram, one paragraph of theory per step, the update rule in words and symbols, forward vs backward table, advantages, limitations | <PYQ id="2025-05/q6b" /> |
-
-Gradient descent questions (types of gradient descent, SGD, momentum, the update rule for $y = xw$) are covered in the gradient descent note; they use the gradients that backpropagation computes.
+| "Explain the learning process in a neural network. How does it update weights? Role of forward propagation, loss, backpropagation and optimization" | The four-step loop with a diagram, each step's job, the update rule, a small example | <PYQ id="2025-05/q6b" /> |
 
 ## Quick revision
 
-- Learning loop: **forward pass → loss → backpropagation → weight update**, repeated.
-- Forward pass, per neuron: weighted sum plus bias, then activation.
-- Loss: squared error for numbers, cross-entropy for classes.
-- Chain rule: multiply local slopes along the path (gears: 3 × 2 = 6).
-- Backprop: error at output → pass blame back through the weights → gradient = error signal × input.
-- Backprop computes gradients; the optimizer uses them: $w \leftarrow w - \eta\,\partial L/\partial w$.
-- Problems: vanishing/exploding gradients, symmetry (fix: small random weights).
+- Learning loop: forward propagation → prediction → loss → backpropagation → optimizer → update weights → better prediction, repeated.
+- The loss tells how much error exists; the gradient (slope of the loss) tells which way and how fast to move.
+- Backpropagation only computes the gradient (the information from the cost flows backwards). The optimizer uses it: $W_{new} = W_{old} - \eta\, \partial L / \partial W$.
+- Vanishing gradient: tiny gradients, early layers stop learning (sigmoid/tanh). Fixes: ReLU, Leaky ReLU, batch normalization, proper initialization, LSTM/GRU.
+- Exploding gradient: huge gradients, unstable training. Fixes: gradient clipping, proper initialization, smaller learning rate, batch normalization, RMSProp/Adam.

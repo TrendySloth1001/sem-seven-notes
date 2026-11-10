@@ -1,509 +1,992 @@
 ---
 title: "Overfitting and regularization"
 module: 2
-summary: "Ek network training data pe full marks kaise la sakta hai aur phir bhi naye data pe fail ho sakta hai, aur isko theek karne ke simple tricks: L2, L1, dropout, early stopping, batch normalization, data augmentation, parameter sharing aur noise."
+summary: "Jo network apne training data par perfect hai wo naye data par fail kyun ho sakta hai (overfitting), use kaise pehchanein, aur class jo methods sikhati hai: L1, L2 aur Elastic Net penalties, weight decay, dropout, batch normalization, early stopping, data augmentation, noise injection aur parameter sharing. Pehle theory teacher ki definitions ke saath, phir wo chhote sums jo puchhe jaate hain."
 keyIdeas:
-  - "Overfitting matlab seekhne ki jagah ratta maarna: training data pe bahut accha, naye data pe kharab."
-  - "Underfitting ulta problem hai: network bahut simple hai ya kam train hua hai, isliye dono pe kharab."
-  - "Bias woh error hai jo bahut simple model se aata hai; variance woh error hai jo bahut sensitive model se aata hai. Regularization thoda bias badhakar variance ko bahut kam karta hai."
-  - "L2 aur L1 bade weights ko punish karte hain. L2 weights ko chhota karta hai. L1 bahut saare weights ko zero kar deta hai."
-  - "Dropout training ke time random neurons ko off karta hai, taaki koi neuron lazy na baith sake."
-  - "Early stopping training ko us moment pe rok deta hai jab naye data wala error sabse kam hota hai."
-  - "Batch normalization har layer ke inputs ko ek standard size mein rescale karta hai. Data augmentation extra training examples banata hai."
+  - "Overfitting: model training data ko bahut achhe se seekh leta hai (noise ke saath) aur naye data par kharab perform karta hai. High training accuracy ka matlab achha model nahi. Generalization naye (unseen) data par sahi prediction karne ki ability hai."
+  - "Regularization ek technique hai jo model ki complexity control karke overfitting kam karti hai. Ye loss function mein penalty add karti hai: Total Loss = Prediction Error + Regularization Penalty."
+  - "L1 (Lasso) penalty = λ Σ|w| aur kuch weights ko exactly 0 bana sakta hai (feature selection). L2 (Ridge) penalty = λ Σ w² weights ko shrink karta hai par usually zero nahi karta. Elastic Net = L1 + L2."
+  - "Dropout training mein kuch neurons ko randomly off kar deta hai (testing mein nahi). Early stopping tab training rokta hai jab validation loss improve hona band ho jaaye. Data augmentation existing samples se naye training samples banata hai."
+  - "Batch normalization layer ke outputs normalize karta hai: y = γ x̂ + β jahan x̂ = (x − μ) / √(σ² + ε). Isse training faster aur stable hoti hai."
 references:
-  - gfdl-ch5
-  - gfdl-ch7
-  - gfdl-ch8
-  - srivastava2014
-  - ioffe2015
-  - cs231n-nn3
-  - nptel-dl
-  - d2l-generalization
-  - d2l-weight-decay
-  - d2l-dropout
-  - d2l-batchnorm
-  - gfg-overfitting
-  - gfg-regularization
-  - gfg-l1-sparsity
-  - gfg-dropout
-  - gfg-early-stopping
-  - gfg-batchnorm
-  - gfg-data-augmentation
-  - mlm-regularization
-  - ibm-regularization
-  - av-dropout
-  - keras-dropout
-  - keras-early-stopping
-  - keras-batchnorm
-  - pytorch-dropout
-  - pytorch-batchnorm
-  - wiki-overfitting
-  - wiki-regularization
-  - wiki-dropout
-  - wiki-early-stopping
-  - wiki-batchnorm
-  - rev-m2-regularization-wiki-bias-variance
-  - rev-m2-regularization-gfg-bias-variance
-  - rev-m2-regularization-wiki-data-augmentation
-  - rev-m2-regularization-ibm-overfitting
+  - class-dl-chp2
+  - class-dl-m2
 ---
 
-Naye ideas se pehle, woh purane ideas jo tumhe chahiye. Agar pehle se aate hain, to next section pe jao.
+Naye ideas se pehle wo purani baatein jo chahiye. Agar pata hai to seedha agle section par jao.
 
-## Pehle basics
+## Basics pehle
 
-- Neural network ek bada formula hai jisme bahut saare adjust hone wale numbers hote hain, jinhe **weights** kehte hain.
-- **Training** matlab weights ko adjust karna taaki network ke answers sahi answers ke paas aa jaayein.
-- **Loss** ek number hai jo batata hai network kitna galat hai. Kam hai to better.
-- Har adjustment ek chhota step hai jo loss ko kam karta hai. Step ka size **learning rate** hai, jise $\eta$ (eta) likhte hain.
-- Saare training examples se ek poora pass ek **epoch** hai.
-- Kuch examples hum alag rakh dete hain, inhe **validation set** kehte hain. Network inse kabhi seekhta nahi. Ye batate hain ki network unseen data pe kaisa kar raha hai, aur actually humein wahi chahiye. Unseen data pe accha karna **generalization** kehlata hai.
-
-## Problem: seekhne ki jagah ratta maarna
-
-Exam ki taiyari karte do students socho.
-
-- Student A pichhle saal ka paper word by word ratta maar leta hai. Pichhle saal ke paper pe A ko 100% milta hai. Naye paper pe, jisme alag questions hain, A fail ho jaata hai.
-- Student B subject samajhta hai. Pichhle saal ke paper pe B ko thoda kam milta hai, par naye paper pe bhi accha karta hai.
-
-Neural network Student A jaisa ban sakta hai. Uske paas itne weights hote hain ki woh training examples ko ratta maar sakta hai, unki galtiyan aur random quirks bhi. Yahi **overfitting** hai. **Regularization** matlab har woh trick jo network ko Student B jaisa banne ke liye push kare. Ye syllabus <Syl m="2" />, section 2.3 hai, aur papers mein sabse zyada aane wale topics mein se ek.
+- **Weight** ek number hai jo batata hai ek input neuron ke liye kitna important hai. Weights wo **parameters** hain jo network seekhta hai. <Cite id="class-dl-chp2" loc="slide 4" />
+- **Loss** prediction ka error hai. **Epoch** training data ka ek complete pass hai. <Cite id="class-dl-chp2" loc="slide 69" />
+- Data teen parts mein baanta jaata hai. **Training data** model banata hai (isse weights seekhe jaate hain). **Validation data** model selection aur parameter tuning ke liye hai. **Testing data** final (tuned) model ki accuracy test karta hai; tuning ke dauran use dekhna bhi nahi chahiye. <Cite id="class-dl-m2" loc="p. 27" />
+- **Hyperparameter** wo setting hai jo aap training se pehle chunte ho (jaise learning rate ya λ). Ise optimizer nahi seekhta. <Cite id="class-dl-chp2" loc="slide 98" />
 
 ## Overfitting aur underfitting
 
+### Hum kya chahte hain: generalization
+
+Training ke baad main sawal ye hai: kya model naye, unseen data par sahi predictions kar sakta hai? Model ko sirf training data par nahi, us data par bhi achha perform karna chahiye jo usne pehle kabhi nahi dekha. <Cite id="class-dl-chp2" loc="slide 92" />
+
 <Box kind="definition">
 
-**Overfitting:** network training data ko, uske noise ke saath, itna close fit kar leta hai ki naye data pe bahut kharab karta hai.
-**Underfitting:** network bahut simple hai, ya bahut kam train hua hai, isliye real pattern pakad nahi paata, aur training aur naye dono data pe kharab hai.
+**Generalization** is the ability of a model to make correct predictions on new (unseen) data. A good model learns patterns, not memorization. <Cite id="class-dl-chp2" loc="slide 92" />
 
 </Box>
 
-<Img id="img-dl-n2-reg-overfit" caption="Hari tedhi-medhi curve: overfitting (har training point, noise samet, ke around mudti hai). Kaali smooth curve: simple boundary jo naye data pe behtar chalti hai." />
+Model 100% training accuracy tak pahunch kar bhi naye data par galat predictions kar sakta hai, kyunki wo actual pattern seekh sakta hai (achha) ya training data ratta maar sakta hai (bura). Isliye **high training accuracy achhe model ke barabar nahi hai**. <Cite id="class-dl-chp2" loc="slide 92" />
 
-**Har ek ko kaise pehchaane.** Training data ka score validation data ke score se compare karo. Teen cases dikhane ke liye made-up numbers:
+Textbook yahi kehta hai: overfitting matlab "a neural network will provide excellent prediction performance on the training data that it is built on, but will perform poorly on unseen test instances". Learning process "remembers random artifacts of the training data that do not generalize". Extreme overfitting ko **memorization** kehte hain. <Cite id="class-dl-m2" loc="p. 19" />
 
-| Case | Accuracy on training data | Accuracy on validation data | What it means |
+<Img id="class-regularization-overfit-problem" caption="Underfitting bahut kam seekhta hai (training aur testing dono par high error); overfitting bahut zyada seekhta hai (training error low par testing error high)." />
+
+### Underfitting, good fit aur overfitting
+
+<Box kind="definition">
+
+**Underfitting:** the model is too simple to learn the important patterns in the data. It performs poorly on both training and testing data. **Overfitting:** the model learns the training data too well, including noise and unnecessary details. It performs very well on training data but poorly on testing data. **Good fit:** the model learns the correct patterns without memorizing the data and performs well on both. <Cite id="class-dl-chp2" loc="slide 93" />
+
+</Box>
+
+**Fruit example (teacher ka).** Underfitting: model training examples bhi nahi seekh paata, to apple ko banana bol deta hai. Overfitting: training apple par ek chhota black spot tha, to model sochta hai "apple mein hamesha black spot hona chahiye", aur bina spot wala naya apple "Not Apple" ban jaata hai. Good fit: model achhe se generalize karta hai. <Cite id="class-dl-chp2" loc="slide 93" />
+
+<Img id="class-regularization-fit-curves" caption="Easy diagram: underfit (bahut simple), good fit (bilkul sahi), overfit (noise ko bhi fit karta hai)." />
+
+<Img id="class-regularization-fit-table" caption="Underfitting, good fit aur overfitting: model complexity, training accuracy, testing accuracy, pattern learning aur generalization par comparison." />
+
+| | Underfitting | Good fit | Overfitting |
 |---|---|---|---|
-| Underfitting | 55% | 52% | Pattern abhi seekha nahi |
-| Good fit | 92% | 90% | Pattern seekh liya |
-| Overfitting | 99% | 70% | Training data ratta maar liya |
+| Model complexity | Too simple | Balanced | Too complex |
+| Training accuracy | Low | High | Very high |
+| Testing accuracy | Low | High | Low |
+| Pattern seekhta hai? | No | Yes | Memorizes |
+| Generalization | Poor | Excellent | Poor |
 
-Overfitting ki pehchaan hai dono scores ke beech **bada gap**. Underfitting ki pehchaan hai ki **dono** scores low hain.
+<Cite id="class-dl-chp2" loc="slide 93" />
 
-**Learning curve.** Neeche wali picture dono errors ko epochs ke against plot karti hai. Training error neeche jaata rehta hai. Validation error pehle neeche jaata hai, apne lowest point pe pahunchta hai, phir upar jaane lagta hai. Wahi turning point hai jahan network ratta maarna shuru karta hai.
+### Kaise pehchanein: loss curves
 
-<Figure caption="Illustrative learning curves. Dashed line ke left mein network abhi seekh raha hai; right mein validation error badhta hai jabki training error girta rehta hai: yahi overfitting hai.">
-  <CurvePlot curves="train-error,val-error" x="0,20" y="0,1.25" xLabel="Epoch" yLabel="Error" mark="min:val-error" />
-</Figure>
+Hum model ki performance training data aur validation (testing) data par compare karte hain. <Cite id="class-dl-chp2" loc="slide 95" />
 
-**Causes aur cures.**
+- **Underfitting:** training loss aur validation loss dono high, kyunki model training data nahi seekh paata.
+- **Good fit:** dono losses ghatte hain aur ek dusre ke kareeb rehte hain.
+- **Overfitting:** training loss ghatta rehta hai, par validation loss badhna shuru ho jaata hai.
 
-| | Overfitting | Underfitting |
+<Img id="class-regularization-loss-curves" caption="Training aur validation loss: underfitting (dono high), good fit (dono low aur kareeb), overfitting (validation loss badhta hai)." />
+
+Textbook overfitting ke do signs add karta hai: training instances aur unseen test instances ke error ke beech gap bada hota hai, aur jab model alag data sets par train ho to wahi test instance ko bahut alag predictions mil sakti hain. **Generalization error** out-of-sample test data par error hai. <Cite id="class-dl-m2" loc="p. 22" />
+
+| | Training accuracy | Validation accuracy |
 |---|---|---|
-| Typical causes | Data ke hisaab se network bahut bada, kam data, noisy data, bahut lamba training | Network bahut chhota, kam epochs, bahut zyada regularization, kharab input features |
-| Cures | Zyada data, data augmentation, L1/L2, dropout, early stopping, chhota network | Bada network, lamba training, kam regularization, better features |
+| Underfitting | Low | Low |
+| Good fit | High | High |
+| Overfitting | Very high | Low |
 
-**Real-world example.** Kuch sau emails pe train kiya gaya spam filter ye seekh sakta hai ki jis email mein ek particular sender ka naam hai woh spam hai. Un emails pe woh perfect hai, par naye sender ki acchi emails ko galat mark kar deta hai. Yahi overfitting hai. <Cite id="rev-m2-regularization-ibm-overfitting" />
+<Cite id="class-dl-chp2" loc="slide 95" />
 
-## Bias, variance aur trade-off
+**Generalization error** training data aur unseen data par model ki performance ka difference hai: chhota difference matlab achhi generalization, bada difference matlab poor generalization. Teacher ke example mein model ki training fruits par accuracy 99% hai aur naye fruits par 60%: bada gap, jo overfitting se aaya hai. <Cite id="class-dl-chp2" loc="slide 95" />
 
-**Bias** woh error hai jo galat ya bahut simple assumptions se aata hai. High bias wala model training data pe bhi real pattern miss kar deta hai. Ye underfitting hai. Socho ki jo points clearly curve pe hain, unpe tum ek straight line fit kar rahe ho.
+<Img id="class-regularization-identify-table" caption="Underfitting, good fit aur overfitting ke liye training accuracy versus validation accuracy." />
 
-**Variance** woh error hai jo particular training set ke liye bahut sensitive hone se aata hai. High variance wala model thode alag sample pe train karo to bahut badal jaata hai. Ye overfitting hai. Socho ek wiggly curve jo har training point se guzarti hai, noise samet.
-
-**Bias ke types jo pooche ja sakte hain.**
-
-- **Statistical bias (bias error):** model ki average prediction aur truth ke beech ka gap, jaisa upar bataya.
-- **Inductive bias:** model ke built-in assumptions, jinke bina woh generalize hi nahi kar sakta. Jaise CNN maanta hai ki paas wale pixels related hote hain aur ek pattern image mein kahin bhi ho, uska matlab same hai.
-- **Data (sampling) bias:** training data real world ko represent nahi karta, jaise face dataset jisme zyada tar ek hi skin tone ho. Koi bhi regularization isse fix nahi karta. Better data chahiye.
-- **Neuron ka bias term:** woh extra number $b$ jo weighted sum mein add hota hai. Ye same word ka alag matlab hai, isliye isse bias error ke saath mix mat karo.
-
-**Trade-off.** Model ko zyada flexible banao to bias kam hota hai par variance badhta hai. Simple banao to variance kam hota hai par bias badhta hai. Naye data pe total error kahin beech mein sabse kam hota hai. Regularization ek bahut flexible network ko us beech ki taraf le jaata hai: thoda zyada bias accept karta hai taaki variance bahut kam ho jaaye. <Cite id="gfdl-ch5" loc="§5.4" /> <Cite id="rev-m2-regularization-wiki-bias-variance" />
-
-```mermaid
-%% caption: Bias-variance trade-off ek path ki tarah. Bahut simple aur bahut flexible dono naye data pe high error dete hain; regularization flexible network ko sweet spot ki taraf wapas kheenchta hai.
-flowchart LR
-  A["Bahut simple model"] --> B["High bias, low variance"]
-  B --> C["Underfitting"]
-  D["Balanced model"] --> E["Low bias, low variance"]
-  E --> F["Good generalization"]
-  G["Bahut flexible model"] --> H["Low bias, high variance"]
-  H --> I["Overfitting"]
-  I -- "regularization add karo" --> D
-```
-
-| | High bias | High variance |
-|---|---|---|
-| Training error | High | Low |
-| Validation error | High | High |
-| Gap between them | Chhota | Bada |
-| Name | Underfitting | Overfitting |
-| Fix | Zyada capacity, kam regularization | Zyada data, zyada regularization |
-
-<Cite id="rev-m2-regularization-gfg-bias-variance" />
-
-## Regularization kya hai
+### Bias aur variance
 
 <Box kind="definition">
 
-**Regularization** model, loss ya training process mein kiya gaya koi bhi change hai jiska maksad naye data pe error kam karna hai, training data pe error nahi. <Cite id="gfdl-ch7" />
+**Bias** is the error caused because the model is too simple (it makes strong assumptions and cannot learn the real pattern). High bias leads to underfitting. **Variance** is the error caused because the model becomes too sensitive to the training data (it memorizes the training examples instead of learning patterns). High variance leads to overfitting. <Cite id="class-dl-chp2" loc="slide 94" />
 
 </Box>
 
-**Ye kyun zaroori hai.** Deep networks mein millions weights hote hain, aur training examples se bhi zyada ho sakte hain. Bina kisi restraint ke woh ratta maar lenge. Regularization wahi restraint hai.
+**Bias-variance trade-off**: model complexity badhne par bias ghatta hai aur variance badhta hai. Goal sahi balance dhundna hai (low bias aur low variance best model deta hai). <Cite id="class-dl-chp2" loc="slide 94" /> Textbook error ke teen parts batata hai: bias, variance aur noise (data ka inherent error). <Cite id="class-dl-m2" loc="p. 26" />
 
-Exam mein English mein likho: "Regularization is any modification we make to a learning algorithm that is intended to reduce its generalization error but not its training error."
+<Img id="class-regularization-bias-variance-graph" caption="Bias-variance trade-off: model complex hone par bias girta hai aur variance badhta hai; total error good fit par sabse kam hai." />
 
-<Img id="img-dl-n2-reg-regularized" caption="Neeli curve har laal point ko chhoti hai par beech mein bahut jhoolti hai (overfit). Regularization ka goal ye smooth hari curve hai." />
+| Model | Bias | Variance |
+|---|---|---|
+| Underfitting | High | Low |
+| Good fit | Moderate | Moderate |
+| Overfitting | Low | High |
 
-Syllabus ke methods chaar families mein aate hain:
+<Cite id="class-dl-chp2" loc="slide 94" />
+
+<Img id="class-regularization-reduce-bias-variance" caption="High bias kam karna (zyada complexity, zyada epochs, zyada features, stronger model) aur high variance kam karna (zyada data, dropout, L1/L2, early stopping, simpler model)." />
+
+### Causes aur solutions
+
+<Img id="class-regularization-causes-solutions" caption="Underfitting aur overfitting ke causes aur har ek ko kaise kam karein." />
+
+| | Causes | Kaise kam karein |
+|---|---|---|
+| **Underfitting** | Model bahut simple; training epochs kam; learning rate bahut high; features kam; training jaldi ruk gayi | Epochs badhao; model complexity badhao; better features add karo; appropriate learning rate chuno; model ko zyada der train karo |
+| **Overfitting** | Model bahut complex; training epochs bahut zyada; chhota training dataset; bahut zyada parameters; training data mein noise | Zyada training data collect karo; data augmentation; early stopping; dropout; L1 regularization; L2 regularization; model complexity kam karo |
+
+<Cite id="class-dl-chp2" loc="slide 96" />
+
+<Img id="class-regularization-fit-summary" caption="Summary table: bias/variance, training error, testing error, model complexity aur model kya seekhta hai, underfitting, good fit aur overfitting ke liye." />
 
 ```mermaid
-%% caption: Syllabus ke regularization methods, is hisaab se grouped ki woh kya change karte hain.
-flowchart TD
-  R["Regularization"] --> P["Weights ko penalize karo"]
-  R --> N["Training ke time network badlo"]
-  R --> D["Data badlo"]
-  R --> T["Training process badlo"]
-  P --> P1["L2 weight decay, L1"]
-  N --> N1["Dropout, parameter sharing, batch norm"]
-  D --> D1["Data augmentation, input ya output mein noise"]
-  T --> T1["Early stopping"]
+%% caption: Overfitting ek picture mein: left mein uske causes, right mein wo techniques jo ye note samjhata hai. Teacher kehte hain "These techniques will be explained in the next topics".
+flowchart LR
+  A["Model too complex, too many epochs, small dataset, noise"] --> B["Overfitting: high training accuracy, low testing accuracy"]
+  B --> C["More data and data augmentation"]
+  B --> D["L1, L2, Elastic Net, weight decay"]
+  B --> E["Dropout"]
+  B --> F["Early stopping"]
+  B --> G["Batch normalization, noise injection, parameter sharing"]
 ```
 
-## L2 regularization (weight decay)
+<Cite id="class-dl-chp2" loc="slide 96" /> Ye syllabus <Syl m="2" /> hai.
 
-**Ye kya hai.** L2 regularization loss mein ek penalty add karta hai jo har weight ke **square** ke saath badhti hai. Ab network ke do goals hain: accurate raho, aur weights chhote rakho.
+## Regularization kya hai?
 
-**Ye kyun zaroori hai.** Bade weights network ko jumpy bana dete hain: input mein chhota sa change output ko bahut badal deta hai, aur ratta maarne wala network bilkul aisa hi dikhta hai. Chhote weights ek shaant, smooth function dete hain jo better generalize karta hai.
+<Box kind="definition">
 
-**Kaise kaam karta hai.**
-
-1. Ek strength $\lambda$ (lambda) chuno, jaise 0.0001. Ye batata hai ki accuracy ke comparison mein chhote weights tumhare liye kitne important hain.
-2. Penalty ko normal loss mein add karo.
-3. Normal tarah train karo. Penalty ka gradient har step pe har weight ko thoda zero ki taraf kheenchta hai.
-4. Ek weight bada tabhi rehta hai jab data use lagatar upar push kare, yaani jab woh sach mein useful ho.
-
-Standard formula kehta hai: new loss = old loss + $\lambda$ times squared weights ke sum ka half.
-
-$$
-\text{new loss} = \text{old loss} + \frac{\lambda}{2}\sum_i w_i^2
-$$
-
-**Isse weight decay kyun kehte hain.** Words mein: har training step pe, har weight pehle apne aap ke $(1-\eta\lambda)$ fraction tak shrink hota hai, aur phir usual step liya jaata hai.
-
-$$
-w \leftarrow (1-\eta\lambda)\,w \;-\; \eta\,(\text{usual gradient})
-$$
-
-Kyunki $(1-\eta\lambda)$ 1 se thoda kam hai, har weight har step pe thoda **decay** hota hai. <Cite id="gfdl-ch7" loc="§7.1.1" /> <Cite id="d2l-weight-decay" />
-
-**Worked example: ek weight-decay step.**
-
-Given: weight $w = 10$, learning rate $\eta = 0.1$, strength $\lambda = 0.5$, usual gradient (old loss se) $= 2$.
-To find: ek step ke baad weight.
-
-1. $\eta$ ko $\lambda$ se multiply karo, kyunki yahi part weight ko shrink karta hai: $0.1 \times 0.5 = 0.05$.
-2. Shrink factor nikaalo, kyunki weight apna itna fraction rakhta hai: $1 - 0.05 = 0.95$.
-3. Weight ko shrink karo (yahi "decay" hai): $0.95 \times 10 = 9.5$.
-4. Usual step lo, kyunki data abhi bhi weight ko move karna chahta hai: $\eta \times 2 = 0.1 \times 2 = 0.2$, to $9.5 - 0.2 = 9.3$.
-
-**New weight = 9.3**
-
-<Box kind="verify">
-
-Step ko plain tarike se karo. New loss ka gradient = usual gradient plus $\lambda w$ ($\dfrac{\lambda}{2}w^2$ ka slope): $2 + 0.5 \times 10 = 2 + 5 = 7$. Phir $w - \eta \times 7 = 10 - 0.7 = 9.3$. Same answer, to shrink-then-step wala form sahi hai. L2 ke bina weight $10 - 0.2 = 9.8$ hota, yaani penalty ne use 0.5 aur zero ki taraf kheencha, jaisa expected tha.
+**Regularization** is a technique used to reduce overfitting by controlling the complexity of the model. Instead of allowing the model to memorize the training data, regularization encourages it to learn only the important patterns. Its main goal is to improve generalization, so the model performs well on both training and unseen data. <Cite id="class-dl-chp2" loc="slide 97" />
 
 </Box>
 
-**Advantages.** Add karna simple hai (Keras ya PyTorch mein ek setting). Saare inputs use mein rehte hain, jo us data ke liye accha hai jahan bahut features thoda thoda help karte hain. Smooth penalty, isliye training stable rehti hai.
+Textbook ki definition: "Many strategies used in machine learning are explicitly designed to reduce the test error, possibly at the expense of increased training error. These strategies are known collectively as regularization." <Cite id="class-dl-m2" loc="p. 19" /> Deep learning mein regularization actually **nodes ke weight matrices ko penalize** karti hai. <Cite id="class-dl-m2" loc="p. 20" />
 
-**Disadvantages.** Weights chhote ho jaate hain par lagbhag kabhi exactly zero nahi hote, isliye model simple nahi hota. $\lambda$ ko tune karna padta hai: bahut bada to network underfit karta hai, bahut chhota to abhi bhi overfit karta hai.
+**Zyada epochs se train kyun nahi kar dete?** Koi soch sakta hai "agar model ko zyada epochs train karein to wo better ho jaayega". Ye sach nahi hai: bahut zyada epochs tak training chalne par model training data ratta maarne lagta hai, to training accuracy badh sakti hai par testing accuracy ghat sakti hai. <Cite id="class-dl-chp2" loc="slide 97" />
 
-**Applications.** CNNs aur transformers ki training mein aam taur pe use hota hai (aksar optimizer ki "weight decay" setting ke roop mein), aur ridge regression mein.
+### Regularization kaise kaam karti hai: penalty
 
-## L1 regularization
+Regularization **loss function mein penalty add karti hai**. Agar model bahut bade ya unnecessary weights banata hai to use extra penalty milti hai. Natija: bahut bade weights discourage hote hain, model simple hota hai, wo noise ke bajaye important features seekhta hai aur unseen data par performance improve hoti hai. <Cite id="class-dl-chp2" loc="slide 97" />
 
-**Ye kya hai.** L1 regularization ek penalty add karta hai jo har weight ki **absolute value** (size, sign ignore karke) ke saath badhti hai.
+- Regularization ke bina: Loss = Prediction Error. Model sirf prediction error kam karne ki koshish karta hai.
+- Regularization ke saath: **Total Loss = Prediction Error + Regularization Penalty**. Model (1) prediction error kam karta hai aur (2) weights ko chhota aur simple rakhta hai. <Cite id="class-dl-chp2" loc="slide 97" />
 
-**Kaise kaam karta hai.** L1 penalty ka zero ki taraf pull har weight ke liye **same strength** ka hota hai, bada ho ya chhota. Isliye ek chhota weight jiski data ko sach mein zaroorat nahi, use poora zero tak, ya zero ke bahut paas tak, kheench liya jaata hai. Sirf woh weights bachte hain jo matter karte hain.
+Textbook ise yun likhta hai: Cost function = Loss (say, binary cross entropy) + Regularization term. <Cite id="class-dl-m2" loc="p. 32" />
 
-Standard formula kehta hai: new loss = old loss + $\lambda$ times absolute weights ka sum.
+<Img id="class-regularization-intro-solves" caption="Regularization problem kaise solve karti hai: wo penalty add karti hai, to bahut bade weights discourage hote hain aur model simple banta hai." />
 
-$$
-\text{new loss} = \text{old loss} + \lambda\sum_i |w_i|
-$$
+<Img id="class-regularization-intro-penalty" caption="General idea: Total Loss = Prediction Error + Regularization Penalty, to model error kam karta hai aur weights chhote rakhta hai." />
 
-Isliye L1 ek **sparse** network deta hai: bahut saare weights zero hote hain. Ye automatic **feature selection** ki tarah kaam karta hai, kyunki jis input ke saare weights zero hain woh effectively ignore ho jaata hai. <Cite id="gfdl-ch7" loc="§7.1.2" /> <Cite id="gfg-l1-sparsity" />
+<Img id="class-regularization-intro-fruit" caption="Fruit example: regularization ke bina model black spot ratta maarta hai; regularization ke saath wo shape, colour aur texture seekhta hai." />
 
-**Worked example: same weights pe dono penalties.**
+```mermaid
+%% caption: Weights par penalty kyun kaam karti hai, jaise teacher draw karte hain. Bade weights se bada penalty, optimizer unhe shrink karta hai, aur simple model better generalize karta hai.
+flowchart TD
+  A["Large weights"] --> B["Large penalty"]
+  B --> C["Higher total loss"]
+  C --> D["Optimizer reduces the weights"]
+  D --> E["Simpler model"]
+  E --> F["Better generalization"]
+```
 
-Given: do weights $w_1 = 3$ aur $w_2 = -4$, strength $\lambda = 0.1$.
-To find: L2 penalty aur L1 penalty.
+<Cite id="class-dl-chp2" loc="slide 98" />
 
-1. L2: har weight ka square karo, kyunki L2 squares use karta hai (sign gayab ho jaata hai): $3^2 = 9$, $(-4)^2 = 16$.
-2. Squares add karo: $9 + 16 = 25$.
-3. $\dfrac{\lambda}{2} = 0.05$ se multiply karo, jaisa L2 formula kehta hai: $0.05 \times 25 = 1.25$.
-4. L1: har weight ki absolute value lo, kyunki L1 sign ignore karta hai: $|3| = 3$, $|-4| = 4$.
-5. Inhe add karo: $3 + 4 = 7$.
-6. $\lambda = 0.1$ se multiply karo, jaisa L1 formula kehta hai: $0.1 \times 7 = 0.7$.
+<Img id="class-regularization-weight-penalty" caption="Weight penalty ka concept: bade weights, bada penalty, higher total loss, optimizer weights kam karta hai." />
 
-**L2 penalty = 1.25, L1 penalty = 0.7**
+**Optimizer chhote weights kyun chunta hai?** Maan lo do models ka prediction error same hai. Model A ka weight 25 hai, model B ka 5. A ka penalty high hai, to uska total loss high; B ka penalty low aur total loss low. Optimizer B chunta hai. <Cite id="class-dl-chp2" loc="slide 98" />
 
-<Box kind="verify">
+<Img id="class-regularization-smaller-weights" caption="Same prediction error wale do models: chhote weight wale ka total loss kam hai." />
 
-Weight by weight dobara calculate karo. L2: $0.05 \times 9 = 0.45$ aur $0.05 \times 16 = 0.80$; $0.45 + 0.80 = 1.25$. L1: $0.1 \times 3 = 0.3$ aur $0.1 \times 4 = 0.4$; $0.3 + 0.4 = 0.7$. Dono match karte hain. Sign check: dono penalties positive hain, jo hona hi chahiye, kyunki penalty loss mein sirf add hoti hai.
+<Img id="class-regularization-train-test-error" caption="Regularization ke bina testing error badhta hai jabki training error girta hai; regularization ke saath testing error kam hai." />
+
+### Regularization coefficient λ (lambda)
+
+<Box kind="definition">
+
+**λ (lambda)** is called the **regularization coefficient** (regularization strength). It controls how much penalty is added to the loss function. Think of λ as a control knob. Ye training se pehle chuna jaane wala hyperparameter hai; weights optimizer seekhta hai. <Cite id="class-dl-chp2" loc="slide 99" />
 
 </Box>
 
-**Advantages.** Chhota, simple model deta hai jo samajhna aasaan hai. Important inputs automatically chun leta hai.
-
-**Disadvantages.** Absolute value ka zero pe sharp corner hota hai, isliye wahan gradient defined nahi hai aur optimizers ko special rule chahiye. Jab do inputs strongly related hon, to ye aksar ek ko random rakh leta hai aur doosre ko drop kar deta hai. Deep networks ke andar L2 se kam common hai.
-
-**Applications.** Lasso regression, bahut wide datasets se genes ya features select karna, phones ke liye networks compress karna.
-
-**L1 zeros kyun deta hai aur L2 kyun nahi (picture).** Penalty ko ek fence ki tarah socho: weights ko iske andar rehna hai. L1 ke liye fence ek diamond hai; L2 ke liye ek circle. Ovals equal loss ki lines hain, best unpenalized answer ke around. Regularized answer wahan hai jahan sabse chhota oval pehli baar fence ko touch karta hai. Diamond ke axes pe sharp corners hain, isliye touch aksar corner pe hota hai, jahan ek weight exactly zero hai. Circle ke corners nahi hain, isliye dono weights non-zero rehte hain.
-
-<Figure caption="Same loss, do fences. L1 (left) mein contour pehle diamond ke corner ko touch karta hai, to w2 = 0. L2 (right) mein woh circle ko wahan touch karta hai jahan dono weights non-zero hain. Touch points compute kiye gaye hain, sketch nahi.">
-  <NormBalls />
-</Figure>
-
-| | L1 | L2 (weight decay) |
+| λ | Penalty | Result |
 |---|---|---|
-| Penalty uses | Weights ki absolute values | Weights ke squares |
-| Pull towards zero | Har weight ke liye same strength | Bade weights ke liye strong, chhote ke liye weak |
-| Effect | Bahut weights zero ho jaate hain (sparse) | Saare weights chhote, rarely zero |
-| Feature selection | Haan, automatic | Nahi |
-| Smoothness | Zero pe corner | Har jagah smooth |
-| Good when | Sirf kuch inputs sach mein matter karte hain | Zyada tar inputs thodi useful information dete hain |
-| Classical name | Lasso | Ridge |
+| λ = 0 | Koi penalty nahi (no regularization) | Model bahut complex ho jaata hai, weights bahut bade, training data ratta maarta hai: **overfitting** |
+| Chhota λ (recommended) | Chhoti penalty | Weights control mein, important features seekhe jaate hain, noise ignore: **good fit**, best choice |
+| Bada λ | Bahut badi penalty | Weights bahut chhote, model bahut simple, enough patterns nahi seekh paata: **underfitting** |
+
+<Cite id="class-dl-chp2" loc="slide 99" />
+
+Textbook bhi sahmat hai: agar regularization coefficient itna high ho ki weights lagbhag zero ho jaayein, to result bahut simple linear network aur halka underfitting hai, isliye coefficient ki value optimize karni padti hai taaki well-fitted model mile. <Cite id="class-dl-m2" loc="p. 21" />
+
+<Img id="class-regularization-lambda-cases" caption="λ = 0 (overfitting), chhota λ (best choice) aur bada λ (underfitting), har ek fruit example ke saath." />
+
+<Img id="class-regularization-lambda-effects" caption="λ ka model complexity, weights aur underfitting/overfitting par effect." />
+
+<Img id="class-regularization-lambda-error" caption="Regularization strength ke saath error: best λ chhota hota hai aur good fit deta hai." />
+
+**Rozmarra ka example (teacher ka).** λ = 0: student textbook ka har sentence ratta maarta hai aur sawal thoda badalne par answer nahi de paata. Chhota λ: student concepts samajhta hai aur sawal badalne par bhi sahi answer deta hai. Bada λ: student bahut kam padhta hai aur simple sawal bhi nahi kar paata. <Cite id="class-dl-chp2" loc="slide 99" />
+
+**Regularization ke advantages:** overfitting kam karti hai, generalization improve karti hai, simpler model banati hai, noise ka effect kam karti hai, unseen data par better performance, model ko zyada robust banati hai. **Disadvantages:** bahut zyada regularization se underfitting hoti hai, sahi λ chunna mushkil hai, training accuracy thodi ghat sakti hai, ek extra hyperparameter tune karna padta hai. <Cite id="class-dl-chp2" loc="slide 99" />
+
+### Regularization ke types
+
+Teacher nau list karte hain: L1 (Lasso), L2 (Ridge), Elastic Net, Weight Decay, Dropout, Early Stopping, Data Augmentation, Noise Injection aur Parameter Sharing. <Cite id="class-dl-chp2" loc="slide 100" /> Textbook unhe penalty-based regularization, ensemble methods (dropout), early stopping, pretraining, continuation and curriculum methods aur sharing parameters mein group karta hai. <Cite id="class-dl-m2" loc="pp. 23-25" />
+
+<Img id="class-regularization-l1-l2-overview" caption="Teacher ka L1 (Lasso) aur L2 (Ridge) ka overview, weights par effect ke saath." />
+
+```mermaid
+%% caption: Teacher ki overview sheet se regularization methods ka family. Penalty methods loss badalte hain; dropout aur noise network badalte hain; early stopping aur data augmentation training badalte hain.
+flowchart TD
+  R["Regularization"] --> P["Penalty on weights: L1, L2, Elastic Net, Weight Decay"]
+  R --> N["Change the network: Dropout, Noise Injection, Parameter Sharing"]
+  R --> T["Change the training: Early Stopping, Data Augmentation"]
+```
+
+<Cite id="class-dl-chp2" loc="slide 100" />
+
+## L1 regularization (Lasso)
+
+<Box kind="definition">
+
+**L1 regularization** reduces overfitting by adding the sum of the absolute values of all weights to the loss function. It is also called **Lasso** (Least Absolute Shrinkage and Selection Operator) because it shrinks large weights, selects only important features and makes unnecessary weights exactly 0. <Cite id="class-dl-chp2" loc="slide 101" />
+
+</Box>
+
+Iska goal unnecessary weights kam karna, unimportant features hatana, simpler model banana aur generalization improve karna hai. **Key idea:** bade weights ko penalize karo, to weights chhote hote hain, model simple hota hai, aur overfitting kam hoti hai. <Cite id="class-dl-chp2" loc="slide 101" />
+
+<Box kind="definition">
+
+**Formula.** Original loss: Loss = Prediction Error. L1 regularized loss: Total Loss = Prediction Loss + $\lambda \sum |w|$. Yahan $\lambda$ regularization coefficient hai, $\sum$ saare weights par sum hai aur $|w|$ har weight ki absolute value. <Cite id="class-dl-chp2" loc="slide 101" />
+
+</Box>
+
+Textbook kehta hai squared penalty ko "with a penalty on the sum of the absolute magnitudes of the coefficients" se badal diya jaata hai, aur $|w_i|$ exactly 0 par differentiable nahi hai, to practice mein us point par slope 0 maan lete hain. <Cite id="class-dl-m2" loc="pp. 33-34" />
+
+**Absolute value kya hai?** Zero se distance, sign ignore karke: $|{-5}| = 5$, $|{+5}| = 5$, $|0| = 0$. <Cite id="class-dl-chp2" loc="slide 102" />
+
+<Img id="class-regularization-l1-solves" caption="L1 problem kaise solve karta hai: bade weights par penalty kuch unnecessary weights ko 0 par dhakel deti hai, phir formula." />
+
+<Img id="class-regularization-l1-concept" caption="L1 (Lasso): naya concept aur uska goal." />
+
+**Sum 1: L1 penalty aur total loss.** <Cite id="class-dl-chp2" loc="slide 102" />
+
+<Sum>
+
+<Given>
+
+Weights $w_1 = 6$, $w_2 = -4$, $w_3 = 2$, $w_4 = -1$. Prediction error $= 4$. $\lambda = 0.1$.
+
+</Given>
+
+<Find>
+
+L1 penalty aur total loss.
+
+</Find>
+
+<Steps>
+
+1. **Absolute values:** $|6| = 6$, $|-4| = 4$, $|2| = 2$, $|-1| = 1$.
+2. **Sum:** $\sum |w| = 6 + 4 + 2 + 1 = 13$. Bade weights penalty mein zyada jodte hain.
+3. **Penalty:** $\lambda \sum |w| = 0.1 \times 13 = 1.3$.
+4. **Total loss** $= 4 + 1.3 = 5.3$.
+
+</Steps>
+
+<Answer>
+
+L1 penalty ($\lambda$ se multiply karne se pehle) $= 13$; $\lambda = 0.1$ ke saath penalty 1.3 aur total loss 5.3.
+
+</Answer>
+
+<Box kind="verify">
+
+Sum doosre tareeke se check karo: $(6 + 4) + (2 + 1) = 10 + 3 = 13$. Ye bhi $4 + 1.3 = 5.3$.
+
+</Box>
+
+</Sum>
+
+**Weight update process aur feature selection.** Bade weight se badi penalty aur higher total loss, to optimizer weight kam karta hai; kuch weights 0 ho jaate hain. Agar koi feature bahut kam contribute karta hai to uska weight 0 ho jaata hai aur model us feature ko automatically ignore karta hai. Ye L1 ki ek unique property hai: **feature selection**. <Cite id="class-dl-chp2" loc="slide 102" /> Fruit example mein texture (0.4) aur background (0.2) 0 ho jaate hain, jabki shape (8 se 7.4) aur colour (6 se 5.5) bache rehte hain. <Cite id="class-dl-chp2" loc="slide 102" />
+
+Textbook careful hai: L1 "creates sparse solutions in which the vast majority of the values of $w_i$ are 0s (after ignoring computational errors)". Agar kisi input ka weight 0 hai to us input ka koi effect nahi, to "the L1-regularizer acts as a feature selector". <Cite id="class-dl-m2" loc="p. 35" /> Isliye "zero ya zero ke bahut kareeb" likho, "hamesha exactly zero" nahi.
+
+<Img id="class-regularization-l1-penalty" caption="L1 penalty calculation: 6 + 4 + 2 + 1 = 13, aur bade weights badi penalty banate hain." />
+
+<Img id="class-regularization-l1-update" caption="L1 weight update process: bada weight, badi penalty, higher total loss, optimizer weight kam karta hai, kuch weights 0 ho jaate hain." />
+
+<Img id="class-regularization-l1-fruit" caption="L1 fruit example: texture aur background weights 0 ho jaate hain, sirf shape aur colour bachte hain." />
+
+**L1 ke advantages:** overfitting kam, automatic feature selection, unnecessary features hataata hai, simpler model, interpret karna aasan. **Disadvantages:** λ bahut bada ho to useful features hata sakta hai, λ chunna important hai, deep learning mein L2 se kam use hota hai. **Kab use karein:** dataset mein bahut input features hon, kuch features unnecessary hon aur simpler models prefer hon. <Cite id="class-dl-chp2" loc="slide 102" />
+
+## L2 regularization (Ridge)
+
+**L1 ki problem.** L1 kuch weights ko exactly 0 bana deta hai, par kabhi kabhi har feature important hota hai, aur kuch features hat jaayein to model useful information kho sakta hai. Humein aisi technique chahiye jo sab features rakhe aur phir bhi overfitting kam kare. <Cite id="class-dl-chp2" loc="slide 103" />
+
+<Box kind="definition">
+
+**L2 regularization** reduces overfitting by adding the sum of the squares of all weights to the loss function. Instead of making weights exactly 0, it reduces (shrinks) all weights so the model becomes simpler while still using every feature. It is also called **Ridge** regularization (Tikhonov regularization). <Cite id="class-dl-chp2" loc="slide 103" />
+
+</Box>
+
+**Formula.** Total Loss = Prediction Loss + $\lambda \sum w^2$. Bade weights ka bada square, to bada penalty. <Cite id="class-dl-chp2" loc="slide 103" /> Textbook L2 regularization ko "also known as **weight decay** as it forces the weights to decay towards zero (but not exactly zero)" kehta hai. <Cite id="class-dl-m2" loc="p. 34" />
+
+<Img id="class-regularization-l2-concept" caption="L2 (Ridge): concept, ise Ridge kyun kehte hain, aur L1 se difference." />
+
+<Img id="class-regularization-l2-solves" caption="L2 problem kaise solve karta hai: bade weight ka bahut bada square, to optimizer use shrink karta hai; weights chhote hote hain par exactly zero nahi." />
+
+<Img id="class-regularization-l2-formula" caption="L2 formula aur har symbol ka matlab." />
+
+**Sum 2: L2 penalty aur total loss.** <Cite id="class-dl-chp2" loc="slide 104" />
+
+<Sum>
+
+<Given>
+
+Weights $w_1 = 5$, $w_2 = -3$, $w_3 = 2$, $w_4 = -1$. Prediction error $= 4$. $\lambda = 0.1$.
+
+</Given>
+
+<Find>
+
+L2 penalty aur total loss.
+
+</Find>
+
+<Steps>
+
+1. **Squares:** $5^2 = 25$, $(-3)^2 = 9$, $2^2 = 4$, $(-1)^2 = 1$. Square sign hata deta hai aur bade weights ko bahut zyada count karta hai.
+2. **Sum:** $\sum w^2 = 25 + 9 + 4 + 1 = 39$.
+3. **Penalty:** $\lambda \sum w^2 = 0.1 \times 39 = 3.9$.
+4. **Total loss** $= 4 + 3.9 = 7.9$.
+
+</Steps>
+
+<Answer>
+
+L2 penalty ($\lambda$ se pehle) $= 39$; $\lambda = 0.1$ ke saath penalty 3.9 aur total loss 7.9.
+
+</Answer>
+
+<Box kind="verify">
+
+Akela weight 5 hi 39 mein se 25 deta hai, to lagbhag 64% penalty sabse bade weight se aati hai. Isse dikhta hai L2 bade weights ko sabse zyada shrink kyun karta hai.
+
+</Box>
+
+</Sum>
+
+**Sum 3: optimizer chhota weight kyun chunta hai (teacher ke Model A aur Model B).** <Cite id="class-dl-chp2" loc="slide 98" />
+
+<Sum>
+
+<Given>
+
+Do models jinka prediction error 4 hai. Model A ka weight 25 aur Model B ka weight 5. L2 penalty $\lambda = 0.01$ ke saath.
+
+</Given>
+
+<Find>
+
+har model ka total loss.
+
+</Find>
+
+<Steps>
+
+1. **Model A:** penalty $= 0.01 \times 25^2 = 0.01 \times 625 = 6.25$. Total $= 4 + 6.25 = 10.25$.
+2. **Model B:** penalty $= 0.01 \times 5^2 = 0.01 \times 25 = 0.25$. Total $= 4 + 0.25 = 4.25$.
+
+</Steps>
+
+<Answer>
+
+Model A: 10.25. Model B: 4.25. Optimizer model B chunta hai, jiska weight chhota hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Dono models ka prediction error same hai, to fark sirf penalty ka hai: $6.25 - 0.25 = 6$ aur $10.25 - 4.25 = 6$.
+
+</Box>
+
+</Sum>
+
+Textbook update mein ek difference batata hai: L2 regularization **multiplicative decay** ko forgetting mechanism ki tarah use karta hai, jabki L1 **additive updates** use karta hai. Accuracy ke nazariye se L2 usually L1 se behtar hai, isliye L2 lagbhag hamesha prefer hota hai. <Cite id="class-dl-m2" loc="p. 35" />
+
+<Img id="class-regularization-l2-penalty" caption="L2 penalty calculation: 25 + 9 + 4 + 1 = 39." />
+
+<Img id="class-regularization-l2-fruit" caption="L2 fruit example: chaaron feature weights shrink hote hain, koi zero nahi hota." />
+
+**L2 ke advantages:** overfitting kam, saare important features rakhta hai, smoother models, stable training, deep learning mein sabse zyada use hota hai. **Disadvantages:** feature selection nahi karta, jab bahut features irrelevant hon to kam useful, λ dhyan se chunna padta hai. <Cite id="class-dl-chp2" loc="slide 104" />
+
+### L1 versus L2
+
+<Img id="class-regularization-l1-vs-l2" caption="L1 versus L2: penalty term, weights par effect, feature selection aur dusre naam." />
+
+| Aspect | L1 (Lasso) | L2 (Ridge) |
+|---|---|---|
+| Penalty term | $\lambda \sum \lvert w \rvert$ (absolute value) | $\lambda \sum w^2$ (square) |
+| Weights par effect | Kuch weights 0 ho jaate hain | Weights chhote par usually 0 nahi |
+| Feature selection | Yes (unimportant features hataata hai) | No (saare features rakhta hai) |
+| Dusre naam | Lasso (Least Absolute Shrinkage and Selection Operator) | Ridge (Tikhonov regularization) |
+| Common use | Jab kuch features unimportant hon | Jab saare features important hon |
+
+<Cite id="class-dl-chp2" loc="slides 102 and 103" />
+
+## Elastic Net regularization
+
+L1 bahut features hata deta hai aur L2 koi nahi hataata. Kabhi kabhi humein feature selection aur weight shrinking dono ek saath chahiye. <Cite id="class-dl-chp2" loc="slide 105" />
+
+<Box kind="definition">
+
+**Elastic Net** combines the advantages of L1 and L2: it removes unimportant features (like L1) and shrinks the remaining weights (like L2). This creates a simpler and more stable model. <Cite id="class-dl-chp2" loc="slide 105" />
+
+</Box>
+
+**Formula.** Total Loss = Prediction Loss + $\lambda_1 \sum |w| + \lambda_2 \sum w^2$, jahan $\lambda_1$ L1 penalty (feature selection) control karta hai aur $\lambda_2$ L2 penalty (weight shrinking). <Cite id="class-dl-chp2" loc="slide 106" />
+
+<Img id="class-regularization-elastic-formula" caption="Elastic Net loss apni do penalties aur unke coefficients ke saath." />
+
+<Img id="class-regularization-elastic-example" caption="Elastic Net example: background weight hata diya jaata hai, shape aur colour shrink hote hain, texture chhota rehta hai." />
+
+**Sum 4: L1 example ke weights par Elastic Net penalty.**
+
+<Sum>
+
+<Given>
+
+Weights $6, -4, 2, -1$ (Sum 1 se). $\lambda_1 = 0.1$ aur $\lambda_2 = 0.1$.
+
+</Given>
+
+<Find>
+
+Elastic Net penalty.
+
+</Find>
+
+<Steps>
+
+1. **L1 part:** $\sum |w| = 13$, to $\lambda_1 \times 13 = 1.3$.
+2. **L2 part:** $\sum w^2 = 36 + 16 + 4 + 1 = 57$, to $\lambda_2 \times 57 = 5.7$.
+3. **Elastic Net penalty** $= 1.3 + 5.7 = 7.0$.
+
+</Steps>
+
+<Answer>
+
+Penalty $= 7.0$ (L1 part 1.3 plus L2 part 5.7).
+
+</Answer>
+
+<Box kind="verify">
+
+$36 + 16 + 4 + 1 = 57$ aur $0.1 \times 57 = 5.7$. Akela L1 1.3 deta aur akela L2 5.7, to jod 7.0 hai.
+
+</Box>
+
+</Sum>
+
+**Advantages:** overfitting kam, feature selection, bade weights shrink, stable models, jab features highly correlated hon tab achha, sirf L1 ya sirf L2 se better balance. **Disadvantages:** computationally zyada expensive, do hyperparameters ($\lambda_1$ aur $\lambda_2$) tune karne padte hain, configure karna mushkil, chhote datasets ke liye hamesha zaroori nahi. <Cite id="class-dl-chp2" loc="slide 106" />
+
+| | Elastic Net | L1 (Lasso) | L2 (Ridge) |
+|---|---|---|---|
+| Uses | L1 aur L2 saath | Sirf L1 | Sirf L2 |
+| Kuch features hataata hai? | Yes | Yes (kuch weights 0) | No |
+| Bache weights shrink karta hai? | Yes | Zyada nahi | Yes |
+| Penalties ki sankhya | Do ($\lambda_1$, $\lambda_2$) | Ek | Ek |
+
+<Cite id="class-dl-chp2" loc="slide 106" />
+
+## Weight decay
+
+<Box kind="definition">
+
+**Weight Decay** is a regularization technique that reduces (shrinks) the weights after every update during training. Simple definition: weight decay = gradually reducing the size of the weights during training. <Cite id="class-dl-chp2" loc="slide 121" />
+
+</Box>
+
+Kaise kaam karta hai: gradient descent weights update karta hai, phir weight decay updated weights ko thoda kam karta hai, to model seekhte hue weights chhote rakhta hai. Update rule $w \leftarrow w - \eta \nabla L - \eta \lambda w$ hai: loss se normal update plus weight-decay term jo weights ko shrink karta hai. <Cite id="class-dl-chp2" loc="slides 100 and 121" /> Standard SGD ke liye L2 regularization aur weight decay lagbhag same behave karte hain; **weight decay lagbhag L2 (Ridge) regularization ke barabar hai**. <Cite id="class-dl-chp2" loc="slide 121" />
+
+<Img id="class-regularization-weight-decay-concept" caption="Weight decay: ye kya hai aur humein kyun chahiye." />
+
+<Img id="class-regularization-weight-decay-update" caption="Weight decay ke saath aur bina weight update: bina decay ke 2.5 badh kar 9.2 ho jaata hai, decay ke saath chhota (2.0) rehta hai." />
+
+**Sum 5: weight decay ka ek step.**
+
+<Sum>
+
+<Given>
+
+$w = 2$, learning rate $\eta = 0.1$, $\lambda = 0.5$, loss ka gradient $\nabla L = 0.4$.
+
+</Given>
+
+<Find>
+
+weight decay ke saath aur bina naya weight.
+
+</Find>
+
+<Steps>
+
+1. **Decay ke bina:** $w \leftarrow 2 - 0.1 \times 0.4 = 1.96$.
+2. **Decay term:** $\eta \lambda w = 0.1 \times 0.5 \times 2 = 0.1$.
+3. **Decay ke saath:** $w \leftarrow 2 - 0.04 - 0.1 = 1.86$.
+
+</Steps>
+
+<Answer>
+
+Weight decay ke saath naya weight 1.86 hai (bina decay ke 1.96). Weight decay weight ko 0.1 aur zero ki taraf kheenchta hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Doosra tareeka: $w(1 - \eta\lambda) - \eta \nabla L = 2 \times 0.95 - 0.04 = 1.9 - 0.04 = 1.86$. Wahi aata hai, jo weight ka multiplicative decay dikhata hai.
+
+</Box>
+
+</Sum>
 
 ## Dropout
 
-**Ye kya hai.** Dropout har training step mein ek layer ke kuch neurons ko randomly off (zero) kar deta hai. Har step pe ek alag random set off hota hai.
+**Problem.** L1, L2 aur Elastic Net weights control karte hain, par ye control nahi karte ki neurons ek dusre par kitna depend karte hain. Deep networks mein kuch neurons doosre neurons par bahut dependent ho sakte hain. Agar ek neuron galat pattern seekhta hai to bahut se doosre neurons bhi wahi galat pattern seekhte hain, aur network training data ratta maarne lagta hai. <Cite id="class-dl-chp2" loc="slide 107" />
 
-**Ye kyun zaroori hai.** Bade network mein neurons **co-adapt** kar sakte hain: ek neuron doosre ki galtiyan theek karna seekh leta hai, aur milkar woh training data ratta maar lete hain. Dropout ye partnerships tod deta hai.
+<Box kind="definition">
 
-**Analogy.** Ek group project socho jahan har din kuch members random absent hote hain. Koi bhi aaram se baith ke ek star member pe sab kuch nahi chhod sakta, kyunki woh star shayad aaye hi nahi. Sabko real kaam karna seekhna padta hai.
-
-**Kaise kaam karta hai.**
-
-1. Ek **keep probability** $p$ chuno, jaise hidden layers ke liye 0.5 aur inputs ke liye lagbhag 0.8.
-2. Har training batch ke liye, har neuron ko probability $p$ se rakho aur warna off kar do. Practice mein iska matlab hai layer ke output ko 1s aur 0s ke random mask se multiply karna.
-3. Sirf bache hue neurons ke saath train karo. Agle batch pe, alag random set off karo.
-4. **Test time pe** kuch bhi off mat karo, kyunki humein poore network ka answer chahiye. Ab zyada neurons active hain, to outputs training se bade honge. Original paper isko test time pe weights ko $p$ se multiply karke theek karta hai. Common modern method, **inverted dropout**, iske bajaye training ke time bache hue outputs ko $1/p$ se scale up karta hai, taaki test time pe kuch change na ho.
-
-<Img id="img-dl-n2-reg-dropout" caption="Dropout tasveer mein: training ke dauraan kuch hidden units (yahan h2 aur h5) apne connections samet band kar diye jaate hain." />
-
-<Figure caption="Left: poora network, test time pe use hota hai. Right: dropout ke saath ek training step. Crossed-out neurons is batch ke liye off hain, isliye unke connections kuch nahi le jaate; agla batch alag random set off karta hai.">
-  <NetworkFigure layers="3,4,4,2" title="Full network (testing)" />
-  <NetworkFigure layers="3,4,4,2" dropped="1:1,1:3,2:0" title="One training step (dropout)" />
-</Figure>
-
-<Box kind="intuition">
-
-Ye overfitting kyun rokta hai: (1) ek neuron particular neighbours ke present hone pe depend nahi kar sakta, isliye har ek ko khud kuch useful seekhna padta hai; (2) har step ek alag "thinned" network train karta hai, aur final network lagbhag in sabke average ki tarah behave karta hai, aur averaging training data ke quirks se aayi galtiyan cancel kar deta hai; (3) random switching noise add karta hai, jisse ratta maarna mushkil ho jaata hai.
+**Dropout** is a regularization technique that randomly turns OFF (drops) some neurons during training. These dropped neurons do not participate in forward propagation, backpropagation or weight updates. Each training iteration uses a slightly different network. <Cite id="class-dl-chp2" loc="slide 107" />
 
 </Box>
 
-**Advantages.** Loss badle bina overfitting kam karta hai. Bahut sasta: bas ek random 0/1 mask. Bahut tarah ke networks aur tasks mein kaam karta hai. Ek network ke andar hi ek sasta ensemble (bahut networks ka average) deta hai. <Cite id="srivastava2014" />
+**Dropout overfitting ki problem kaise solve karta hai.** Training mein dropout kuch neurons randomly select karke unhe temporarily OFF kar deta hai. Sirf bache hue neurons learning ke liye use hote hain. Har iteration mein alag neurons drop hote hain, to model training data ratta nahi maar sakta; balki har neuron independently useful patterns seekhta hai. **Random drop → less dependency → learn general patterns → overfitting reduces.** <Cite id="class-dl-chp2" loc="slide 107" />
 
-**Disadvantages.** Training zyada time leti hai kyunki learning signal zyada noisy hai. Keep probability ek aur setting hai jise tune karna padta hai. Chhote networks ya bahut kam data mein kam useful hai, aur agar dono ko carelessly lagaya jaaye to batch normalization ke saath awkward interact karta hai.
+Textbook ise ensemble ki tarah samjhata hai: dropout edge sampling ke bajaye node sampling se neural network ensemble banata hai. Agar node drop hota hai to uske saare incoming aur outgoing connections bhi drop ho jaate hain. Nodes sirf input aur hidden layers se sample hote hain (output nodes kabhi drop nahi hote, warna prediction nahi de sakte). Agar network mein $M$ nodes hain to $2^M$ possible sampled networks hain, par unke **weights shared** hain. <Cite id="class-dl-m2" loc="p. 38" />
 
-**Applications.** AlexNet jaise image classifiers ki fully connected layers, text aur speech models, aur Keras aur PyTorch ki "Dropout" layer. <Cite id="keras-dropout" />
+Training steps (textbook): <Cite id="class-dl-m2" loc="p. 39" />
 
-## Early stopping
+1. Base network se ek network sample karo (input nodes probability $p_i$ se, hidden nodes $p_h$ se rakhe jaate hain, sab independent; node hatane par uske edges bhi hat jaate hain).
+2. Ek training instance ya mini-batch sample karo.
+3. Bache hue edges ke weights backpropagation se update karo.
 
-**Ye kya hai.** Early stopping matlab tab tak train karna jab tak network **validation** data pe improve kar raha hai, aur improve hona band ho to ruk jaana.
+<Img id="class-regularization-dropout-concept" caption="Dropout: dropped neurons forward propagation, backpropagation ya weight updates mein hissa nahi lete." />
 
-**Ye kyun zaroori hai.** Learning curve dobara dekho: ek point ke baad, zyada epochs validation error ko badtar banate hain. Early stopping us point ko automatically pakad leta hai.
-
-**Kaise kaam karta hai.**
-
-1. Har epoch ke baad, validation loss measure karo.
-2. Jab bhi woh naye lowest value pe pahunche, weights ki ek copy save karo.
-3. Agar woh ek fixed number of epochs (**patience**) tak improve na ho, to ruk jao aur saved weights pe wapas jao.
-
-<Img id="img-dl-n2-reg-early-stopping" caption="Training error girta rehta hai, par validation error dashed line ke baad badhne lagta hai. Training wahin rok do." />
+<Img id="class-regularization-dropout-solves" caption="Dropout problem kaise solve karta hai: random drop se kam dependency, general patterns aur kam overfitting." />
 
 ```mermaid
-%% caption: Early-stopping loop. Training tabhi tak chalti hai jab tak validation loss naye lows pe pahunchta rahe.
-flowchart TD
-  A["Ek epoch train karo"] --> B["Validation loss measure karo"]
-  B --> C{"Ab tak ka lowest?"}
-  C -- "Haan" --> D["Weights save karo, counter 0 karo"]
-  D --> A
-  C -- "Nahi" --> E["Counter mein 1 add karo"]
-  E --> F{"Counter = patience?"}
-  F -- "Nahi" --> A
-  F -- "Haan" --> G["Ruko aur saved weights load karo"]
+%% caption: Teacher ke main-idea diagram se dropout training loop. Har iteration mein neurons ka alag set drop hota hai.
+flowchart LR
+  A["Training starts"] --> B["Random neurons are dropped"]
+  B --> C["Remaining neurons learn"]
+  C --> D["Next iteration"]
+  D --> E["Different neurons are dropped"]
+  E --> F["Model learns better general patterns"]
+  F -.-> B
 ```
 
-**Short example.** Patience 2 aur validation losses 0.90, 0.60, 0.45, **0.40**, 0.42, 0.47 ke saath, best epoch 4 hai. Epochs 5 aur 6 dono worse hain, isliye training epoch 6 ke baad rukti hai aur epoch 4 ke weights use hote hain.
+<Cite id="class-dl-chp2" loc="slide 107" />
 
-**Advantages.** Network ya loss mein koi change nahi. Training time bachata hai. Use karna lagbhag free hai, aur har doosre method ke saath kaam karta hai. Simple loss ke liye iska effect L2 jaisa hota hai. <Cite id="gfdl-ch7" loc="§7.8" />
+<Img id="class-regularization-dropout-example" caption="Dropout ke bina saare neurons active hote hain aur ek galat neuron doosron ko bhatka deta hai; dropout ke saath kuch neurons off hote hain aur baaki useful features seekhte hain." />
 
-**Disadvantages.** Validation set chahiye, jo training se data le leta hai. Noisy validation curve isse bahut jaldi rokwa sakta hai, isliye patience dhyan se chuno.
+**Dropout rate (p)** batata hai training mein kitne percent neurons OFF honge: <Cite id="class-dl-chp2" loc="slide 108" />
 
-**Applications.** Keras ka "EarlyStopping" callback, aur bahut se practical training runs. <Cite id="keras-early-stopping" />
+| p | Kya hota hai |
+|---|---|
+| 0 (0%) | Koi neuron drop nahi; regularization nahi; overfitting ka zyada chance |
+| 0.2 (20%) | Paanch mein se ek neuron drop; thodi regularization |
+| **0.5 (50%)** | Aadhe neurons drop; hidden layers ke liye **sabse common**; learning aur overfitting rokne ke beech achha balance |
+| 0.8 (80%) | Zyadatar neurons drop; model bahut kam seekhta hai; underfitting ho sakti hai |
 
-## Batch normalization
+<Img id="class-regularization-dropout-rate" caption="Alag dropout rates ke examples aur har ek ka matlab." />
 
-**Ye kya hai.** Batch normalization (batch norm) ek layer hai jo agli layer ke inputs ko rescale karti hai taaki current mini-batch pe har unit ki values ka average 0 aur spread 1 ho. Phir network ko unke liye best scale aur shift seekhne deti hai.
+**Training aur testing.** Training mein random neurons OFF hote hain aur har iteration mein alag neurons drop hote hain. Testing mein koi neuron drop nahi hota, saare neurons active hote hain aur prediction ke liye poora network use hota hai. <Cite id="class-dl-chp2" loc="slide 108" />
 
-**Ye kyun zaroori hai.** Training ke time jaise earlier layers badalti hain, baad wali layers tak pahunchne wali values ka size badalta rehta hai. Har layer ko baar baar re-adjust karna padta hai, isliye training slow aur unstable hoti hai aur chhota learning rate chahiye. Batch norm values ko ek steady range mein rakhta hai.
+<Img id="class-regularization-dropout-train-test" caption="Training mein dropout (random neurons off) aur testing mein (saare neurons on)." />
 
-**Kaise kaam karta hai (ek unit aur ek mini-batch ke liye).**
+<Img id="class-regularization-dropout-network" caption="Wahi network bina dropout aur training mein dropout ke saath (crossed neurons drop hue hain)." />
 
-1. Batch ki values ka **average** nikaalo.
-2. Unka **spread** (variance) nikaalo.
-3. **Normalize:** average subtract karo aur spread ke square root se divide karo, taaki values ka average 0 aur spread 1 ho.
-4. **Scale and shift:** ek learned number $\gamma$ (gamma) se multiply karo aur ek learned number $\beta$ (beta) add karo, taaki agar better ho to network rescaling ko undo kar sake.
-5. **Test time pe** shayad ek hi example ho aur koi batch na ho, isliye layer training ke time store kiye gaye mean aur variance ke running averages use karti hai.
+**Sum 6: kitne neurons aur kitne networks?** <Cite id="class-dl-chp2" loc="slide 108" />
 
-Formulas, step by step: $\mu_B$ batch average hai, $\sigma_B^2$ batch variance, $\epsilon$ ek tiny number jo zero se divide hone se rokta hai.
+<Sum>
 
-$$
-\mu_B = \frac{1}{m}\sum_i x_i
-\qquad
-\sigma_B^2 = \frac{1}{m}\sum_i (x_i-\mu_B)^2
-$$
+<Given>
 
-$$
-\hat{x}_i = \frac{x_i-\mu_B}{\sqrt{\sigma_B^2+\epsilon}}
-\qquad
-y_i = \gamma\,\hat{x}_i + \beta
-$$
+100 neurons ki hidden layer jisme dropout rate $p = 0.5$, aur ek aur jisme $p = 0.2$. Ek chhota network jisme 4 droppable nodes (input aur hidden) hain.
 
-**Worked example: chaar values pe batch norm.**
+</Given>
 
-Given: ek mini-batch mein ek unit ki values: 2, 4, 6, 8. Simple rakhne ke liye $\gamma = 1$, $\beta = 0$ aur $\epsilon \approx 0$ lo.
-To find: normalized values.
+<Find>
 
-1. Average, batch ka centre nikaalne ke liye: $(2+4+6+8)/4 = 20/4 = 5$.
-2. Har value se average subtract karo, taaki woh 0 pe centre ho jaayein: $-3, -1, 1, 3$.
-3. Inka square karo, kyunki variance bina sign ke spread measure karta hai: $9, 1, 1, 9$.
-4. Squares ka average lo, yahi variance hai: $(9+1+1+9)/4 = 20/4 = 5$.
-5. Variance ka square root, taaki spread values ki units mein aa jaaye: $\sqrt{5} \approx 2.236$.
-6. Har centred value ko 2.236 se divide karo, taaki spread 1 ho jaaye: $-3/2.236 \approx -1.342$, $-1/2.236 \approx -0.447$, $1/2.236 \approx 0.447$, $3/2.236 \approx 1.342$.
-7. $\gamma = 1$ se scale aur $\beta = 0$ se shift karo, isse values same rehti hain.
+dropped neurons ki expected sankhya, aur possible sampled networks ki sankhya.
 
-**Normalized batch ≈ −1.34, −0.45, 0.45, 1.34**
+</Find>
+
+<Steps>
+
+1. **$p = 0.5$:** $0.5 \times 100 = 50$ neurons har iteration mein average drop hote hain.
+2. **$p = 0.2$:** $0.2 \times 100 = 20$ neurons average drop hote hain.
+3. **Possible networks:** 4 nodes mein se har ek ya to rakha jaata hai ya drop, to $2^4 = 16$ sampled networks. Textbook ka formula $M$ nodes ke liye $2^M$ hai.
+
+</Steps>
+
+<Answer>
+
+$p = 0.5$ par 50 neurons drop, $p = 0.2$ par 20, aur 4 droppable nodes ke liye 16 possible networks.
+
+</Answer>
 
 <Box kind="verify">
 
-Output ka average 0 aur variance 1 hona chahiye. Average:
-
-$$
-(-1.342 - 0.447 + 0.447 + 1.342)/4 = 0/4 = 0
-$$
-
-Variance: $1.342^2 \approx 1.801$ aur $0.447^2 \approx 0.200$, to
-
-$$
-(1.801 + 0.200 + 0.200 + 1.801)/4 = 4.002/4 \approx 1.00
-$$
-
-Dono checks pass (chhota sa 0.002 rounding ki wajah se hai).
+2 nodes ke choices likho: dono rakhe, sirf A drop, sirf B drop, dono drop = 4 networks $= 2^2$. Har extra node count double karta hai, to 4 nodes se $2^4 = 16$.
 
 </Box>
 
+</Sum>
+
+<Img id="class-regularization-dropout-why" caption="Dropout overfitting kyun rokta hai: neurons ek dusre par depend nahi kar sakte kyunki koi bhi neuron kabhi bhi drop ho sakta hai." />
+
+**Dropout ke advantages:** overfitting kam, generalization improve, neuron dependency rokta hai, network zyada robust, simple aur deep learning mein widely used. **Disadvantages:** training thodi slow, sahi dropout rate chunna important hai, bahut high dropout se underfitting ho sakti hai, usually sirf training mein apply hota hai. <Cite id="class-dl-chp2" loc="slide 108" /> Textbook add karta hai ki dropout efficient hai (sirf hidden units sample karne ka extra kaam hai) par ye network ki expressive power kam karta hai, to iske poore fayde ke liye bade models aur zyada units chahiye. <Cite id="class-dl-m2" loc="p. 40" />
+
+<Img id="class-regularization-dropout-pros-cons" caption="Dropout ke advantages aur disadvantages." />
+
+<Img id="class-regularization-dropout-phases" caption="Training phase (har iteration mein random network) aur testing phase (saare neurons on) mein dropout." />
+
+Keras mein dropout ek layer hai: dense layers ke beech `Dropout(0.25)`. <Cite id="class-dl-m2" loc="p. 43" />
+
+## Batch normalization
+
+**Problem: internal covariate shift.** Network deep hone par training mushkil hoti hai: ek layer ka output agli layer ka input hai, weights badalte rehte hain, to har layer ke inputs badalte rehte hain. Training slow hoti hai, model unstable hota hai aur optimizer ko best weights dhundne mein zyada time lagta hai. Is problem ko **Internal Covariate Shift** kehte hain. <Cite id="class-dl-chp2" loc="slide 109" />
+
+Ye kyun hota hai: weights update hote hain, to ek layer ka output badalta hai, to agli layer ka input badalta hai, to agli layer ko phir se seekhna padta hai, aur training slow ho jaati hai. Optimizer model improve kar raha ho tab bhi agli layer ko badalte inputs milte rehte hain. <Cite id="class-dl-chp2" loc="slide 109" /> Textbook ka example: dog / not-dog classifier sirf safed kutton par train hua, phir non-white kutte diye gaye: hidden activations ka distribution badal jaata hai, aur "this change in hidden activation is known as an internal covariate shift". <Cite id="class-dl-m2" loc="p. 81" />
+
+<Box kind="definition">
+
+**Batch Normalization (BatchNorm)** is a technique that normalizes the outputs of a layer before passing them to the next layer. Instead of allowing values to vary widely, BatchNorm keeps them within a similar range. This makes training faster and more stable. <Cite id="class-dl-chp2" loc="slide 109" />
+
+</Box>
+
+<Img id="class-regularization-bn-problem" caption="Internal covariate shift: weights badalte rehte hain, to har layer ke inputs badalte rehte hain aur training slow ho jaati hai." />
+
+<Img id="class-regularization-bn-concept" caption="Batch normalization: ye agli layer se pehle ek layer ke outputs ko normalize karta hai." />
+
+**Batch kya hai? Normalization kya hai?** Batch training samples ka ek chhota group hai jo saath mein process hota hai (jaise 1000 images 32 ke batches mein bheji jaati hain). Normalization matlab values ko similar range mein laana (jaise 10, 50, 100, 200 chhoti values ban jaati hain jo 0 ke aas-paas hain). <Cite id="class-dl-chp2" loc="slide 110" />
+
+**Step by step kaise kaam karta hai** (teacher ke steps): <Cite id="class-dl-chp2" loc="slide 110" />
+
+1. Batch ka **mean** $\mu$ calculate karo (saare outputs ka average).
+2. Batch ka **variance** $\sigma^2$ calculate karo (values mean se kitni phaili hain).
+3. **Normalize:** $\hat x = \dfrac{x - \mu}{\sqrt{\sigma^2 + \epsilon}}$. Normalization ke baad mean lagbhag 0 aur variance lagbhag 1 hota hai. ($\epsilon$ zero se divide hone se bachne ke liye chhoti value hai.)
+4. $\gamma$ (gamma) se **scale** karo: $\gamma \hat x$. Gamma network ko decide karne deta hai ki values bade hon ya chhote.
+5. $\beta$ (beta) se **shift** karo: $\gamma \hat x + \beta$. Beta network ko normalized values shift karne deta hai.
+6. Output agli layer ko do.
+
+<Box kind="definition">
+
+**Final Batch Normalization formula:** $y = \gamma \left[ \dfrac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} \right] + \beta$, jahan $\mu$ mean hai, $\sigma^2$ variance, $\epsilon$ zero se division rokta hai, $\gamma$ scaling parameter aur $\beta$ shifting parameter. <Cite id="class-dl-chp2" loc="slide 110" />
+
+</Box>
+
+Do trainable parameters $\gamma$ aur $\beta$ model ko "the optimum distribution for each hidden layer" chunne dete hain: $\gamma$ standard deviation adjust karta hai aur $\beta$ curve ko left ya right shift karta hai. <Cite id="class-dl-m2" loc="p. 72" />
+
+<Img id="class-regularization-bn-steps" caption="Batch, normalization, aur pehle teen steps: mean, variance aur values normalize karna." />
+
+<Img id="class-regularization-bn-formula" caption="Gamma se scale, beta se shift, final formula aur complete flow." />
+
 ```mermaid
-%% caption: Batch normalization ek mini-batch ke liye ek unit ki values ke saath kya karta hai, step by step.
+%% caption: Teacher ki sheet se complete batch normalization flow. Gamma aur beta seekhe jaate hain, to layer phir bhi best scale aur shift chun sakti hai.
 flowchart LR
-  A["Values ka batch x1 ... xm"] --> B["Average: μ"]
-  A --> C["Spread: σ²"]
-  B --> D["Normalize: (x − μ) / √(σ² + ε)"]
-  C --> D
-  D --> E["Scale and shift: γ·x̂ + β"]
-  E --> F["Output y"]
+  A["Input"] --> B["Calculate mean"]
+  B --> C["Calculate variance"]
+  C --> D["Normalize values"]
+  D --> E["Multiply by gamma"]
+  E --> F["Add beta"]
+  F --> G["Output to next layer"]
 ```
 
-**Ye regularize bhi kyun karta hai.** Har example ko un doosre examples ke saath normalize kiya jaata hai jo us batch mein hain, isliye uski value mein thoda random noise aa jaata hai. Ye noise thoda regularizing effect deta hai, kuch kuch dropout jaisa.
+<Cite id="class-dl-chp2" loc="slide 110" />
 
-**Advantages.** Fast aur steady training. Higher learning rate use kar sakte ho. Network is baat pe kam depend karta hai ki weights shuru mein kaise set kiye gaye the. Mild regularization.
+**Sum 7: chaar values par batch normalization (teacher ka mean example, poora kiya).** <Cite id="class-dl-chp2" loc="slide 110" />
 
-**Disadvantages.** Bahut chhote batches ke saath kharab kaam karta hai, kyunki tab batch average reliable nahi hota. Training aur testing mein alag behave karta hai, jisse bugs aa sakte hain. Thoda computation add karta hai. Original paper ne speed-up ko "internal covariate shift" se explain kiya tha, par ye explanation abhi bhi debated hai; answer mein simply likho ki ye training ko stabilize aur fast karta hai. <Cite id="ioffe2015" /> <Cite id="gfdl-ch8" loc="§8.7.1" />
+<Sum>
 
-**Applications.** Bahut se modern CNNs, jaise ResNet, convolutions ke baad batch norm layer lagate hain. <Cite id="keras-batchnorm" />
+<Given>
+
+Chaar outputs ka batch $2, 4, 6, 8$. $\gamma = 2$, $\beta = 1$ lo aur $\epsilon$ ignore karo.
+
+</Given>
+
+<Find>
+
+mean, variance, normalized values aur final outputs.
+
+</Find>
+
+<Steps>
+
+1. **Mean:** $\mu = (2 + 4 + 6 + 8) / 4 = 5$.
+2. **Variance:** deviations $-3, -1, 1, 3$; squares $9, 1, 1, 9$; $\sigma^2 = 20 / 4 = 5$. To $\sigma = \sqrt{5} = 2.236$.
+3. **Normalize** $\hat x = (x - 5) / 2.236$: $-1.342, -0.447, 0.447, 1.342$.
+4. **Scale aur shift** $y = 2\hat x + 1$: $-1.683, 0.106, 1.894, 3.683$.
+
+</Steps>
+
+<Answer>
+
+Normalized values: $-1.342, -0.447, 0.447, 1.342$ (mean 0, variance 1). Final outputs: $-1.683, 0.106, 1.894, 3.683$.
+
+</Answer>
+
+<Box kind="verify">
+
+Normalized values ka sum 0 hai, aur unka variance $(1.8 + 0.2 + 0.2 + 1.8)/4 = 1.0$. Slide ke apne normalization examples (10, 50, 100, 200 se −1.2, −0.3, 0.5, 1.0 aur 20, 50, 100, 150 se −1.1, −0.4, 0.5, 1.0) sirf mota picture hain: exact values −1.13, −0.56, 0.14, 1.55 aur −1.21, −0.61, 0.40, 1.41 hain.
+
+</Box>
+
+</Sum>
+
+**Kahan lagta hai?** Dense ya Convolution layer ke baad aur activation function (ReLU) se pehle: teacher kehte hain BN activation function se pehle apply hota hai. <Cite id="class-dl-chp2" loc="slide 110" />
+
+<Img id="class-regularization-bn-placement" caption="Batch normalization kahan baithta hai: dense layer, batch normalization, activation function, next layer." />
+
+**Training versus testing.** BatchNorm training mein current batch ki statistics use karta hai; testing mein learned statistics use karta hai. <Cite id="class-dl-chp2" loc="slide 109" /> (Textbook: "Batch normalization is computed differently during the training and the testing phase". <Cite id="class-dl-m2" loc="p. 72" />)
+
+<Img id="class-regularization-bn-with-without" caption="Batch normalization ke bina aur saath training: saath mein har layer ko similar range mein inputs milte hain, to learning faster hoti hai." />
+
+**Benefits:** faster training; stable learning; higher learning rate allow karta hai; internal covariate shift kam; overfitting thodi kam (har batch ki statistics alag hoti hai, jo thodi randomness add karti hai, ek chhota regularization effect, par dropout ya L1/L2 ka replacement nahi). **Advantages:** faster convergence, stable learning, weight initialization ke prati kam sensitive, overall model performance improve. **Disadvantages:** training mein extra computation, bahut chhote batch sizes par kam effective, extra memory chahiye, dropout jaisi doosri regularization techniques ko poori tarah replace nahi karta. <Cite id="class-dl-chp2" loc="slide 112" />
+
+<Img id="class-regularization-bn-benefits" caption="Batch normalization ke benefits: faster training, stable learning, higher learning rate, kam covariate shift, halki regularization." />
+
+| | Batch normalization | Dropout |
+|---|---|---|
+| Kya karta hai | Activations normalize karta hai | Neurons ko randomly OFF karta hai |
+| Neurons | Saare neurons active rehte hain | Kuch neurons temporarily hat jaate hain |
+| Main purpose | Mainly training speed up | Mainly overfitting kam |
+
+<Cite id="class-dl-chp2" loc="slide 112" />
+
+Textbook add karta hai ki batch normalization lagbhag kisi bhi deep network ko reparametrize karne ka tareeka hai, aur iske advantages training speed up karna aur internal covariate shift handle karna hain. <Cite id="class-dl-m2" loc="pp. 71 and 79" />
+
+## Early stopping
+
+**Problem.** Training mein model har epoch weights update karke training data se seekhta hai. Shuru mein wo useful patterns seekhta hai aur accuracy improve hoti hai. Agar training bahut zyada epochs chale to model patterns seekhne ke bajaye training data ratta maarne lagta hai: training accuracy bahut high rehti hai, validation accuracy ghatti hai, aur model unseen data par kharab perform karta hai. Dropout, L1 aur L2 learning process modify karke overfitting kam karte hain, par agar model bahut der train ho to overfitting phir bhi ho sakti hai. Sabse simple solution hai overfitting shuru hone se pehle training rok dena. <Cite id="class-dl-chp2" loc="slide 113" />
+
+<Box kind="definition">
+
+**Early Stopping** is a regularization technique that stops the training process automatically when the model stops improving on the validation data. Instead of training for a fixed number of epochs, the model is stopped at the best epoch. <Cite id="class-dl-chp2" loc="slide 113" />
+
+</Box>
+
+Textbook: "In early stopping, the iterative optimization method is terminated early without converging to the optimal solution on the training data." Training data ka ek hissa **validation set** ke roop mein alag rakha jaata hai; us par model ka error monitor hota hai. Ek point par ye error validation set par badhne lagta hai jabki training set par ghatta rehta hai: wahi termination ka point hai. <Cite id="class-dl-m2" loc="pp. 24 and 42" />
+
+<Img id="class-regularization-early-stopping-problem" caption="Bahut zyada epochs ki training overfitting kyun karti hai, aur dropout, L1 aur L2 use poori tarah kyun solve nahi kar sakte." />
+
+<Img id="class-regularization-early-stopping-concept" caption="Early stopping: sahi time par rok do, best model pao." />
+
+**Kaise kaam karta hai.** Training mein model har epoch ke baad validation loss check karta hai. Agar validation loss kai consecutive epochs tak improve nahi hota to training automatically ruk jaati hai. Natija: model training data ratta nahi maarta, overfitting kam hoti hai aur best-performing model save ho jaata hai. <Cite id="class-dl-chp2" loc="slide 113" />
+
+<Img id="class-regularization-early-stopping-solves" caption="Training loss girta rehta hai par validation loss badhne lagta hai: best epoch wo hai jahan wo sabse kam hai." />
+
+```mermaid
+%% caption: Teacher ke main-idea diagram se early stopping flowchart. Patience wo epochs ki sankhya hai jitna hum intezaar karte hain.
+flowchart TD
+  A["Start training"] --> B["Train one epoch"]
+  B --> C["Check validation loss"]
+  C --> D{"Improving?"}
+  D -->|"Yes"| B
+  D -->|"No"| E["Wait for patience"]
+  E --> F{"Still not improving?"}
+  F -->|"No"| B
+  F -->|"Yes"| G["Stop training and save the best model"]
+```
+
+<Cite id="class-dl-chp2" loc="slide 113" />
+
+**Key terms.** **Best epoch** wo epoch hai jisme validation loss sabse kam ya validation accuracy sabse high ho; wahi model hum rakhte hain. **Patience** epochs ki wo sankhya hai jitna model rukne se pehle intezaar karta hai; patience = 3 ho to agar validation loss 3 consecutive epochs tak improve na ho to training ruk jaati hai. Patience chhote fluctuations ki wajah se jaldi rukne se bachata hai. Early stopping mainly validation loss monitor karta hai, training loss nahi. <Cite id="class-dl-chp2" loc="slide 114" />
+
+<Img id="class-regularization-early-stopping-patience" caption="Patience: kitne epochs intezaar karna hai. Patience 3 ke saath teen epochs bina improvement ke training rok dete hain." />
+
+**Sum 8: patience 3 ke saath early stopping (teacher ki table).** <Cite id="class-dl-chp2" loc="slide 114" />
+
+<Sum>
+
+<Given>
+
+Epoch ke hisaab se validation loss: 1 → 0.90, 2 → 0.70, 3 → 0.55, 4 → 0.48, 5 → 0.49, 6 → 0.50, 7 → 0.51. Patience $= 3$.
+
+</Given>
+
+<Find>
+
+best epoch aur wo epoch jahan training rukti hai.
+
+</Find>
+
+<Steps>
+
+1. **Epochs 1 se 3:** loss har baar improve hota hai (0.90, 0.70, 0.55), to continue.
+2. **Epoch 4:** 0.48 ab tak ka sabse kam hai, to ye **best model** hai; save karo.
+3. **Epoch 5:** 0.49, 0.48 se kharab hai, wait (1).
+4. **Epoch 6:** 0.50 ab bhi kharab hai, wait (2).
+5. **Epoch 7:** 0.51 ab bhi kharab hai, wait (3). Patience khatam.
+
+</Steps>
+
+<Answer>
+
+Training epoch 7 par rukti hai aur epoch 4 ka saved model (loss 0.48) use hota hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Epoch 4 ke baad loss teen baar lagatar badha (0.49, 0.50, 0.51), jo patience 3 ke barabar hai. Epoch 4 se pehle kisi epoch ka loss 0.48 se kam nahi tha.
+
+</Box>
+
+</Sum>
+
+<Img id="class-regularization-early-stopping-example" caption="Teacher ka example: epoch ke hisaab se validation loss, epoch 4 par best model, patience 3 ke saath epoch 7 par stop." />
+
+<Img id="class-regularization-early-stopping-graph" caption="Training aur validation loss: wahan roko jahan validation loss sabse kam hai (best epoch)." />
+
+**Advantages:** overfitting rokta hai, training time bachata hai, best model automatically select karta hai, implement karna aasan, generalization improve. **Disadvantages:** validation dataset chahiye, sahi patience value chunna important hai, patience bahut chhota ho to jaldi ruk sakta hai. <Cite id="class-dl-chp2" loc="slide 114" /> Keras mein: `EarlyStopping(monitor='val_err', patience=5)`, jahan monitor wo quantity hai jise dekha jaata hai aur patience wo epochs ki sankhya jisme koi improvement na ho to training ruk jaati hai. <Cite id="class-dl-m2" loc="p. 43" />
 
 ## Data augmentation
 
-**Ye kya hai.** Data augmentation existing training examples ko aise tarike se badalkar extra examples banata hai jisse correct answer same rahe.
+**Problem.** Deep learning models ko bahut saara training data chahiye, par kai real-world cases mein sirf chhota dataset milta hai. Chhota dataset model ko general patterns seekhne ke bajaye ratta maarne par majboor karta hai (wo wahi images baar-baar dekhta hai aur background, lighting, camera angle aur noise yaad kar leta hai, asli object nahi). Isse overfitting hoti hai. Zyada data collect karna time-consuming, expensive, mushkil aur kabhi impossible hai (jaise medical images). <Cite id="class-dl-chp2" loc="slide 115" />
 
-**Ye kyun zaroori hai.** Overfitting ka sabse accha ilaaj zyada data hai, par real labelled data mehenga hai. Augmentation free mein zyada variety deta hai.
+<Box kind="definition">
 
-**Kaise kaam karta hai.**
+**Data Augmentation** creates new training samples by modifying the existing data. The modified images still represent the same object but look different to the model. It increases the diversity of the training dataset. <Cite id="class-dl-chp2" loc="slide 115" />
 
-1. Ek training example lo.
-2. Ek random change apply karo jo uska label na badle.
-3. Badla hua example network ko do. Har epoch thoda alag version dekhta hai, isliye network ek exact picture ratta nahi maar sakta.
+</Box>
 
-**Types.**
+Textbook ka version: "a set of techniques used to artificially expand the size and diversity of a training dataset by applying transformations to existing data samples". Ye overfitting kam karta hai, model ko transformations (rotation, flipping, noise) ke prati invariance seekhne mein help karta hai, jab data collect karna expensive ho tab useful hai aur real-world mein robustness badhata hai. <Cite id="class-dl-m2" loc="p. 83" />
 
-- **Images:** left to right flip, crop, thoda rotate, zoom, shift, brightness ya contrast change.
-- **Audio:** background noise add karo, speed ya pitch thoda badlo.
-- **Text:** words ko synonyms se replace karo, doosri language mein translate karke wapas laao.
+<Img id="class-regularization-aug-problem" caption="Chhota dataset overfitting kyun karta hai, aur zyada data collect karna hamesha solve kyun nahi kar sakta." />
+
+<Img id="class-regularization-aug-new-concept" caption="Data augmentation: naya concept aur humein ye kyun chahiye." />
+
+**Kaise kaam karta hai.** Original training image ko alag-alag transformations se modify kiya jaata hai. Har transformed image ek naya training sample ban jaati hai, aur **label nahi badalta**: rotated ya flipped apple ab bhi Apple hai. <Cite id="class-dl-chp2" loc="slide 116" />
 
 ```mermaid
-%% caption: Data augmentation ek labelled image ko bahut saare training examples mein badal deta hai jo sab label "cat" rakhte hain.
-flowchart LR
-  A["Original photo, label: cat"] --> B["Flipped"]
-  A --> C["Cropped"]
-  A --> D["Rotated 10°"]
-  A --> E["Brighter"]
-  B --> F["Sab abhi bhi cat labelled"]
-  C --> F
-  D --> F
-  E --> F
+%% caption: Teacher ki sheet se data augmentation flow. Ek original image se kai naye training images bante hain, sab ka label same.
+flowchart TD
+  A["Original image"] --> B["Rotation"]
+  A --> C["Flip"]
+  A --> D["Zoom"]
+  A --> E["Crop"]
+  A --> F["Brightness"]
+  A --> G["Noise"]
+  B --> H["Many new training images, same label"]
+  C --> H
+  D --> H
+  E --> H
+  F --> H
+  G --> H
 ```
 
-**Dhyan rakho:** change se answer nahi badalna chahiye. Digit 6 ko 180° rotate karo to woh 9 jaisa dikhta hai, isliye digits ke liye woh rotation galat label dega. <Cite id="gfdl-ch7" loc="§7.4" />
+<Cite id="class-dl-chp2" loc="slide 116" />
 
-**Advantages.** Zyada data paane ka sasta tarika. Network ko lighting ya position jaise chhote changes ke liye robust banata hai. Kisi bhi doosre method ke saath combine ho sakta hai.
+### Common data augmentation techniques (teacher ke chhe)
 
-**Disadvantages.** Galat transformations galat labels banate hain. Zyada data hone se training zyada time leti hai. Safe changes chunne ke liye task ki knowledge chahiye.
-
-**Applications.** Image classification, medical imaging jahan data kam hai, speech recognition. <Cite id="rev-m2-regularization-wiki-data-augmentation" />
-
-## Syllabus ke baaki regularizers
-
-**Parameter sharing.** Same weights ko bahut jagah reuse karo. Convolution filter poori image pe slide hota hai, isliye weights ka ek chhota set har jagah use hota hai. Kam free weights matlab ratta maarne ka kam chance. *Advantage:* bahut kam weights aur ek sensible built-in assumption. *Disadvantage:* sirf wahan suitable jahan same pattern sach mein kahin bhi aa sakta hai. *Application:* images ke liye CNNs, RNNs jo har time step pe weights ka ek hi set reuse karte hain. <Cite id="gfdl-ch7" loc="§7.9" />
-
-**Input mein noise add karna.** Thode noisy inputs pe train karo taaki network chhote changes pe strongly react na kare. Kuch simple models ke liye, bahut thoda input noise add karna weights ke size pe penalty jaisa kaam karta dikhaya gaya hai, L2 jaisa. *Advantage:* zyada robust network. *Disadvantage:* bahut zyada noise real signal ko chhupa deta hai. *Application:* speech recognition aur denoising autoencoders. <Cite id="gfdl-ch7" loc="§7.5" />
-
-**Output mein noise add karna (label smoothing).** Target ko soft karo, jaise correct class ke liye 1.0 ki jagah 0.9 use karo, taaki network overconfident na bane ya un labels ke peeche na bhaage jo shayad galat hon. *Advantage:* better-calibrated, kam overconfident predictions. *Disadvantage:* model ki probabilities ab exactly true wali nahi rehti. *Application:* image classifiers aur translation models. <Cite id="gfdl-ch7" loc="§7.5.1" />
-
-## Saare methods ek nazar mein
-
-| Method | What it changes | Main idea | Main drawback |
-|---|---|---|---|
-| L2 / weight decay | Loss | Saare weights chhote rakho | Weights kabhi exactly zero nahi |
-| L1 | Loss | Bekaar weights zero karo | Zero pe corner, deep nets mein kam use |
-| Dropout | Training ke time network | Random neurons off karo | Slow training |
-| Batch normalization | Network | Har layer ke inputs rescale karo | Chhote batches mein weak |
-| Early stopping | Training process | Lowest validation loss pe ruko | Validation set chahiye |
-| Data augmentation | Data | Label same rakhne wali copies banao | Galat changes, galat labels |
-| Parameter sharing | Network | Weights reuse karo | Sirf jahan patterns repeat hon |
-| Input / output noise | Data | Network robust aur kam confident banao | Zyada noise nuksaan karta hai |
-
-**Conclusion.** Overfitting ratta maarna hai; upar ka har regularization method training data pe thodi accuracy chhodkar naye data pe bahut better karta hai, aur practice mein kai methods saath use hote hain (jaise weight decay, dropout, data augmentation aur early stopping).
-
-## Ye kahan poocha gaya
-
-| If the question says | What to write | Seen as |
+| Technique | Kya karta hai | Kyun help karta hai |
 |---|---|---|
-| "Explain dropout" ya "dropout and its advantages" | Definition, kyun zaroori, steps, diagram, test-time scaling, overfitting kyun rokta hai, advantages | <PYQ id="2023-12/q1c" /> <PYQ id="2024-05/q1c" /> <PYQ id="2024-12/q1c" /> |
-| "Explain regularization" | Kya hai, kyun zaroori, chaar families, main methods pe ek ek line | <PYQ id="2025-05/q1b" /> |
-| "Overfitting and underfitting" | Dono definitions, table, learning curve, causes aur fixes, bias aur variance | <PYQ id="2025-05/q1d" /> |
-| "L1 and L2 regularization" | Dono ideas aur penalties words mein, diamond aur circle picture, comparison table | <PYQ id="2024-05/q5a" /> |
-| "Early stopping, batch normalization, data augmentation" | Har ek ki definition, steps, advantage aur use, batch norm steps ke saath | <PYQ id="2023-12/q3b" /> |
+| **Rotation** | Image ko chhote angle se rotate karte hain (jaise 20°) | Alag orientations ke liye useful |
+| **Flipping** | Image horizontally ya vertically flip hoti hai | Model ko mirrored objects pehchanne mein help |
+| **Zooming** | Object bada ya chhota kiya jaata hai | Alag distances par objects pehchanne mein help |
+| **Cropping** | Image ka ek hissa hata diya jaata hai | Aise objects bhi seekhta hai jo partially dikhte hon |
+| **Brightness adjustment** | Brightness badhai ya ghatai jaati hai | Alag lighting conditions mein kaam karta hai |
+| **Noise addition** | Image mein chhota random noise add hota hai | Model ko noisy inputs ke prati robust banata hai |
+
+<Cite id="class-dl-chp2" loc="slide 116" />
+
+<Img id="class-regularization-aug-techniques" caption="Chhe common data augmentation techniques (rotation, flipping, zooming, cropping, brightness, noise) aur flow." />
+
+<Img id="class-regularization-aug-fruit-flow" caption="Fruit example: ek apple image se chhe training images bante hain, sab Apple label ke saath." />
+
+Textbook techniques ko data type ke hisaab se group karta hai: **image** data (geometric transformations jaise rotation, flipping, cropping, scaling, translation; colour transformations jaise brightness, contrast, saturation, hue; noise addition jaise Gaussian ya salt-and-pepper noise; cutout/random erasing; mixup jo do images aur unke labels combine karta hai; affine aur perspective transformations), **text** data (synonym replacement, back translation, random insertion/deletion/swap, BERT jaise language model se contextual augmentation) aur **audio** data (time stretching ya compression, pitch shifting, noise add karna, time mein shift, speed badalna). Ye warning bhi deta hai: "be careful with health care data". <Cite id="class-dl-m2" loc="pp. 89-92" />
+
+**Sum 9: kitna data milta hai?**
+
+<Sum>
+
+<Given>
+
+100 original apple images. Har image ko 20° rotate, flip, zoom in aur brighter banaya jaata hai, aur original bhi rakha jaata hai.
+
+</Given>
+
+<Find>
+
+training set ka size.
+
+</Find>
+
+<Steps>
+
+1. Har image 4 naye images deti hai (rotation, flip, zoom, brightness) plus original: $1 + 4 = 5$ images.
+2. Training set: $100 \times 5 = 500$ images.
+
+</Steps>
+
+<Answer>
+
+100 originals se 500 training images, sab ka label Apple.
+
+</Answer>
+
+<Box kind="verify">
+
+Naye images $= 100 \times 4 = 400$, aur $400 + 100$ originals $= 500$.
+
+</Box>
+
+</Sum>
+
+**Advantages:** bina aur data collect kiye training data badhta hai, overfitting kam, generalization improve, model robust, CNN performance improve. **Disadvantages:** training time badhta hai, bahut zyada augmentation se accuracy ghat sakti hai, kuch transformations har dataset ke liye suitable nahi. <Cite id="class-dl-chp2" loc="slide 116" /> Keras mein class `ImageDataGenerator(rotation_range=20, width_shift_range=0.1, ..., horizontal_flip=True, ...)` use karti hai. <Cite id="class-dl-m2" loc="p. 93" />
+
+| | More data | Data augmentation |
+|---|---|---|
+| Matlab | Naye real-world samples collect karna | Existing data se naye samples banana |
+| Cost aur time | High (time-consuming, expensive) | Low (quick aur easy) |
+| Purpose | Dataset size badhana | Dataset size aur diversity badhana |
+
+<Cite id="class-dl-chp2" loc="slide 115" />
+
+## Noise injection aur parameter sharing
+
+**Noise injection.** Training ke dauran inputs, weights ya hidden layers ki activations mein jaan-boojh kar chhota random noise add kiya jaata hai. Model exact values ratta maarne ke bajaye robust patterns seekhta hai. Types: **input noise** (network mein jaane se pehle input data mein), **weight noise** (training mein weights mein, jaise 0.80 + 0.02 = 0.82) aur **hidden layer (activation) noise** (hidden neurons ke outputs mein). Noise sirf training mein add hota hai; testing mein nahi. **Advantages:** overfitting kam, generalization improve, noisy inputs ke prati robust. **Disadvantages:** bahut zyada noise accuracy kam kar sakta hai, noise ki matra chunna important hai. <Cite id="class-dl-chp2" loc="slides 118 and 119" />
+
+<Img id="class-regularization-noise-solves" caption="Noise injection problem kaise solve karta hai: training mein chhota random noise add hota hai, to model unimportant variations ignore karta hai." />
+
+<Img id="class-regularization-noise-where" caption="Noise injection ke types: input noise, weight noise aur hidden layer (activation) noise." />
+
+**Parameter sharing.** Ek technique jisme kai neurons ya connections weights ka same set use karte hain. Alag-alag weights seekhne ke bajaye model ek shared weight seekhta hai jo kai jagah reuse hota hai, jisse trainable parameters, memory aur overfitting ka chance kam hota hai. CNN mein wahi filter poori image par apply hota hai, to model apple ko kahin bhi pehchaan sakta hai. Ye mainly CNNs aur RNNs mein use hota hai. Ek limitation: shared weights kuch problems mein location-specific patterns capture nahi kar paate. <Cite id="class-dl-chp2" loc="slide 120" /> Textbook: sharing parameters model ke degrees of freedom kam karta hai aur recurrent tatha convolutional networks mein use hota hai. <Cite id="class-dl-m2" loc="p. 25" />
+
+<Img id="class-regularization-param-sharing-idea" caption="Parameter sharing ke bina har connection ka apna weight hai; sharing ke saath ek weight W reuse hota hai, to parameters kam." />
+
+<Img id="class-regularization-param-sharing-fruit" caption="CNN mein parameter sharing: wahi filter image ke top, center aur bottom par apply hota hai." />
+
+## Comparison: kaun sa method kya karta hai
+
+| Method | Kis par kaam karta hai | Main idea |
+|---|---|---|
+| L1 (Lasso) | Weights | Penalty $\lambda \sum \lvert w \rvert$; kuch weights 0 (feature selection) |
+| L2 (Ridge) | Weights | Penalty $\lambda \sum w^2$; weights chhote par 0 nahi |
+| Elastic Net | Weights | L1 + L2 saath |
+| Weight decay | Weights | Har update ke baad weights shrink (L2 ke lagbhag barabar) |
+| Dropout | Neurons | Training mein neurons ko randomly OFF karta hai |
+| Batch normalization | Activations | Har layer ke outputs normalize; faster, stable training |
+| Early stopping | Training duration | Validation loss improve hona band ho to rukta hai |
+| Data augmentation | Training data | Existing data se naye samples banata hai |
+| Noise injection | Inputs, weights, activations | Training mein chhota random noise add |
+| Parameter sharing | Parameters ki sankhya | Wahi weights kai jagah reuse |
+
+<Cite id="class-dl-chp2" loc="slide 100" />
+
+## Ye kahan puchha gaya
+
+| Question | Kya likhna hai | Solution |
+|---|---|---|
+| "Explain regularization in neural network" | Definition, kyun zaroori, penalty idea, λ, methods ki chhoti list | <PYQ id="2025-05/q1b" /> |
+| "Explain overfitting and underfitting" | Definitions, fruit example, curves, table, bias aur variance, fixes | <PYQ id="2025-05/q1d" /> |
+| "Explain dropout. How does it solve overfitting?" | Definition, random drop, dropout rate, training vs testing, advantages | <PYQ id="2023-12/q1c" /> <PYQ id="2024-05/q1c" /> <PYQ id="2024-12/q1c" /> |
+| "L1 and L2 regularization" | Formulas, har ek kya karta hai, feature selection, comparison table | <PYQ id="2024-05/q5a" /> |
+| "Early stopping, batch normalization and data augmentation" | Har ek ka problem, definition, kaise kaam karta hai, advantages | <PYQ id="2023-12/q3b" /> |
+| "Need for regularization; early stopping and dropout" | Overfitting problem, regularization, dono methods | <PYQ id="assignment-1/q2a" /> |
+| "Data augmentation and its types with examples" | Definition, examples ke saath chhe techniques, text aur audio | <PYQ id="assignment-1/q2b" /> |
 
 ## Quick revision
 
-- Overfitting: training data pe great, naye data pe kharab (high variance). Underfitting: dono pe kharab (high bias).
-- Regularization: koi bhi cheez jo training data ki jagah naye data pe error kam kare.
-- L2 $\dfrac{\lambda}{2}\sum w_i^2$ add karta hai aur har step pe har weight ko thoda shrink karta hai (weight decay). L1 $\lambda\sum |w_i|$ add karta hai aur bahut weights ko zero ki taraf push karta hai.
-- Dropout: training ke time random neurons off karo; test time pe sab on rakho (scaling ke saath).
-- Early stopping: wahan ruko jahan validation loss lowest hai aur wahi weights use karo.
-- Batch norm: batch average subtract karo, spread se divide karo, phir $\gamma$ se scale aur $\beta$ se shift karo.
-- Augmentation: sirf woh changes jo label same rakhein.
+- Underfitting: bahut simple, high bias, training aur testing dono par poor. Overfitting: bahut complex, high variance, training par bahut achha par testing par poor. Good fit: balanced.
+- Regularization: Total Loss = Prediction Error + Regularization Penalty. λ control knob hai: 0 overfit karta hai, chhota best hai, bada underfit karta hai.
+- L1: $\lambda \sum |w|$, weights 0 kar sakta hai, feature selection (Lasso). L2: $\lambda \sum w^2$, weights chhote par 0 nahi (Ridge, weight decay). Elastic Net: dono.
+- Dropout: sirf training mein neurons randomly OFF (common rate 0.5). Early stopping: validation loss improve hona band ho to ruko (patience). Data augmentation: naye samples, same label.
+- Batch normalization: $y = \gamma \hat x + \beta$ jahan $\hat x = (x - \mu)/\sqrt{\sigma^2 + \epsilon}$; internal covariate shift fix, faster aur stable training.

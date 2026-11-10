@@ -1,64 +1,35 @@
 ---
-references: [gfdl-ch7, gfdl-ch8, ioffe2015, gfg-early-stopping, gfg-batchnorm, gfg-data-augmentation]
+references: [class-dl-chp2]
 ---
 
-**In simple words:** teeno cheezein deep network ko achhe se train hone aur naye data pe kaam karne mein madad karti hain. Early stopping training ko sahi waqt pe rokti hai, batch normalization har layer ke inputs ka size steady rakhti hai, aur data augmentation extra training examples banata hai.
+**In simple words:** early stopping sahi time par training rok deta hai, batch normalization har layer ki values ko similar range mein rakhta hai, aur data augmentation purane samples se naye training samples banata hai. Teeno network ko better train aur generalize karne mein help karte hain. <Cite id="class-dl-chp2" loc="slides 109, 113 and 115" />
 
-**1. Early stopping**
+**1. Early stopping.** Agar training bahut zyada epochs chale to model training data ratta maarne lagta hai: validation accuracy ghatti hai. Early stopping tab training automatically rok deta hai jab model validation data par improve hona band kar de, aur best model save ho jaata hai. **Patience** wo epochs ki sankhya hai jitna intezaar karna hai (patience 3: 3 epochs bina improvement ke baad stop). Example: epoch 4 par validation loss 0.48, phir 0.49, 0.50, 0.51 epoch 7 par rukta hai aur epoch 4 rakhta hai. <Cite id="class-dl-chp2" loc="slides 113 and 114" />
 
-*Definition.* Training tab tak hi karo jab tak validation data pe error girta rahe; jab sudhar ruk jaaye to rok do. <Cite id="gfdl-ch7" loc="§7.8" />
+<Img id="class-regularization-early-stopping-solves" caption="Training loss girta rehta hai, validation loss badhne lagta hai: best epoch par roko." />
 
-*Why needed.* Training error girta rahta hai, lekin validation error ek lowest point tak girta hai aur phir badhne lagta hai, kyunki network ratta marna shuru kar deta hai.
-
-*How it works.*
-
-1. Har epoch ke baad validation loss napo.
-2. Jab bhi wo naya lowest value chhue, weights save karo.
-3. Agar fixed number of epochs (*patience*) tak sudhar na ho, to rok do aur saved weights wapas load karo.
+**2. Batch normalization.** Weights badalne se har layer ke inputs badalte rehte hain (internal covariate shift) aur training slow ho jaati hai. Batch normalization agli layer se pehle ek layer ke outputs normalize karta hai: batch ka mean $\mu$ aur variance $\sigma^2$ calculate karo, normalize $\hat x = \dfrac{x - \mu}{\sqrt{\sigma^2 + \epsilon}}$, phir scale aur shift $y = \gamma \hat x + \beta$ ($\gamma$, $\beta$ seekhe jaate hain). Isse training faster aur stable hoti hai aur higher learning rate allow hota hai. <Cite id="class-dl-chp2" loc="slides 109 and 110" />
 
 ```mermaid
-%% caption: Early stopping wo weights rakhta hai jo lowest validation loss wale epoch ke the.
+%% caption: Ek batch ke liye batch normalization ke steps.
 flowchart LR
-  A["Ek epoch train karo"] --> B["Validation loss"]
-  B --> C{"Naya lowest?"}
-  C -- "Haan" --> D["Weights save karo"]
-  D --> A
-  C -- "Nahi, patience khatam" --> E["Rok do, best weights load karo"]
-  C -- "Nahi, patience baaki" --> A
+  A["Input batch"] --> B["Mean"]
+  B --> C["Variance"]
+  C --> D["Normalize"]
+  D --> E["Multiply by gamma"]
+  E --> F["Add beta"]
+  F --> G["Output to next layer"]
 ```
 
-<Img id="img-dl-n2-reg-early-stopping" caption="Training error girta rehta hai, par validation error apne minimum ke baad badhne lagta hai; usi minimum pe ruk jao." />
+**3. Data augmentation.** Chhota dataset overfitting karata hai aur zyada data collect karna costly hai. Data augmentation existing data ko modify karke naye training samples banata hai (rotation, flipping, zooming, cropping, brightness, noise); label nahi badalta, to flipped apple ab bhi Apple hai. <Cite id="class-dl-chp2" loc="slides 115 and 116" />
 
-*Advantages:* network ya loss mein badlaav nahi, time bachta hai. *Limitation:* validation set chahiye; noisy curve pe jaldi ruk sakta hai. *Use:* Keras EarlyStopping callback. <Cite id="gfg-early-stopping" />
+<Img id="class-regularization-aug-techniques" caption="Chhe common data augmentation techniques aur flow." />
 
-**2. Batch normalization**
+| | Early stopping | Batch normalization | Data augmentation |
+|---|---|---|---|
+| Kis par kaam karta hai | Training duration | Layer outputs | Training data |
+| Main benefit | Overfitting rokta hai | Faster, stable training | Zyada data, kam overfitting |
 
-*Definition.* Ek layer jo mini-batch mein ek unit ki values ko average 0 aur spread 1 tak rescale karti hai, phir ek learned scale $\gamma$ aur shift $\beta$ lagati hai. <Cite id="ioffe2015" />
+**Conclusion:** teeno methods teen alag problems fix karte hain: bahut lambi training, layers ke unstable inputs, aur kam data.
 
-*Why needed.* Jaise pehle wali layers badalti hain, later layers tak pahunchne wali values ka size badalta rehta hai, to training slow aur unstable ho jaati hai.
-
-*How it works.* Batch ka average $\mu_B$ aur variance $\sigma_B^2$ nikaalo, average ghatao, variance ke square root se bhaag do ($\epsilon$ ek bahut chhota number hai taaki zero se bhaag na ho), phir scale aur shift karo:
-
-$$
-\hat{x}_i = \frac{x_i-\mu_B}{\sqrt{\sigma_B^2+\epsilon}},
-\qquad
-y_i = \gamma\hat{x}_i + \beta
-$$
-
-Test time pe training ke dauran save kiye hue $\mu$ aur $\sigma^2$ ke running averages use hote hain.
-
-*Advantages:* training tez aur steady, higher learning rate, starting weights pe kam nirbharta, batch ke noise se halka regularization. *Limitation:* bahut chhote batches pe kamzor. *Use:* ResNet mein convolutions ke baad. <Cite id="gfdl-ch8" loc="§8.7.1" /> <Cite id="gfg-batchnorm" />
-
-**3. Data augmentation**
-
-*Definition.* Existing examples ko aise badalkar extra training examples banana jisse label na badle. <Cite id="gfdl-ch7" loc="§7.4" />
-
-*Why needed.* Overfitting ke sabse achhe ilaajon mein se ek zyada data hai, lekin labelled data mehenga padta hai.
-
-*Types.* Images: flip, crop, halka rotation, zoom, brightness change. Audio: noise add karna. Text: synonym replace karna.
-
-*Advantages:* sasta extra data, position aur lighting ke liye robustness. *Limitation:* badlaav label nahi badalna chahiye; 6 ko 180° ghumaoge to 9 ban jaayega. *Use:* image classification aur medical imaging. <Cite id="gfg-data-augmentation" />
-
-**Conclusion:** early stopping control karta hai *kab* rokna hai, batch normalization control karta hai *layers kaise* train hon, aur augmentation control karta hai *network kaunsa data* dekhe; teeno milkar overfitting kam karte hain.
-
-Exam mein English mein likho: "Early stopping stops training when validation error starts rising, batch normalization normalizes layer inputs over each mini-batch, and data augmentation creates extra training samples by label-preserving transformations."
+Exam mein English mein likho: "Batch normalization normalizes the outputs of a layer: y = gamma x-hat + beta."

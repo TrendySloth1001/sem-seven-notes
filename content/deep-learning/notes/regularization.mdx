@@ -1,507 +1,992 @@
 ---
 title: "Overfitting and regularization"
 module: 2
-summary: "Why a network can score full marks on its training data and still fail on new data, and the simple tricks that fix it: L2, L1, dropout, early stopping, batch normalization, data augmentation, parameter sharing and noise."
+summary: "Why a network that is perfect on its training data can fail on new data (overfitting), how to spot it, and the methods the class teaches to fix it: L1, L2 and Elastic Net penalties, weight decay, dropout, batch normalization, early stopping, data augmentation, noise injection and parameter sharing. Theory first with the teacher's definitions, then the small sums that are asked."
 keyIdeas:
-  - "Overfitting is memorizing instead of learning: very good on training data, poor on new data."
-  - "Underfitting is the opposite problem: the network is too simple or too little trained, so it is poor on both."
-  - "Bias is error from a model that is too simple; variance is error from a model that is too sensitive. Regularization trades a little bias for a big drop in variance."
-  - "L2 and L1 punish large weights. L2 makes weights small. L1 makes many of them zero."
-  - "Dropout switches off random neurons during training so no neuron can be lazy."
-  - "Early stopping stops training at the moment the new-data error is lowest."
-  - "Batch normalization rescales each layer's inputs to a standard size. Data augmentation makes extra training examples."
+  - "Overfitting: the model learns the training data too well (including noise) and performs poorly on new data. High training accuracy does not mean a good model. Generalization is the ability to predict correctly on new (unseen) data."
+  - "Regularization is a technique used to reduce overfitting by controlling the complexity of the model. It adds a penalty to the loss function: Total Loss = Prediction Error + Regularization Penalty."
+  - "L1 (Lasso) penalty = λ Σ|w| and can make some weights exactly 0 (feature selection). L2 (Ridge) penalty = λ Σ w² and shrinks weights but usually does not make them zero. Elastic Net = L1 + L2."
+  - "Dropout randomly turns off some neurons during training (not during testing). Early stopping stops training when the validation loss stops improving. Data augmentation creates new training samples from existing ones."
+  - "Batch normalization normalizes the outputs of a layer: y = γ x̂ + β with x̂ = (x − μ) / √(σ² + ε). It makes training faster and more stable."
 references:
-  - gfdl-ch5
-  - gfdl-ch7
-  - gfdl-ch8
-  - srivastava2014
-  - ioffe2015
-  - cs231n-nn3
-  - nptel-dl
-  - d2l-generalization
-  - d2l-weight-decay
-  - d2l-dropout
-  - d2l-batchnorm
-  - gfg-overfitting
-  - gfg-regularization
-  - gfg-l1-sparsity
-  - gfg-dropout
-  - gfg-early-stopping
-  - gfg-batchnorm
-  - gfg-data-augmentation
-  - mlm-regularization
-  - ibm-regularization
-  - av-dropout
-  - keras-dropout
-  - keras-early-stopping
-  - keras-batchnorm
-  - pytorch-dropout
-  - pytorch-batchnorm
-  - wiki-overfitting
-  - wiki-regularization
-  - wiki-dropout
-  - wiki-early-stopping
-  - wiki-batchnorm
-  - rev-m2-regularization-wiki-bias-variance
-  - rev-m2-regularization-gfg-bias-variance
-  - rev-m2-regularization-wiki-data-augmentation
-  - rev-m2-regularization-ibm-overfitting
+  - class-dl-chp2
+  - class-dl-m2
 ---
 
 Before the new ideas, here are the old ones you need. If you already know them, skip to the next section.
 
 ## The basics first
 
-- A neural network is a big formula with many adjustable numbers called **weights**.
-- **Training** means adjusting the weights so the network's answers get close to the correct answers.
-- The **loss** is one number that says how wrong the network is. Lower is better.
-- Each adjustment is a small step that lowers the loss. The size of the step is the **learning rate**, written $\eta$ (eta).
-- One full pass through all the training examples is one **epoch**.
-- We keep some examples aside as a **validation set**. The network never learns from them. They tell us how the network does on data it has not seen, which is what we really care about. Doing well on unseen data is called **generalization**.
-
-## The problem: memorizing instead of learning
-
-Think of two students preparing for an exam.
-
-- Student A memorizes last year's paper word for word. On last year's paper A scores 100%. On a new paper with different questions, A fails.
-- Student B understands the subject. B scores a bit less on last year's paper, but also does well on the new one.
-
-A neural network can behave like Student A. It has so many weights that it can memorize the training examples, including their mistakes and random quirks. That is **overfitting**. **Regularization** means every trick that pushes the network to behave like Student B. This is syllabus <Syl m="2" />, section 2.3, and one of the topics that comes up most often in the papers.
+- A **weight** is a number that shows how important an input is to a neuron. The weights are the **parameters** the network learns. <Cite id="class-dl-chp2" loc="slide 4" />
+- The **loss** is the error of the prediction. An **epoch** is one complete pass through the training data. <Cite id="class-dl-chp2" loc="slide 69" />
+- The data is split into three parts. **Training data** builds the model (it is used to learn the weights). **Validation data** is used for model selection and parameter tuning. **Testing data** tests the accuracy of the final (tuned) model; it must not even be looked at while tuning. <Cite id="class-dl-m2" loc="p. 27" />
+- A **hyperparameter** is a setting that you choose before training (for example the learning rate or λ). It is not learned by the optimizer. <Cite id="class-dl-chp2" loc="slide 98" />
 
 ## Overfitting and underfitting
 
+### What we want: generalization
+
+After training, the main question is: can the model make correct predictions on new, unseen data? A model should not only perform well on the training data but also on data it has never seen before. <Cite id="class-dl-chp2" loc="slide 92" />
+
 <Box kind="definition">
 
-**Overfitting:** the network fits the training data, including its noise, so closely that it does much worse on new data.
-**Underfitting:** the network is too simple, or trained too little, to capture the real pattern, so it is poor on both training and new data.
+**Generalization** is the ability of a model to make correct predictions on new (unseen) data. A good model learns patterns, not memorization. <Cite id="class-dl-chp2" loc="slide 92" />
 
 </Box>
 
-<Img id="img-dl-n2-reg-overfit" caption="Green wiggly curve: overfitting (it bends round every training point, noise included). Black smooth curve: a simpler boundary that generalizes better." />
+A model may reach 100% training accuracy but still make wrong predictions on new data, because it may learn the actual pattern (good) or memorize the training data (bad). Therefore **high training accuracy is not the same as a good model**. <Cite id="class-dl-chp2" loc="slide 92" />
 
-**How to recognise each one.** Compare the score on training data with the score on validation data. Here are made-up numbers to show the three cases:
+The textbook says the same: overfitting means "a neural network will provide excellent prediction performance on the training data that it is built on, but will perform poorly on unseen test instances". The learning process "remembers random artifacts of the training data that do not generalize". Extreme overfitting is called **memorization**. <Cite id="class-dl-m2" loc="p. 19" />
 
-| Case | Accuracy on training data | Accuracy on validation data | What it means |
+<Img id="class-regularization-overfit-problem" caption="Underfitting learns too little (high error on training and testing data); overfitting learns too much (low training error but high testing error)." />
+
+### Underfitting, good fit and overfitting
+
+<Box kind="definition">
+
+**Underfitting:** the model is too simple to learn the important patterns in the data. It performs poorly on both training and testing data. **Overfitting:** the model learns the training data too well, including noise and unnecessary details. It performs very well on training data but poorly on testing data. **Good fit:** the model learns the correct patterns without memorizing the data and performs well on both. <Cite id="class-dl-chp2" loc="slide 93" />
+
+</Box>
+
+**Fruit example (the teacher's).** Underfitting: the model cannot even learn the training examples, so it calls an apple a banana. Overfitting: the training apple had a small black spot, so the model thinks "an apple must always have a black spot", and a new apple without the spot is called "Not Apple". Good fit: the model generalizes well. <Cite id="class-dl-chp2" loc="slide 93" />
+
+<Img id="class-regularization-fit-curves" caption="Easy diagram: underfit (too simple), good fit (just right), overfit (fits the noise also)." />
+
+<Img id="class-regularization-fit-table" caption="Underfitting, good fit and overfitting compared on model complexity, training accuracy, testing accuracy, pattern learning and generalization." />
+
+| | Underfitting | Good fit | Overfitting |
 |---|---|---|---|
-| Underfitting | 55% | 52% | Has not learned the pattern yet |
-| Good fit | 92% | 90% | Learned the pattern |
-| Overfitting | 99% | 70% | Memorized the training data |
+| Model complexity | Too simple | Balanced | Too complex |
+| Training accuracy | Low | High | Very high |
+| Testing accuracy | Low | High | Low |
+| Learns the pattern? | No | Yes | Memorizes |
+| Generalization | Poor | Excellent | Poor |
 
-The giveaway for overfitting is a **big gap** between the two scores. The giveaway for underfitting is that **both** scores are low.
+<Cite id="class-dl-chp2" loc="slide 93" />
 
-**The learning curve.** The picture below plots both errors against the number of epochs. The training error keeps going down. The validation error goes down at first, reaches its lowest point, and then starts going up. That turning point is where the network starts memorizing.
+### How to identify them: loss curves
 
-<Figure caption="Illustrative learning curves. Left of the dashed line the network is still learning; right of it the validation error rises while the training error keeps falling: that is overfitting.">
-  <CurvePlot curves="train-error,val-error" x="0,20" y="0,1.25" xLabel="Epoch" yLabel="Error" mark="min:val-error" />
-</Figure>
+We compare the model's performance on training data and on validation (testing) data. <Cite id="class-dl-chp2" loc="slide 95" />
 
-**Causes and cures.**
+- **Underfitting:** training loss and validation loss are both high, because the model cannot learn the training data.
+- **Good fit:** both losses decrease and stay close to each other.
+- **Overfitting:** training loss keeps decreasing, but the validation loss starts increasing.
 
-| | Overfitting | Underfitting |
+<Img id="class-regularization-loss-curves" caption="Training and validation loss: underfitting (both high), good fit (both low and close), overfitting (validation loss rises)." />
+
+The textbook adds two signs of overfitting: the gap between the error on training instances and unseen test instances is large, and when a model is trained on different data sets the same test instance may get very different predictions. The **generalization error** is the error on out-of-sample test data. <Cite id="class-dl-m2" loc="p. 22" />
+
+| | Training accuracy | Validation accuracy |
 |---|---|---|
-| Typical causes | Network too big for the data, too little data, noisy data, training too long | Network too small, too few epochs, too much regularization, poor input features |
-| Cures | More data, data augmentation, L1/L2, dropout, early stopping, a smaller network | A bigger network, longer training, less regularization, better features |
+| Underfitting | Low | Low |
+| Good fit | High | High |
+| Overfitting | Very high | Low |
 
-**Real-world example.** A spam filter trained on a few hundred emails may learn that every email containing one sender's name is spam. It is perfect on those emails but marks good emails from a new sender wrongly. That is overfitting. <Cite id="rev-m2-regularization-ibm-overfitting" />
+<Cite id="class-dl-chp2" loc="slide 95" />
 
-## Bias, variance and the trade-off
+**Generalization error** is the difference between the model's performance on training data and unseen data: a small difference means good generalization, a large difference means poor generalization. In the teacher's example a model has 99% accuracy on training fruits and 60% on new fruits: a large gap, caused by overfitting. <Cite id="class-dl-chp2" loc="slide 95" />
 
-**Bias** is the error that comes from wrong or too simple assumptions. A model with high bias misses the real pattern even on training data. That is underfitting. Picture fitting a straight line to points that clearly lie on a curve.
+<Img id="class-regularization-identify-table" caption="Training accuracy versus validation accuracy for underfitting, good fit and overfitting." />
 
-**Variance** is the error that comes from being too sensitive to the particular training set. A model with high variance changes a lot if you train it on a slightly different sample. That is overfitting. Picture a wiggly curve that passes through every training point, noise included.
-
-**Types of bias you may be asked about.**
-
-- **Statistical bias (bias error):** the gap between the model's average prediction and the truth, as described above.
-- **Inductive bias:** the built-in assumptions a model makes so that it can generalize at all. For example, a CNN assumes that nearby pixels are related and that a pattern means the same thing anywhere in the image.
-- **Data (sampling) bias:** the training data does not represent the real world, for example a face dataset with mostly one skin tone. No amount of regularization fixes this. You need better data.
-- **The bias term in a neuron:** the extra number $b$ added to the weighted sum. It is a different meaning of the same word, so do not mix it up with bias error.
-
-**The trade-off.** Making a model more flexible lowers bias but raises variance. Making it simpler lowers variance but raises bias. The total error on new data is lowest somewhere in the middle. Regularization moves a too-flexible network towards that middle: it accepts a little more bias to get a large drop in variance. <Cite id="gfdl-ch5" loc="§5.4" /> <Cite id="rev-m2-regularization-wiki-bias-variance" />
-
-```mermaid
-%% caption: The bias-variance trade-off as a path. Too simple and too flexible both give high error on new data; regularization pulls a flexible network back towards the sweet spot.
-flowchart LR
-  A["Too simple model"] --> B["High bias, low variance"]
-  B --> C["Underfitting"]
-  D["Balanced model"] --> E["Low bias, low variance"]
-  E --> F["Good generalization"]
-  G["Too flexible model"] --> H["Low bias, high variance"]
-  H --> I["Overfitting"]
-  I -- "add regularization" --> D
-```
-
-| | High bias | High variance |
-|---|---|---|
-| Training error | High | Low |
-| Validation error | High | High |
-| Gap between them | Small | Large |
-| Name | Underfitting | Overfitting |
-| Fix | More capacity, less regularization | More data, more regularization |
-
-<Cite id="rev-m2-regularization-gfg-bias-variance" />
-
-## What regularization is
+### Bias and variance
 
 <Box kind="definition">
 
-**Regularization** is any change to the model, the loss or the training process that is meant to reduce the error on new data, not the error on training data. <Cite id="gfdl-ch7" />
+**Bias** is the error caused because the model is too simple (it makes strong assumptions and cannot learn the real pattern). High bias leads to underfitting. **Variance** is the error caused because the model becomes too sensitive to the training data (it memorizes the training examples instead of learning patterns). High variance leads to overfitting. <Cite id="class-dl-chp2" loc="slide 94" />
 
 </Box>
 
-**Why it is needed.** Deep networks have millions of weights, and can have more weights than training examples. Without some restraint they will memorize. Regularization is the restraint.
+The **bias-variance trade-off**: as model complexity increases, bias decreases and variance increases. The goal is to find the right balance (low bias and low variance gives the best model). <Cite id="class-dl-chp2" loc="slide 94" /> The textbook lists three parts of the error: bias, variance and noise (the inherent error in the data). <Cite id="class-dl-m2" loc="p. 26" />
 
-<Img id="img-dl-n2-reg-regularized" caption="Blue curve hits every red point but swings wildly in between (overfit). The smooth green curve is what regularization aims for." />
+<Img id="class-regularization-bias-variance-graph" caption="Bias-variance trade-off: bias falls and variance rises as the model gets more complex; total error is lowest at the good fit." />
 
-The methods in the syllabus fall into four families:
+| Model | Bias | Variance |
+|---|---|---|
+| Underfitting | High | Low |
+| Good fit | Moderate | Moderate |
+| Overfitting | Low | High |
+
+<Cite id="class-dl-chp2" loc="slide 94" />
+
+<Img id="class-regularization-reduce-bias-variance" caption="Reducing high bias (more complexity, more epochs, more features, a stronger model) and high variance (more data, dropout, L1/L2, early stopping, a simpler model)." />
+
+### Causes and solutions
+
+<Img id="class-regularization-causes-solutions" caption="Causes of underfitting and overfitting and how to reduce each." />
+
+| | Causes | How to reduce |
+|---|---|---|
+| **Underfitting** | Model is too simple; too few training epochs; learning rate is too high; insufficient features; training stopped too early | Increase the number of epochs; increase model complexity; add better features; choose an appropriate learning rate; train the model for longer |
+| **Overfitting** | Model is too complex; too many training epochs; small training dataset; too many parameters; noise in the training data | Collect more training data; data augmentation; early stopping; dropout; L1 regularization; L2 regularization; reduce model complexity |
+
+<Cite id="class-dl-chp2" loc="slide 96" />
+
+<Img id="class-regularization-fit-summary" caption="Summary table: bias/variance, training error, testing error, model complexity and what the model learns, for underfitting, good fit and overfitting." />
 
 ```mermaid
-%% caption: The regularization methods in the syllabus, grouped by what they change.
-flowchart TD
-  R["Regularization"] --> P["Penalize the weights"]
-  R --> N["Change the network while training"]
-  R --> D["Change the data"]
-  R --> T["Change the training process"]
-  P --> P1["L2 weight decay, L1"]
-  N --> N1["Dropout, parameter sharing, batch norm"]
-  D --> D1["Data augmentation, noise in input or output"]
-  T --> T1["Early stopping"]
+%% caption: Overfitting in one picture: its causes on the left, and the techniques that this note explains on the right. The teacher says "These techniques will be explained in the next topics".
+flowchart LR
+  A["Model too complex, too many epochs, small dataset, noise"] --> B["Overfitting: high training accuracy, low testing accuracy"]
+  B --> C["More data and data augmentation"]
+  B --> D["L1, L2, Elastic Net, weight decay"]
+  B --> E["Dropout"]
+  B --> F["Early stopping"]
+  B --> G["Batch normalization, noise injection, parameter sharing"]
 ```
 
-## L2 regularization (weight decay)
+<Cite id="class-dl-chp2" loc="slide 96" /> This is syllabus <Syl m="2" />.
 
-**What it is.** L2 regularization adds a penalty to the loss that grows with the **square** of each weight. The network now has two goals: be accurate, and keep its weights small.
+## What is regularization?
 
-**Why it is needed.** Large weights make a network jumpy: a tiny change in the input can change the output a lot, which is exactly what a memorizing network looks like. Small weights give a calmer, smoother function that generalizes better.
+<Box kind="definition">
 
-**How it works.**
-
-1. Pick a strength $\lambda$ (lambda), for example 0.0001. It says how much you care about small weights compared with accuracy.
-2. Add the penalty to the normal loss.
-3. Train as usual. The gradient of the penalty pulls every weight a little towards zero at every step.
-4. A weight stays large only if the data keeps pushing it up, that is, only if it is truly useful.
-
-The standard formula says: new loss = old loss + $\lambda$ times half the sum of the squared weights.
-
-$$
-\text{new loss} = \text{old loss} + \frac{\lambda}{2}\sum_i w_i^2
-$$
-
-**Why it is called weight decay.** In words: at every training step, each weight is first shrunk to a fraction $(1-\eta\lambda)$ of itself, and then the usual step is taken.
-
-$$
-w \leftarrow (1-\eta\lambda)\,w \;-\; \eta\,(\text{usual gradient})
-$$
-
-Because $(1-\eta\lambda)$ is a little less than 1, every weight **decays** a bit at every step. <Cite id="gfdl-ch7" loc="§7.1.1" /> <Cite id="d2l-weight-decay" />
-
-**Worked example: one weight-decay step.**
-
-Given: weight $w = 10$, learning rate $\eta = 0.1$, strength $\lambda = 0.5$, usual gradient (from the old loss) $= 2$.
-To find: the weight after one step.
-
-1. Multiply $\eta$ by $\lambda$, because that is the part that shrinks the weight: $0.1 \times 0.5 = 0.05$.
-2. Find the shrink factor, because the weight keeps this fraction of itself: $1 - 0.05 = 0.95$.
-3. Shrink the weight (the "decay"): $0.95 \times 10 = 9.5$.
-4. Take the usual step, because the data still wants to move the weight: $\eta \times 2 = 0.1 \times 2 = 0.2$, so $9.5 - 0.2 = 9.3$.
-
-**New weight = 9.3**
-
-<Box kind="verify">
-
-Do the step the plain way instead. The gradient of the new loss is the usual gradient plus $\lambda w$ (the slope of $\dfrac{\lambda}{2}w^2$): $2 + 0.5 \times 10 = 2 + 5 = 7$. Then $w - \eta \times 7 = 10 - 0.7 = 9.3$. Same answer, so the shrink-then-step form is correct. Without L2 the weight would be $10 - 0.2 = 9.8$, so the penalty pulled it 0.5 closer to zero, as expected.
+**Regularization** is a technique used to reduce overfitting by controlling the complexity of the model. Instead of allowing the model to memorize the training data, regularization encourages it to learn only the important patterns. Its main goal is to improve generalization, so the model performs well on both training and unseen data. <Cite id="class-dl-chp2" loc="slide 97" />
 
 </Box>
 
-**Advantages.** Simple to add (one setting in Keras or PyTorch). Keeps all inputs in use, which suits data where many features each help a little. Smooth penalty, so training stays stable.
+The textbook's definition: "Many strategies used in machine learning are explicitly designed to reduce the test error, possibly at the expense of increased training error. These strategies are known collectively as regularization." <Cite id="class-dl-m2" loc="p. 19" /> In deep learning, regularization actually **penalizes the weight matrices of the nodes**. <Cite id="class-dl-m2" loc="p. 20" />
 
-**Disadvantages.** Weights become small but almost never exactly zero, so it does not simplify the model. $\lambda$ must be tuned: too large and the network underfits, too small and it still overfits.
+**Why not just train for more epochs?** One might think "if we train the model for more epochs, it will become better". That is not true: when training continues for too many epochs the model starts memorizing the training data, so more epochs may increase training accuracy but testing accuracy may decrease. <Cite id="class-dl-chp2" loc="slide 97" />
 
-**Applications.** Common in training CNNs and transformers (often as the "weight decay" setting of the optimizer), and in ridge regression.
+### How regularization works: the penalty
 
-## L1 regularization
+Regularization **adds a penalty to the loss function**. If the model creates very large or unnecessary weights, it receives an extra penalty. As a result very large weights are discouraged, the model becomes simpler, it learns important features instead of noise and its performance on unseen data improves. <Cite id="class-dl-chp2" loc="slide 97" />
 
-**What it is.** L1 regularization adds a penalty that grows with the **absolute value** (size, ignoring the sign) of each weight.
+- Without regularization: Loss = Prediction Error. The model only tries to reduce the prediction error.
+- With regularization: **Total Loss = Prediction Error + Regularization Penalty**. The model tries to (1) reduce the prediction error and (2) keep the weights small and simple. <Cite id="class-dl-chp2" loc="slide 97" />
 
-**How it works.** The pull of the L1 penalty towards zero has the **same strength** for every weight, big or small. A small weight that the data does not really need is therefore pulled all the way to zero, or extremely close to it. Only the weights that matter survive.
+The textbook writes it as: Cost function = Loss (say, binary cross entropy) + Regularization term. <Cite id="class-dl-m2" loc="p. 32" />
 
-The standard formula says: new loss = old loss + $\lambda$ times the sum of the absolute weights.
+<Img id="class-regularization-intro-solves" caption="How regularization solves the problem: it adds a penalty so very large weights are discouraged and the model becomes simpler." />
 
-$$
-\text{new loss} = \text{old loss} + \lambda\sum_i |w_i|
-$$
+<Img id="class-regularization-intro-penalty" caption="The general idea: Total Loss = Prediction Error + Regularization Penalty, so the model reduces the error and keeps the weights small." />
 
-So L1 gives a **sparse** network: many weights are zero. This works like automatic **feature selection**, because an input whose weights are all zero is effectively ignored. <Cite id="gfdl-ch7" loc="§7.1.2" /> <Cite id="gfg-l1-sparsity" />
+<Img id="class-regularization-intro-fruit" caption="Fruit example: without regularization the model memorizes the black spot; with regularization it learns shape, colour and texture." />
 
-**Worked example: the two penalties on the same weights.**
+```mermaid
+%% caption: Why a penalty on weights helps, as the teacher draws it. Large weights give a large penalty, the optimizer shrinks them, and the simpler model generalizes better.
+flowchart TD
+  A["Large weights"] --> B["Large penalty"]
+  B --> C["Higher total loss"]
+  C --> D["Optimizer reduces the weights"]
+  D --> E["Simpler model"]
+  E --> F["Better generalization"]
+```
 
-Given: two weights $w_1 = 3$ and $w_2 = -4$, strength $\lambda = 0.1$.
-To find: the L2 penalty and the L1 penalty.
+<Cite id="class-dl-chp2" loc="slide 98" />
 
-1. L2: square each weight, because L2 uses squares (the sign disappears): $3^2 = 9$, $(-4)^2 = 16$.
-2. Add the squares: $9 + 16 = 25$.
-3. Multiply by $\dfrac{\lambda}{2} = 0.05$, as the L2 formula says: $0.05 \times 25 = 1.25$.
-4. L1: take the absolute value of each weight, because L1 ignores the sign: $|3| = 3$, $|-4| = 4$.
-5. Add them: $3 + 4 = 7$.
-6. Multiply by $\lambda = 0.1$, as the L1 formula says: $0.1 \times 7 = 0.7$.
+<Img id="class-regularization-weight-penalty" caption="The weight penalty concept: large weights, large penalty, higher total loss, the optimizer reduces the weights." />
 
-**L2 penalty = 1.25, L1 penalty = 0.7**
+**Why does the optimizer choose smaller weights?** Suppose two models give the same prediction error. Model A has weight 25, model B has weight 5. The penalty for A is high, so its total loss is high; B has a low penalty and a low total loss. The optimizer chooses B. <Cite id="class-dl-chp2" loc="slide 98" />
 
-<Box kind="verify">
+<Img id="class-regularization-smaller-weights" caption="Two models with the same prediction error: the one with the smaller weight has the lower total loss." />
 
-Recompute weight by weight. L2: $0.05 \times 9 = 0.45$ and $0.05 \times 16 = 0.80$; $0.45 + 0.80 = 1.25$. L1: $0.1 \times 3 = 0.3$ and $0.1 \times 4 = 0.4$; $0.3 + 0.4 = 0.7$. Both match. Sign check: both penalties are positive, as they must be, since a penalty only ever adds to the loss.
+<Img id="class-regularization-train-test-error" caption="Without regularization the testing error rises while training error falls; with regularization the testing error is lower." />
+
+### The regularization coefficient λ (lambda)
+
+<Box kind="definition">
+
+**λ (lambda)** is called the **regularization coefficient** (regularization strength). It controls how much penalty is added to the loss function. Think of λ as a control knob. It is a hyperparameter chosen before training; the weights are learned by the optimizer. <Cite id="class-dl-chp2" loc="slide 99" />
 
 </Box>
 
-**Advantages.** Produces a smaller, simpler model that is easier to interpret. Picks out the important inputs automatically.
-
-**Disadvantages.** The absolute value has a sharp corner at zero, so the gradient there is not defined and optimizers need a special rule. When two inputs are strongly related it tends to keep one at random and drop the other. Less common than L2 inside deep networks.
-
-**Applications.** Lasso regression, selecting genes or features from very wide datasets, compressing networks for phones.
-
-**Why L1 gives zeros and L2 does not (picture).** Think of the penalty as a fence: the weights must stay inside it. For L1 the fence is a diamond; for L2 it is a circle. The ovals are lines of equal loss around the best unpenalized answer. The regularized answer is where the smallest oval first touches the fence. The diamond has sharp corners on the axes, so the touch usually happens at a corner, where one weight is exactly zero. The circle has no corners, so both weights stay non-zero.
-
-<Figure caption="Same loss, two fences. With L1 (left) the contour first touches the diamond at its corner, so w2 = 0. With L2 (right) it touches the circle where both weights are non-zero. The touch points were computed, not sketched.">
-  <NormBalls />
-</Figure>
-
-| | L1 | L2 (weight decay) |
+| λ | Penalty | Result |
 |---|---|---|
-| Penalty uses | Absolute values of the weights | Squares of the weights |
-| Pull towards zero | Same strength for every weight | Stronger for big weights, weak for small ones |
-| Effect | Many weights become zero (sparse) | All weights become small, rarely zero |
-| Feature selection | Yes, automatic | No |
-| Smoothness | Corner at zero | Smooth everywhere |
-| Good when | Only a few inputs really matter | Most inputs carry a little useful information |
-| Classical name | Lasso | Ridge |
+| λ = 0 | No penalty (no regularization) | The model becomes very complex, weights become very large, it memorizes the training data: **overfitting** |
+| Small λ (recommended) | Small penalty | Weights are controlled, important features are learned, noise is ignored: **good fit**, the best choice |
+| Large λ | Very large penalty | Weights become very small, the model becomes too simple and cannot learn enough patterns: **underfitting** |
+
+<Cite id="class-dl-chp2" loc="slide 99" />
+
+The textbook agrees: if the regularization coefficient is so high that the weights are nearly zero, the result is a much simpler linear network and slight underfitting, so we need to optimize the value of the coefficient to get a well-fitted model. <Cite id="class-dl-m2" loc="p. 21" />
+
+<Img id="class-regularization-lambda-cases" caption="λ = 0 (overfitting), small λ (the best choice) and large λ (underfitting), each with the fruit example." />
+
+<Img id="class-regularization-lambda-effects" caption="Effect of λ on model complexity, on the weights and on underfitting and overfitting." />
+
+<Img id="class-regularization-lambda-error" caption="Error against regularization strength: the best λ is small and gives the good fit." />
+
+**Everyday analogy (the teacher's).** λ = 0: the student memorizes every sentence from the textbook and cannot answer if the question changes slightly. Small λ: the student understands concepts and answers correctly even if the question changes. Large λ: the student studies too little and cannot answer even simple questions. <Cite id="class-dl-chp2" loc="slide 99" />
+
+**Advantages of regularization:** reduces overfitting, improves generalization, produces a simpler model, reduces the effect of noise, better performance on unseen data, makes the model more robust. **Disadvantages:** too much regularization causes underfitting, choosing the correct λ is difficult, training accuracy may decrease slightly, one extra hyperparameter must be tuned. <Cite id="class-dl-chp2" loc="slide 99" />
+
+### The types of regularization
+
+The teacher lists nine: L1 (Lasso), L2 (Ridge), Elastic Net, Weight Decay, Dropout, Early Stopping, Data Augmentation, Noise Injection and Parameter Sharing. <Cite id="class-dl-chp2" loc="slide 100" /> The textbook groups them as penalty-based regularization, ensemble methods (dropout), early stopping, pretraining, continuation and curriculum methods, and sharing parameters. <Cite id="class-dl-m2" loc="pp. 23-25" />
+
+<Img id="class-regularization-l1-l2-overview" caption="The teacher's overview of L1 (Lasso) and L2 (Ridge) with the effect on the weights." />
+
+```mermaid
+%% caption: The family of regularization methods from the teacher's overview sheet. Penalty methods change the loss; dropout and noise change the network; early stopping and data augmentation change the training.
+flowchart TD
+  R["Regularization"] --> P["Penalty on weights: L1, L2, Elastic Net, Weight Decay"]
+  R --> N["Change the network: Dropout, Noise Injection, Parameter Sharing"]
+  R --> T["Change the training: Early Stopping, Data Augmentation"]
+```
+
+<Cite id="class-dl-chp2" loc="slide 100" />
+
+## L1 regularization (Lasso)
+
+<Box kind="definition">
+
+**L1 regularization** reduces overfitting by adding the sum of the absolute values of all weights to the loss function. It is also called **Lasso** (Least Absolute Shrinkage and Selection Operator) because it shrinks large weights, selects only important features and makes unnecessary weights exactly 0. <Cite id="class-dl-chp2" loc="slide 101" />
+
+</Box>
+
+Its goal is to reduce unnecessary weights, remove unimportant features, build a simpler model and improve generalization. **Key idea:** penalize large weights, so weights become smaller, the model becomes simpler, and overfitting reduces. <Cite id="class-dl-chp2" loc="slide 101" />
+
+<Box kind="definition">
+
+**Formula.** Original loss: Loss = Prediction Error. L1 regularized loss: Total Loss = Prediction Loss + $\lambda \sum |w|$. Here $\lambda$ is the regularization coefficient, $\sum$ is the sum over all weights and $|w|$ is the absolute value of each weight. <Cite id="class-dl-chp2" loc="slide 101" />
+
+</Box>
+
+The textbook says the squared penalty is replaced "with a penalty on the sum of the absolute magnitudes of the coefficients", and that $|w_i|$ is not differentiable when $w_i$ is exactly 0, so in practice the slope is set to 0 at that point. <Cite id="class-dl-m2" loc="pp. 33-34" />
+
+**What is absolute value?** The distance from zero, ignoring the sign: $|{-5}| = 5$, $|{+5}| = 5$, $|0| = 0$. <Cite id="class-dl-chp2" loc="slide 102" />
+
+<Img id="class-regularization-l1-solves" caption="How L1 solves the problem: the penalty on large weights pushes some unnecessary weights to 0, then the formula." />
+
+<Img id="class-regularization-l1-concept" caption="L1 (Lasso): the new concept and its goal." />
+
+**Sum 1: L1 penalty and total loss.** <Cite id="class-dl-chp2" loc="slide 102" />
+
+<Sum>
+
+<Given>
+
+Weights $w_1 = 6$, $w_2 = -4$, $w_3 = 2$, $w_4 = -1$. Prediction error $= 4$. $\lambda = 0.1$.
+
+</Given>
+
+<Find>
+
+the L1 penalty and the total loss.
+
+</Find>
+
+<Steps>
+
+1. **Absolute values:** $|6| = 6$, $|-4| = 4$, $|2| = 2$, $|-1| = 1$.
+2. **Sum:** $\sum |w| = 6 + 4 + 2 + 1 = 13$. The bigger weights add more to the penalty.
+3. **Penalty:** $\lambda \sum |w| = 0.1 \times 13 = 1.3$.
+4. **Total loss** $= 4 + 1.3 = 5.3$.
+
+</Steps>
+
+<Answer>
+
+L1 penalty (before multiplying by $\lambda$) $= 13$; with $\lambda = 0.1$ the penalty is 1.3 and the total loss is 5.3.
+
+</Answer>
+
+<Box kind="verify">
+
+Check the sum a second way: $(6 + 4) + (2 + 1) = 10 + 3 = 13$. Also $4 + 1.3 = 5.3$.
+
+</Box>
+
+</Sum>
+
+**Weight update process and feature selection.** A large weight gives a large penalty and a higher total loss, so the optimizer reduces the weight; some weights become 0. If a feature contributes very little, its weight becomes 0 and the model automatically ignores that feature. This is the one unique property of L1: **feature selection**. <Cite id="class-dl-chp2" loc="slide 102" /> In the fruit example, texture (0.4) and background (0.2) go to 0, while shape (8 to 7.4) and colour (6 to 5.5) remain. <Cite id="class-dl-chp2" loc="slide 102" />
+
+The textbook is careful: L1 "creates sparse solutions in which the vast majority of the values of $w_i$ are 0s (after ignoring computational errors)". If the weight on an input is 0, that input has no effect, so "the L1-regularizer acts as a feature selector". <Cite id="class-dl-m2" loc="p. 35" /> So say "zero or very close to zero", not "always exactly zero".
+
+<Img id="class-regularization-l1-penalty" caption="L1 penalty calculation: 6 + 4 + 2 + 1 = 13, and large weights create a larger penalty." />
+
+<Img id="class-regularization-l1-update" caption="L1 weight update process: large weight, large penalty, higher total loss, the optimizer reduces the weight, some weights become 0." />
+
+<Img id="class-regularization-l1-fruit" caption="L1 fruit example: texture and background weights become 0, only shape and colour remain." />
+
+**Advantages of L1:** reduces overfitting, performs automatic feature selection, removes unnecessary features, produces a simpler model, easy to interpret. **Disadvantages:** may remove useful features if λ is too large, choosing λ is important, less commonly used than L2 in deep learning. **Used when** the dataset has many input features, some features are unnecessary and simpler models are preferred. <Cite id="class-dl-chp2" loc="slide 102" />
+
+## L2 regularization (Ridge)
+
+**The problem with L1.** L1 makes some weights exactly 0, but sometimes every feature is important, and if some features are removed the model may lose useful information. We need a technique that keeps all features while still reducing overfitting. <Cite id="class-dl-chp2" loc="slide 103" />
+
+<Box kind="definition">
+
+**L2 regularization** reduces overfitting by adding the sum of the squares of all weights to the loss function. Instead of making weights exactly 0, it reduces (shrinks) all weights so the model becomes simpler while still using every feature. It is also called **Ridge** regularization (Tikhonov regularization). <Cite id="class-dl-chp2" loc="slide 103" />
+
+</Box>
+
+**Formula.** Total Loss = Prediction Loss + $\lambda \sum w^2$. Larger weights give a larger square, which gives a larger penalty. <Cite id="class-dl-chp2" loc="slide 103" /> The textbook calls L2 regularization "also known as **weight decay** as it forces the weights to decay towards zero (but not exactly zero)". <Cite id="class-dl-m2" loc="p. 34" />
+
+<Img id="class-regularization-l2-concept" caption="L2 (Ridge): the concept, why it is called Ridge, and the difference from L1." />
+
+<Img id="class-regularization-l2-solves" caption="How L2 solves the problem: a large weight gives a much larger square, so the optimizer shrinks it; weights become small but not exactly zero." />
+
+<Img id="class-regularization-l2-formula" caption="The L2 formula and the meaning of each symbol." />
+
+**Sum 2: L2 penalty and total loss.** <Cite id="class-dl-chp2" loc="slide 104" />
+
+<Sum>
+
+<Given>
+
+Weights $w_1 = 5$, $w_2 = -3$, $w_3 = 2$, $w_4 = -1$. Prediction error $= 4$. $\lambda = 0.1$.
+
+</Given>
+
+<Find>
+
+the L2 penalty and the total loss.
+
+</Find>
+
+<Steps>
+
+1. **Squares:** $5^2 = 25$, $(-3)^2 = 9$, $2^2 = 4$, $(-1)^2 = 1$. The square removes the sign and makes big weights count much more.
+2. **Sum:** $\sum w^2 = 25 + 9 + 4 + 1 = 39$.
+3. **Penalty:** $\lambda \sum w^2 = 0.1 \times 39 = 3.9$.
+4. **Total loss** $= 4 + 3.9 = 7.9$.
+
+</Steps>
+
+<Answer>
+
+L2 penalty (before $\lambda$) $= 39$; with $\lambda = 0.1$ the penalty is 3.9 and the total loss is 7.9.
+
+</Answer>
+
+<Box kind="verify">
+
+The weight 5 alone gives 25 of the 39, so about 64% of the penalty comes from the biggest weight. This shows why L2 shrinks large weights hardest.
+
+</Box>
+
+</Sum>
+
+**Sum 3: why the optimizer picks the smaller weight (the teacher's Model A and Model B).** <Cite id="class-dl-chp2" loc="slide 98" />
+
+<Sum>
+
+<Given>
+
+Two models with the same prediction error 4. Model A has weight 25 and Model B has weight 5. L2 penalty with $\lambda = 0.01$.
+
+</Given>
+
+<Find>
+
+the total loss of each model.
+
+</Find>
+
+<Steps>
+
+1. **Model A:** penalty $= 0.01 \times 25^2 = 0.01 \times 625 = 6.25$. Total $= 4 + 6.25 = 10.25$.
+2. **Model B:** penalty $= 0.01 \times 5^2 = 0.01 \times 25 = 0.25$. Total $= 4 + 0.25 = 4.25$.
+
+</Steps>
+
+<Answer>
+
+Model A: 10.25. Model B: 4.25. The optimizer chooses model B, the one with the smaller weight.
+
+</Answer>
+
+<Box kind="verify">
+
+Both models have the same prediction error, so the only difference is the penalty: $6.25 - 0.25 = 6$ and $10.25 - 4.25 = 6$.
+
+</Box>
+
+</Sum>
+
+The textbook points out one difference in the update: L2 regularization uses **multiplicative decay** as a forgetting mechanism, whereas L1 regularization uses **additive updates**. From an accuracy point of view L2 usually outperforms L1, which is why L2 is almost always preferred. <Cite id="class-dl-m2" loc="p. 35" />
+
+<Img id="class-regularization-l2-penalty" caption="L2 penalty calculation: 25 + 9 + 4 + 1 = 39." />
+
+<Img id="class-regularization-l2-fruit" caption="L2 fruit example: all four feature weights shrink, none becomes zero." />
+
+**Advantages of L2:** reduces overfitting, keeps all important features, produces smoother models, stable training, most widely used in deep learning. **Disadvantages:** does not perform feature selection, less useful when many features are irrelevant, λ must be chosen carefully. <Cite id="class-dl-chp2" loc="slide 104" />
+
+### L1 versus L2
+
+<Img id="class-regularization-l1-vs-l2" caption="L1 versus L2: penalty term, effect on weights, feature selection and other names." />
+
+| Aspect | L1 (Lasso) | L2 (Ridge) |
+|---|---|---|
+| Penalty term | $\lambda \sum \lvert w \rvert$ (absolute value) | $\lambda \sum w^2$ (square) |
+| Effect on weights | Some weights become 0 | Weights become small but usually not 0 |
+| Feature selection | Yes (removes unimportant features) | No (keeps all features) |
+| Also called | Lasso (Least Absolute Shrinkage and Selection Operator) | Ridge (Tikhonov regularization) |
+| Common use | When some features are unimportant | When all features are important |
+
+<Cite id="class-dl-chp2" loc="slides 102 and 103" />
+
+## Elastic Net regularization
+
+L1 removes too many features and L2 does not remove any. Sometimes we need both feature selection and weight shrinking together. <Cite id="class-dl-chp2" loc="slide 105" />
+
+<Box kind="definition">
+
+**Elastic Net** combines the advantages of L1 and L2: it removes unimportant features (like L1) and shrinks the remaining weights (like L2). This creates a simpler and more stable model. <Cite id="class-dl-chp2" loc="slide 105" />
+
+</Box>
+
+**Formula.** Total Loss = Prediction Loss + $\lambda_1 \sum |w| + \lambda_2 \sum w^2$, where $\lambda_1$ controls the L1 penalty (feature selection) and $\lambda_2$ controls the L2 penalty (weight shrinking). <Cite id="class-dl-chp2" loc="slide 106" />
+
+<Img id="class-regularization-elastic-formula" caption="The Elastic Net loss with its two penalties and their coefficients." />
+
+<Img id="class-regularization-elastic-example" caption="Elastic Net example: the background weight is removed, shape and colour are shrunk, texture is kept smaller." />
+
+**Sum 4: Elastic Net penalty on the L1 example weights.**
+
+<Sum>
+
+<Given>
+
+Weights $6, -4, 2, -1$ (from Sum 1). $\lambda_1 = 0.1$ and $\lambda_2 = 0.1$.
+
+</Given>
+
+<Find>
+
+the Elastic Net penalty.
+
+</Find>
+
+<Steps>
+
+1. **L1 part:** $\sum |w| = 13$, so $\lambda_1 \times 13 = 1.3$.
+2. **L2 part:** $\sum w^2 = 36 + 16 + 4 + 1 = 57$, so $\lambda_2 \times 57 = 5.7$.
+3. **Elastic Net penalty** $= 1.3 + 5.7 = 7.0$.
+
+</Steps>
+
+<Answer>
+
+Penalty $= 7.0$ (L1 part 1.3 plus L2 part 5.7).
+
+</Answer>
+
+<Box kind="verify">
+
+$36 + 16 + 4 + 1 = 57$ and $0.1 \times 57 = 5.7$. L1 alone would give 1.3 and L2 alone 5.7, so the sum is 7.0.
+
+</Box>
+
+</Sum>
+
+**Advantages:** reduces overfitting, performs feature selection, shrinks large weights, produces stable models, works well when features are highly correlated, better balance than only L1 or only L2. **Disadvantages:** more computationally expensive, two hyperparameters ($\lambda_1$ and $\lambda_2$) must be tuned, more difficult to configure, not always necessary for small datasets. <Cite id="class-dl-chp2" loc="slide 106" />
+
+| | Elastic Net | L1 (Lasso) | L2 (Ridge) |
+|---|---|---|---|
+| Uses | L1 and L2 together | Only L1 | Only L2 |
+| Removes some features? | Yes | Yes (some weights 0) | No |
+| Shrinks remaining weights? | Yes | Not much | Yes |
+| Number of penalties | Two ($\lambda_1$, $\lambda_2$) | One | One |
+
+<Cite id="class-dl-chp2" loc="slide 106" />
+
+## Weight decay
+
+<Box kind="definition">
+
+**Weight Decay** is a regularization technique that reduces (shrinks) the weights after every update during training. Simple definition: weight decay = gradually reducing the size of the weights during training. <Cite id="class-dl-chp2" loc="slide 121" />
+
+</Box>
+
+How it works: gradient descent updates the weights, then weight decay slightly reduces the updated weights, so the model learns while keeping the weights small. The update rule is $w \leftarrow w - \eta \nabla L - \eta \lambda w$: the normal update from the loss plus the weight-decay term that shrinks the weights. <Cite id="class-dl-chp2" loc="slides 100 and 121" /> For standard SGD, L2 regularization and weight decay behave almost the same; **weight decay is almost the same as L2 (Ridge) regularization**. <Cite id="class-dl-chp2" loc="slide 121" />
+
+<Img id="class-regularization-weight-decay-concept" caption="Weight decay: what it is and why we need it." />
+
+<Img id="class-regularization-weight-decay-update" caption="Weight update with and without weight decay: 2.5 grows to 9.2 without it and stays small (2.0) with it." />
+
+**Sum 5: one weight-decay step.**
+
+<Sum>
+
+<Given>
+
+$w = 2$, learning rate $\eta = 0.1$, $\lambda = 0.5$, gradient of the loss $\nabla L = 0.4$.
+
+</Given>
+
+<Find>
+
+the new weight with and without weight decay.
+
+</Find>
+
+<Steps>
+
+1. **Without decay:** $w \leftarrow 2 - 0.1 \times 0.4 = 1.96$.
+2. **Decay term:** $\eta \lambda w = 0.1 \times 0.5 \times 2 = 0.1$.
+3. **With decay:** $w \leftarrow 2 - 0.04 - 0.1 = 1.86$.
+
+</Steps>
+
+<Answer>
+
+With weight decay the new weight is 1.86 (without it, 1.96). Weight decay pulls the weight 0.1 further toward zero.
+
+</Answer>
+
+<Box kind="verify">
+
+Another way: $w(1 - \eta\lambda) - \eta \nabla L = 2 \times 0.95 - 0.04 = 1.9 - 0.04 = 1.86$. It is the same, which shows the multiplicative decay of the weight.
+
+</Box>
+
+</Sum>
 
 ## Dropout
 
-**What it is.** Dropout randomly switches off (sets to zero) some neurons in a layer during each training step. A different random set is switched off at every step.
+**The problem.** L1, L2 and Elastic Net control the weights, but they do not control how neurons depend on each other. In deep networks some neurons may become too dependent on other neurons. If one neuron learns a wrong pattern, many other neurons also learn the same wrong pattern, and the network starts memorizing the training data. <Cite id="class-dl-chp2" loc="slide 107" />
 
-**Why it is needed.** In a big network, neurons can **co-adapt**: one neuron learns to fix the mistakes of another, and together they memorize the training data. Dropout breaks these partnerships.
+<Box kind="definition">
 
-**Analogy.** Imagine a group project where, each day, some members are absent at random. Nobody can sit back and let one star member do everything, because that star may not turn up. Everybody has to learn to do real work.
-
-**How it works.**
-
-1. Choose a **keep probability** $p$, for example 0.5 for hidden layers and about 0.8 for inputs.
-2. For each training batch, keep every neuron with probability $p$ and switch it off otherwise. In practice this means multiplying the layer's output by a random mask of 1s and 0s.
-3. Train with only the remaining neurons. On the next batch, switch off a different random set.
-4. **At test time** switch nothing off, because we want the full network's answer. More neurons are now active, so the outputs would be bigger than during training. The original paper fixes this by multiplying the weights by $p$ at test time. The common modern method, **inverted dropout**, instead scales up the surviving outputs by $1/p$ during training, so nothing changes at test time.
-
-<Img id="img-dl-n2-reg-dropout" caption="Dropout in a picture: during training some hidden units (here h2 and h5) are switched off together with their connections." />
-
-<Figure caption="Left: the full network, used at test time. Right: one training step with dropout. The crossed-out neurons are switched off for this batch, so their connections carry nothing; the next batch switches off a different random set.">
-  <NetworkFigure layers="3,4,4,2" title="Full network (testing)" />
-  <NetworkFigure layers="3,4,4,2" dropped="1:1,1:3,2:0" title="One training step (dropout)" />
-</Figure>
-
-<Box kind="intuition">
-
-Why this stops overfitting: (1) a neuron cannot depend on particular neighbours being present, so each one must learn something useful by itself; (2) every step trains a different "thinned" network, and the final network behaves approximately like the average of all of them, and averaging cancels out the mistakes caused by quirks of the training data; (3) the random switching adds noise, which makes memorizing hard.
+**Dropout** is a regularization technique that randomly turns OFF (drops) some neurons during training. These dropped neurons do not participate in forward propagation, backpropagation or weight updates. Each training iteration uses a slightly different network. <Cite id="class-dl-chp2" loc="slide 107" />
 
 </Box>
 
-**Advantages.** Reduces overfitting without changing the loss. Very cheap: just a random 0/1 mask. Works in many kinds of networks and tasks. Gives a cheap kind of ensemble (many networks averaged) inside one network. <Cite id="srivastava2014" />
+**How dropout solves the problem of overfitting.** During training, dropout randomly selects some neurons and temporarily switches them OFF. Only the remaining neurons are used for learning. Different neurons are dropped in every iteration, so the model cannot memorize the training data; instead every neuron learns useful patterns independently. **Random drop → less dependency → learn general patterns → overfitting reduces.** <Cite id="class-dl-chp2" loc="slide 107" />
 
-**Disadvantages.** Training takes longer because the learning signal is noisier. The keep probability is one more setting to tune. Less useful in small networks or with very little data, and it interacts awkwardly with batch normalization if both are placed carelessly.
+The textbook explains it as an ensemble: dropout uses node sampling instead of edge sampling to create a neural network ensemble. If a node is dropped, all its incoming and outgoing connections are dropped too. Nodes are sampled only from the input and hidden layers (the output nodes are never dropped, otherwise we could not give a prediction). If the network has $M$ nodes, there are $2^M$ possible sampled networks, but their **weights are shared**. <Cite id="class-dl-m2" loc="p. 38" />
 
-**Applications.** The fully connected layers of image classifiers such as AlexNet, text and speech models, and the "Dropout" layer in Keras and PyTorch. <Cite id="keras-dropout" />
+Training steps (textbook): <Cite id="class-dl-m2" loc="p. 39" />
 
-## Early stopping
+1. Sample a network from the base network (input nodes kept with probability $p_i$, hidden nodes with $p_h$, all independent; removing a node removes its edges).
+2. Sample a single training instance or a mini-batch.
+3. Update the weights of the retained edges using backpropagation.
 
-**What it is.** Early stopping means training only while the network keeps improving on **validation** data, and stopping when it stops improving.
+<Img id="class-regularization-dropout-concept" caption="Dropout: the dropped neurons do not take part in forward propagation, backpropagation or weight updates." />
 
-**Why it is needed.** Look again at the learning curve: after a point, more epochs make the validation error worse. Early stopping catches that point automatically.
-
-**How it works.**
-
-1. After every epoch, measure the validation loss.
-2. Whenever it reaches a new lowest value, save a copy of the weights.
-3. If it fails to improve for a fixed number of epochs (the **patience**), stop and go back to the saved weights.
-
-<Img id="img-dl-n2-reg-early-stopping" caption="Training error keeps falling, but validation error starts rising after the dashed line. Stop training there." />
+<Img id="class-regularization-dropout-solves" caption="How dropout solves the problem: random drop gives less dependency, general patterns and less overfitting." />
 
 ```mermaid
-%% caption: The early-stopping loop. Training continues only while the validation loss keeps reaching new lows.
-flowchart TD
-  A["Train for one epoch"] --> B["Measure the validation loss"]
-  B --> C{"Lowest so far?"}
-  C -- "Yes" --> D["Save the weights, reset the counter to 0"]
-  D --> A
-  C -- "No" --> E["Add 1 to the counter"]
-  E --> F{"Counter equals patience?"}
-  F -- "No" --> A
-  F -- "Yes" --> G["Stop and load the saved weights"]
+%% caption: The dropout training loop from the teacher's main-idea diagram. A different set of neurons is dropped at every iteration.
+flowchart LR
+  A["Training starts"] --> B["Random neurons are dropped"]
+  B --> C["Remaining neurons learn"]
+  C --> D["Next iteration"]
+  D --> E["Different neurons are dropped"]
+  E --> F["Model learns better general patterns"]
+  F -.-> B
 ```
 
-**Short example.** With a patience of 2 and validation losses 0.90, 0.60, 0.45, **0.40**, 0.42, 0.47, the best epoch is 4. Epochs 5 and 6 are both worse, so training stops after epoch 6 and the weights from epoch 4 are used.
+<Cite id="class-dl-chp2" loc="slide 107" />
 
-**Advantages.** No change to the network or the loss. Saves training time. Almost free to use, and works alongside every other method. For a simple loss it has an effect similar to L2. <Cite id="gfdl-ch7" loc="§7.8" />
+<Img id="class-regularization-dropout-example" caption="Without dropout all neurons are active and one wrong neuron misleads others; with dropout some neurons are turned off and the rest learn useful features." />
 
-**Disadvantages.** Needs a validation set, which takes data away from training. A noisy validation curve can make it stop too soon, so patience must be chosen with care.
+**Dropout rate (p)** tells what percentage of neurons will be turned OFF during training: <Cite id="class-dl-chp2" loc="slide 108" />
 
-**Applications.** The "EarlyStopping" callback in Keras, and many practical training runs. <Cite id="keras-early-stopping" />
+| p | What happens |
+|---|---|
+| 0 (0%) | No neurons dropped; no regularization; higher chance of overfitting |
+| 0.2 (20%) | One in five neurons dropped; small regularization |
+| **0.5 (50%)** | Half the neurons dropped; **most common** for hidden layers; good balance between learning and preventing overfitting |
+| 0.8 (80%) | Most neurons dropped; the model learns very little; may lead to underfitting |
 
-## Batch normalization
+<Img id="class-regularization-dropout-rate" caption="Examples of different dropout rates and what each means." />
 
-**What it is.** Batch normalization (batch norm) is a layer that rescales the inputs of the next layer so that, over the current mini-batch, each unit's values have average 0 and spread 1. It then lets the network learn the best scale and shift for them.
+**Training and testing.** During training random neurons are turned OFF and different neurons are dropped in every iteration. During testing no neurons are dropped, all neurons are active and the complete network is used for prediction. <Cite id="class-dl-chp2" loc="slide 108" />
 
-**Why it is needed.** As earlier layers change during training, the values arriving at later layers keep changing in size. Each layer has to keep re-adjusting, so training is slow and unstable and needs a small learning rate. Batch norm keeps the values in a steady range.
+<Img id="class-regularization-dropout-train-test" caption="Dropout in training (random neurons off) and in testing (all neurons on)." />
 
-**How it works (for one unit and one mini-batch).**
+<Img id="class-regularization-dropout-network" caption="The same network without dropout and with dropout during training (crossed neurons are dropped)." />
 
-1. Find the **average** of the values in the batch.
-2. Find their **spread** (variance).
-3. **Normalize:** subtract the average and divide by the square root of the spread, so the values have average 0 and spread 1.
-4. **Scale and shift:** multiply by a learned number $\gamma$ (gamma) and add a learned number $\beta$ (beta), so the network can undo the rescaling if that works better.
-5. **At test time** there may be a single example and no batch, so the layer uses running averages of the mean and variance stored during training.
+**Sum 6: how many neurons and networks?** <Cite id="class-dl-chp2" loc="slide 108" />
 
-The formulas, step for step: $\mu_B$ is the batch average, $\sigma_B^2$ the batch variance, $\epsilon$ a tiny number that prevents dividing by zero.
+<Sum>
 
-$$
-\mu_B = \frac{1}{m}\sum_i x_i
-\qquad
-\sigma_B^2 = \frac{1}{m}\sum_i (x_i-\mu_B)^2
-$$
+<Given>
 
-$$
-\hat{x}_i = \frac{x_i-\mu_B}{\sqrt{\sigma_B^2+\epsilon}}
-\qquad
-y_i = \gamma\,\hat{x}_i + \beta
-$$
+A hidden layer of 100 neurons with dropout rate $p = 0.5$, and another with $p = 0.2$. A small network with 4 droppable nodes (input and hidden).
 
-**Worked example: batch norm on four values.**
+</Given>
 
-Given: one unit's values in a mini-batch: 2, 4, 6, 8. Take $\gamma = 1$, $\beta = 0$ and $\epsilon \approx 0$ to keep it simple.
-To find: the normalized values.
+<Find>
 
-1. Average, to find the centre of the batch: $(2+4+6+8)/4 = 20/4 = 5$.
-2. Subtract the average from each value, to centre them on 0: $-3, -1, 1, 3$.
-3. Square these, because variance measures spread without signs: $9, 1, 1, 9$.
-4. Average the squares to get the variance: $(9+1+1+9)/4 = 20/4 = 5$.
-5. Square root of the variance, to get the spread in the same units as the values: $\sqrt{5} \approx 2.236$.
-6. Divide each centred value by 2.236, so the spread becomes 1: $-3/2.236 \approx -1.342$, $-1/2.236 \approx -0.447$, $1/2.236 \approx 0.447$, $3/2.236 \approx 1.342$.
-7. Scale by $\gamma = 1$ and shift by $\beta = 0$, which leaves the values unchanged.
+the expected number of dropped neurons, and the number of possible sampled networks.
 
-**Normalized batch ≈ −1.34, −0.45, 0.45, 1.34**
+</Find>
+
+<Steps>
+
+1. **$p = 0.5$:** $0.5 \times 100 = 50$ neurons dropped on average per iteration.
+2. **$p = 0.2$:** $0.2 \times 100 = 20$ neurons dropped on average.
+3. **Possible networks:** each of the 4 nodes is either kept or dropped, so $2^4 = 16$ sampled networks. The textbook's formula is $2^M$ for $M$ nodes.
+
+</Steps>
+
+<Answer>
+
+50 neurons dropped at $p = 0.5$, 20 at $p = 0.2$, and 16 possible networks for 4 droppable nodes.
+
+</Answer>
 
 <Box kind="verify">
 
-The output should have average 0 and variance 1. Average:
-
-$$
-(-1.342 - 0.447 + 0.447 + 1.342)/4 = 0/4 = 0
-$$
-
-Variance: $1.342^2 \approx 1.801$ and $0.447^2 \approx 0.200$, so
-
-$$
-(1.801 + 0.200 + 0.200 + 1.801)/4 = 4.002/4 \approx 1.00
-$$
-
-Both checks pass (the tiny 0.002 is rounding).
+List the choices for 2 nodes: both kept, only A dropped, only B dropped, both dropped = 4 networks $= 2^2$. Each extra node doubles the count, so 4 nodes give $2^4 = 16$.
 
 </Box>
 
+</Sum>
+
+<Img id="class-regularization-dropout-why" caption="Why dropout prevents overfitting: neurons cannot depend on each other because any neuron may be dropped at any time." />
+
+**Advantages of dropout:** reduces overfitting, improves generalization, prevents neuron dependency, makes the network more robust, simple and widely used in deep learning. **Disadvantages:** training becomes slightly slower, choosing the correct dropout rate is important, a very high dropout may cause underfitting, usually applied only during training. <Cite id="class-dl-chp2" loc="slide 108" /> The textbook adds that dropout is efficient (only the sampling of hidden units is extra work) but it reduces the expressive power of the network, so larger models with more units are needed to gain its full advantages. <Cite id="class-dl-m2" loc="p. 40" />
+
+<Img id="class-regularization-dropout-pros-cons" caption="Advantages and disadvantages of dropout." />
+
+<Img id="class-regularization-dropout-phases" caption="Dropout in the training phase (random network every iteration) and the testing phase (all neurons on)." />
+
+In Keras, dropout is a layer: `Dropout(0.25)` between dense layers. <Cite id="class-dl-m2" loc="p. 43" />
+
+## Batch normalization
+
+**The problem: internal covariate shift.** As networks get deeper, training becomes difficult: the output of one layer is the input to the next, the weights keep changing, so the inputs to each layer keep changing. Training becomes slow, the model becomes unstable and the optimizer takes longer to find the best weights. This problem is called **Internal Covariate Shift**. <Cite id="class-dl-chp2" loc="slide 109" />
+
+Why it happens: weights are updated, so the output of one layer changes, so the input of the next layer changes, so the next layer has to learn again, and training becomes slow. Even though the optimizer is improving the model, the next layer still receives changing inputs. <Cite id="class-dl-chp2" loc="slide 109" /> The textbook's example: a dog / not-dog classifier trained on white dogs only, then given non-white dogs: the distribution of the hidden activations changes, and "this change in hidden activation is known as an internal covariate shift". <Cite id="class-dl-m2" loc="p. 81" />
+
+<Box kind="definition">
+
+**Batch Normalization (BatchNorm)** is a technique that normalizes the outputs of a layer before passing them to the next layer. Instead of allowing values to vary widely, BatchNorm keeps them within a similar range. This makes training faster and more stable. <Cite id="class-dl-chp2" loc="slide 109" />
+
+</Box>
+
+<Img id="class-regularization-bn-problem" caption="Internal covariate shift: the weights keep changing, so the inputs to each layer keep changing and training becomes slow." />
+
+<Img id="class-regularization-bn-concept" caption="Batch normalization: it normalizes the outputs of a layer before the next layer." />
+
+**What is a batch? What is normalization?** A batch is a small group of training samples processed together (for example 1000 images sent as batches of 32). Normalization means bringing values into a similar range (for example 10, 50, 100, 200 become small values around 0). <Cite id="class-dl-chp2" loc="slide 110" />
+
+**How it works, step by step** (the teacher's steps): <Cite id="class-dl-chp2" loc="slide 110" />
+
+1. **Calculate the mean** $\mu$ of the batch (the average of all outputs).
+2. **Calculate the variance** $\sigma^2$ of the batch (how spread out the values are from the mean).
+3. **Normalize:** $\hat x = \dfrac{x - \mu}{\sqrt{\sigma^2 + \epsilon}}$. After normalization the mean is about 0 and the variance about 1. ($\epsilon$ is a small value to avoid division by zero.)
+4. **Scale** using $\gamma$ (gamma): $\gamma \hat x$. Gamma lets the network decide whether the values should become larger or smaller.
+5. **Shift** using $\beta$ (beta): $\gamma \hat x + \beta$. Beta lets the network shift the normalized values.
+6. Pass the output to the next layer.
+
+<Box kind="definition">
+
+**Final Batch Normalization formula:** $y = \gamma \left[ \dfrac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} \right] + \beta$, where $\mu$ is the mean, $\sigma^2$ the variance, $\epsilon$ prevents division by zero, $\gamma$ is the scaling parameter and $\beta$ the shifting parameter. <Cite id="class-dl-chp2" loc="slide 110" />
+
+</Box>
+
+The two trainable parameters $\gamma$ and $\beta$ let the model choose "the optimum distribution for each hidden layer": $\gamma$ adjusts the standard deviation and $\beta$ shifts the curve left or right. <Cite id="class-dl-m2" loc="p. 72" />
+
+<Img id="class-regularization-bn-steps" caption="Batch, normalization, and the first three steps: mean, variance and normalizing the values." />
+
+<Img id="class-regularization-bn-formula" caption="Scale with gamma, shift with beta, the final formula and the complete flow." />
+
 ```mermaid
-%% caption: What batch normalization does to one unit's values for one mini-batch, step by step.
+%% caption: The complete batch normalization flow from the teacher's sheet. Gamma and beta are learned, so the layer can still choose the best scale and shift.
 flowchart LR
-  A["Batch of values x1 ... xm"] --> B["Average: μ"]
-  A --> C["Spread: σ²"]
-  B --> D["Normalize: (x − μ) / √(σ² + ε)"]
-  C --> D
-  D --> E["Scale and shift: γ·x̂ + β"]
-  E --> F["Output y"]
+  A["Input"] --> B["Calculate mean"]
+  B --> C["Calculate variance"]
+  C --> D["Normalize values"]
+  D --> E["Multiply by gamma"]
+  E --> F["Add beta"]
+  F --> G["Output to next layer"]
 ```
 
-**Why it also regularizes.** Each example is normalized using whichever other examples happen to be in its batch, so its value carries a little random noise. That noise has a mild regularizing effect, a bit like dropout.
+<Cite id="class-dl-chp2" loc="slide 110" />
 
-**Advantages.** Faster and steadier training. A higher learning rate can be used. The network depends less on how the weights were first set. Mild regularization.
+**Sum 7: batch normalization on four values (the teacher's mean example, completed).** <Cite id="class-dl-chp2" loc="slide 110" />
 
-**Disadvantages.** Works poorly with very small batches, because the batch average is then unreliable. Behaves differently in training and testing, which can cause bugs. Adds some computation. The original paper explained the speed-up by "internal covariate shift", but that explanation is still debated; in an answer, say simply that it stabilizes and speeds up training. <Cite id="ioffe2015" /> <Cite id="gfdl-ch8" loc="§8.7.1" />
+<Sum>
 
-**Applications.** Many modern CNNs, for example ResNet, place a batch norm layer after their convolutions. <Cite id="keras-batchnorm" />
+<Given>
+
+A batch of four outputs $2, 4, 6, 8$. Take $\gamma = 2$, $\beta = 1$ and ignore $\epsilon$.
+
+</Given>
+
+<Find>
+
+the mean, the variance, the normalized values and the final outputs.
+
+</Find>
+
+<Steps>
+
+1. **Mean:** $\mu = (2 + 4 + 6 + 8) / 4 = 5$.
+2. **Variance:** deviations $-3, -1, 1, 3$; squares $9, 1, 1, 9$; $\sigma^2 = 20 / 4 = 5$. So $\sigma = \sqrt{5} = 2.236$.
+3. **Normalize** $\hat x = (x - 5) / 2.236$: $-1.342, -0.447, 0.447, 1.342$.
+4. **Scale and shift** $y = 2\hat x + 1$: $-1.683, 0.106, 1.894, 3.683$.
+
+</Steps>
+
+<Answer>
+
+Normalized values: $-1.342, -0.447, 0.447, 1.342$ (mean 0, variance 1). Final outputs: $-1.683, 0.106, 1.894, 3.683$.
+
+</Answer>
+
+<Box kind="verify">
+
+The normalized values add up to 0, and their variance is $(1.8 + 0.2 + 0.2 + 1.8)/4 = 1.0$. The slide's own normalization examples (10, 50, 100, 200 to −1.2, −0.3, 0.5, 1.0 and 20, 50, 100, 150 to −1.1, −0.4, 0.5, 1.0) are only rough pictures: the exact values are −1.13, −0.56, 0.14, 1.55 and −1.21, −0.61, 0.40, 1.41.
+
+</Box>
+
+</Sum>
+
+**Where is it placed?** After the Dense or Convolution layer and before the activation function (ReLU): the teacher says BN is applied before the activation function. <Cite id="class-dl-chp2" loc="slide 110" />
+
+<Img id="class-regularization-bn-placement" caption="Where batch normalization sits: dense layer, batch normalization, activation function, next layer." />
+
+**Training versus testing.** BatchNorm uses the current batch's statistics during training; during testing it uses the learned statistics. <Cite id="class-dl-chp2" loc="slide 109" /> (The textbook: "Batch normalization is computed differently during the training and the testing phase". <Cite id="class-dl-m2" loc="p. 72" />)
+
+<Img id="class-regularization-bn-with-without" caption="Training without and with batch normalization: with it each layer receives inputs in a similar range, so learning is faster." />
+
+**Benefits:** faster training; stable learning; allows a higher learning rate; reduces internal covariate shift; slightly reduces overfitting (each batch has different statistics, which adds a little randomness, a small regularization effect, but not a replacement for dropout or L1/L2). **Advantages:** faster convergence, stable learning, less sensitive to weight initialization, improves overall model performance. **Disadvantages:** adds extra computation during training, less effective with very small batch sizes, requires additional memory, does not completely replace other regularization techniques like dropout. <Cite id="class-dl-chp2" loc="slide 112" />
+
+<Img id="class-regularization-bn-benefits" caption="Benefits of batch normalization: faster training, stable learning, higher learning rate, less covariate shift, slight regularization." />
+
+| | Batch normalization | Dropout |
+|---|---|---|
+| What it does | Normalizes activations | Randomly turns OFF neurons |
+| Neurons | All neurons remain active | Some neurons are temporarily removed |
+| Main purpose | Mainly speeds up training | Mainly reduces overfitting |
+
+<Cite id="class-dl-chp2" loc="slide 112" />
+
+The textbook adds that batch normalization is a way of reparametrizing almost any deep network, and its advantages are that it speeds up training and handles internal covariate shift. <Cite id="class-dl-m2" loc="pp. 71 and 79" />
+
+## Early stopping
+
+**The problem.** During training the model learns from the training data by updating weights every epoch. At first it learns useful patterns and accuracy improves. If training continues for too many epochs the model starts memorizing the training data instead of learning patterns: training accuracy stays very high, validation accuracy decreases, and the model performs poorly on unseen data. Dropout, L1 and L2 reduce overfitting by modifying the learning process, but if the model is trained for too long, overfitting can still occur. The simplest solution is to stop training before overfitting begins. <Cite id="class-dl-chp2" loc="slide 113" />
+
+<Box kind="definition">
+
+**Early Stopping** is a regularization technique that stops the training process automatically when the model stops improving on the validation data. Instead of training for a fixed number of epochs, the model is stopped at the best epoch. <Cite id="class-dl-chp2" loc="slide 113" />
+
+</Box>
+
+The textbook: "In early stopping, the iterative optimization method is terminated early without converging to the optimal solution on the training data." A portion of the training data is held out as a **validation set**; the model's error on it is monitored. At some point this error begins to rise on the validation set even though it continues to reduce on the training set: that is the point to terminate. <Cite id="class-dl-m2" loc="pp. 24 and 42" />
+
+<Img id="class-regularization-early-stopping-problem" caption="Why training for too many epochs causes overfitting, and why dropout, L1 and L2 cannot completely solve it." />
+
+<Img id="class-regularization-early-stopping-concept" caption="Early stopping: stop at the right time, get the best model." />
+
+**How it works.** During training the model continuously checks the validation loss after every epoch. If the validation loss stops improving for several consecutive epochs, training is stopped automatically. As a result the model does not memorize the training data, overfitting is reduced and the best-performing model is saved. <Cite id="class-dl-chp2" loc="slide 113" />
+
+<Img id="class-regularization-early-stopping-solves" caption="Training loss keeps falling but validation loss starts rising: the best epoch is where it is lowest." />
+
+```mermaid
+%% caption: The early stopping flowchart from the teacher's main-idea diagram. Patience is the number of epochs we wait before giving up.
+flowchart TD
+  A["Start training"] --> B["Train one epoch"]
+  B --> C["Check validation loss"]
+  C --> D{"Improving?"}
+  D -->|"Yes"| B
+  D -->|"No"| E["Wait for patience"]
+  E --> F{"Still not improving?"}
+  F -->|"No"| B
+  F -->|"Yes"| G["Stop training and save the best model"]
+```
+
+<Cite id="class-dl-chp2" loc="slide 113" />
+
+**Key terms.** The **best epoch** is the epoch with the lowest validation loss or the highest validation accuracy; that is the model we keep. **Patience** is the number of epochs the model waits before stopping; with patience = 3, if the validation loss does not improve for 3 consecutive epochs, training stops. Patience prevents stopping too early because of small fluctuations. Early stopping mainly monitors the validation loss, not the training loss. <Cite id="class-dl-chp2" loc="slide 114" />
+
+<Img id="class-regularization-early-stopping-patience" caption="Patience: the number of epochs to wait. With patience 3, three epochs without improvement stop training." />
+
+**Sum 8: early stopping with patience 3 (the teacher's table).** <Cite id="class-dl-chp2" loc="slide 114" />
+
+<Sum>
+
+<Given>
+
+Validation loss by epoch: 1 → 0.90, 2 → 0.70, 3 → 0.55, 4 → 0.48, 5 → 0.49, 6 → 0.50, 7 → 0.51. Patience $= 3$.
+
+</Given>
+
+<Find>
+
+the best epoch and the epoch where training stops.
+
+</Find>
+
+<Steps>
+
+1. **Epochs 1 to 3:** the loss improves each time (0.90, 0.70, 0.55), so continue.
+2. **Epoch 4:** 0.48 is the lowest so far, so this is the **best model**; save it.
+3. **Epoch 5:** 0.49 is worse than 0.48, wait (1).
+4. **Epoch 6:** 0.50 is still worse, wait (2).
+5. **Epoch 7:** 0.51 is still worse, wait (3). Patience is used up.
+
+</Steps>
+
+<Answer>
+
+Training stops at epoch 7 and the saved model from epoch 4 (loss 0.48) is used.
+
+</Answer>
+
+<Box kind="verify">
+
+After epoch 4 the loss rose three times in a row (0.49, 0.50, 0.51), which equals the patience of 3. No epoch before 4 had a loss below 0.48.
+
+</Box>
+
+</Sum>
+
+<Img id="class-regularization-early-stopping-example" caption="The teacher's example: validation loss by epoch, the best model at epoch 4, stop at epoch 7 with patience 3." />
+
+<Img id="class-regularization-early-stopping-graph" caption="Training and validation loss: stop where the validation loss is lowest (the best epoch)." />
+
+**Advantages:** prevents overfitting, saves training time, automatically selects the best model, easy to implement, improves generalization. **Disadvantages:** requires a validation dataset, choosing the correct patience value is important, may stop too early if the patience is too small. <Cite id="class-dl-chp2" loc="slide 114" /> In Keras: `EarlyStopping(monitor='val_err', patience=5)`, where monitor is the quantity being watched and patience is the number of epochs with no improvement after which training stops. <Cite id="class-dl-m2" loc="p. 43" />
 
 ## Data augmentation
 
-**What it is.** Data augmentation makes extra training examples by changing the existing ones in ways that keep the correct answer.
+**The problem.** Deep learning models need a large amount of training data, but in many real-world cases only a small dataset is available. A small dataset causes the model to memorize instead of learning general patterns (it sees the same images again and again and memorizes the background, lighting, camera angle and noise, not the actual object). This leads to overfitting. Collecting more data is time-consuming, expensive, difficult and sometimes impossible (for example medical images). <Cite id="class-dl-chp2" loc="slide 115" />
 
-**Why it is needed.** More data is the best cure for overfitting, but real labelled data is costly. Augmentation gives more variety for free.
+<Box kind="definition">
 
-**How it works.**
+**Data Augmentation** creates new training samples by modifying the existing data. The modified images still represent the same object but look different to the model. It increases the diversity of the training dataset. <Cite id="class-dl-chp2" loc="slide 115" />
 
-1. Take a training example.
-2. Apply a random change that does not alter its label.
-3. Feed the changed example to the network. Each epoch sees a slightly different version, so the network cannot memorize one exact picture.
+</Box>
 
-**Types.**
+The textbook's version: "a set of techniques used to artificially expand the size and diversity of a training dataset by applying transformations to existing data samples". It reduces overfitting, helps the model learn invariance to transformations (rotation, flipping, noise), is useful when collecting data is expensive and boosts robustness in the real world. <Cite id="class-dl-m2" loc="p. 83" />
 
-- **Images:** flip left to right, crop, rotate slightly, zoom, shift, change brightness or contrast.
-- **Audio:** add background noise, change speed or pitch slightly.
-- **Text:** replace words with synonyms, translate to another language and back.
+<Img id="class-regularization-aug-problem" caption="Why a small dataset causes overfitting, and why collecting more data cannot always solve it." />
+
+<Img id="class-regularization-aug-new-concept" caption="Data augmentation: the new concept and why we need it." />
+
+**How it works.** The original training image is modified using different transformations. Each transformed image becomes a new training sample, and **the label does not change**: a rotated or flipped apple is still an Apple. <Cite id="class-dl-chp2" loc="slide 116" />
 
 ```mermaid
-%% caption: Data augmentation turns one labelled image into many training examples that all keep the label "cat".
-flowchart LR
-  A["Original photo, label: cat"] --> B["Flipped"]
-  A --> C["Cropped"]
-  A --> D["Rotated 10°"]
-  A --> E["Brighter"]
-  B --> F["All still labelled cat"]
-  C --> F
-  D --> F
-  E --> F
+%% caption: The data augmentation flow from the teacher's sheet. One original image becomes many new training images, all with the same label.
+flowchart TD
+  A["Original image"] --> B["Rotation"]
+  A --> C["Flip"]
+  A --> D["Zoom"]
+  A --> E["Crop"]
+  A --> F["Brightness"]
+  A --> G["Noise"]
+  B --> H["Many new training images, same label"]
+  C --> H
+  D --> H
+  E --> H
+  F --> H
+  G --> H
 ```
 
-**Be careful:** the change must not alter the answer. Rotating the digit 6 by 180° makes it look like a 9, so that rotation would give a wrong label for digits. <Cite id="gfdl-ch7" loc="§7.4" />
+<Cite id="class-dl-chp2" loc="slide 116" />
 
-**Advantages.** Cheap way to get more data. Makes the network robust to small changes such as lighting or position. Can be combined with any other method.
+### Common data augmentation techniques (the teacher's six)
 
-**Disadvantages.** Wrong transformations create wrong labels. Training takes longer because there is more data. Needs knowledge of the task to choose safe changes.
+| Technique | What it does | Why it helps |
+|---|---|---|
+| **Rotation** | The image is rotated by a small angle (for example 20°) | Useful for different orientations |
+| **Flipping** | The image is flipped horizontally or vertically | Helps the model recognize mirrored objects |
+| **Zooming** | The object is enlarged or reduced | Helps recognize objects at different distances |
+| **Cropping** | A part of the image is removed | Learns objects even when partially visible |
+| **Brightness adjustment** | Brightness is increased or decreased | Works under different lighting conditions |
+| **Noise addition** | Small random noise is added to the image | Makes the model robust to noisy inputs |
 
-**Applications.** Image classification, medical imaging where data is scarce, speech recognition. <Cite id="rev-m2-regularization-wiki-data-augmentation" />
+<Cite id="class-dl-chp2" loc="slide 116" />
 
-## Other regularizers in the syllabus
+<Img id="class-regularization-aug-techniques" caption="The six common data augmentation techniques (rotation, flipping, zooming, cropping, brightness, noise) and the flow." />
 
-**Parameter sharing.** Reuse the same weights in many places. A convolution filter is slid over the whole image, so one small set of weights is used everywhere. Fewer free weights means less chance to memorize. *Advantage:* far fewer weights and a sensible built-in assumption. *Disadvantage:* only suitable where the same pattern really can appear anywhere. *Application:* CNNs for images, RNNs that reuse one set of weights at every time step. <Cite id="gfdl-ch7" loc="§7.9" />
+<Img id="class-regularization-aug-fruit-flow" caption="Fruit example: one apple image becomes six training images, all labelled Apple." />
 
-**Adding noise to the input.** Train on slightly noisy inputs so the network does not react strongly to tiny changes. For some simple models, adding a very small amount of input noise has been shown to work like a penalty on the size of the weights, similar to L2. *Advantage:* more robust network. *Disadvantage:* too much noise hides the real signal. *Application:* speech recognition and denoising autoencoders. <Cite id="gfdl-ch7" loc="§7.5" />
+The textbook groups the techniques by data type: **image** data (geometric transformations such as rotation, flipping, cropping, scaling, translation; colour transformations such as brightness, contrast, saturation, hue; noise addition such as Gaussian or salt-and-pepper noise; cutout/random erasing; mixup, which combines two images and their labels; affine and perspective transformations), **text** data (synonym replacement, back translation, random insertion/deletion/swap, contextual augmentation with a language model such as BERT) and **audio** data (time stretching or compression, pitch shifting, adding noise, shifting in time, changing speed). It also warns: "be careful with health care data". <Cite id="class-dl-m2" loc="pp. 89-92" />
 
-**Adding noise to the output (label smoothing).** Soften the target, for example use 0.9 instead of 1.0 for the correct class, so the network does not become overconfident or chase labels that may be wrong. *Advantage:* better-calibrated, less overconfident predictions. *Disadvantage:* the model's probabilities are no longer exactly the true ones. *Application:* image classifiers and translation models. <Cite id="gfdl-ch7" loc="§7.5.1" />
+**Sum 9: how much data do we get?**
 
-## All methods at a glance
+<Sum>
 
-| Method | What it changes | Main idea | Main drawback |
-|---|---|---|---|
-| L2 / weight decay | The loss | Keep all weights small | Never makes weights exactly zero |
-| L1 | The loss | Make unneeded weights zero | Corner at zero, less used in deep nets |
-| Dropout | The network while training | Switch off random neurons | Slower training |
-| Batch normalization | The network | Rescale each layer's inputs | Weak with small batches |
-| Early stopping | The training process | Stop at the lowest validation loss | Needs a validation set |
-| Data augmentation | The data | Make label-preserving copies | Wrong changes give wrong labels |
-| Parameter sharing | The network | Reuse weights | Only where patterns repeat |
-| Input / output noise | The data | Make the network robust and less confident | Too much noise hurts |
+<Given>
 
-**Conclusion.** Overfitting is memorizing; every regularization method above gives up a little accuracy on training data to do much better on new data, and in practice several are used together (for example weight decay, dropout, data augmentation and early stopping).
+100 original apple images. Each image is rotated by 20°, flipped, zoomed in and made brighter, and the original is kept.
+
+</Given>
+
+<Find>
+
+the size of the training set.
+
+</Find>
+
+<Steps>
+
+1. Each image gives 4 new images (rotation, flip, zoom, brightness) plus the original: $1 + 4 = 5$ images.
+2. Training set: $100 \times 5 = 500$ images.
+
+</Steps>
+
+<Answer>
+
+500 training images from 100 originals, all with the label Apple.
+
+</Answer>
+
+<Box kind="verify">
+
+New images created $= 100 \times 4 = 400$, and $400 + 100$ originals $= 500$.
+
+</Box>
+
+</Sum>
+
+**Advantages:** increases training data without collecting more, reduces overfitting, improves generalization, makes the model robust, improves CNN performance. **Disadvantages:** increases training time, excessive augmentation may reduce accuracy, some transformations may not suit every dataset. <Cite id="class-dl-chp2" loc="slide 116" /> In Keras the class uses `ImageDataGenerator(rotation_range=20, width_shift_range=0.1, ..., horizontal_flip=True, ...)`. <Cite id="class-dl-m2" loc="p. 93" />
+
+| | More data | Data augmentation |
+|---|---|---|
+| What it means | Collect new real-world samples | Create new samples from existing data |
+| Cost and time | High (time-consuming, expensive) | Low (quick and easy) |
+| Purpose | Increase dataset size | Increase dataset size and diversity |
+
+<Cite id="class-dl-chp2" loc="slide 115" />
+
+## Noise injection and parameter sharing
+
+**Noise injection.** Small random noise is intentionally added during training to the inputs, the weights or the activations of hidden layers. The model learns robust patterns instead of memorizing exact values. Types: **input noise** (added to the input data before it enters the network), **weight noise** (added to the weights during training, for example 0.80 + 0.02 = 0.82) and **hidden layer (activation) noise** (added to the outputs of hidden neurons). Noise is added only during training; during testing no noise is added. **Advantages:** reduces overfitting, improves generalization, makes the model robust to noisy inputs. **Disadvantages:** too much noise can reduce accuracy, choosing the amount of noise is important. <Cite id="class-dl-chp2" loc="slides 118 and 119" />
+
+<Img id="class-regularization-noise-solves" caption="How noise injection solves the problem: small random noise is added during training, so the model ignores unimportant variations." />
+
+<Img id="class-regularization-noise-where" caption="Types of noise injection: input noise, weight noise and hidden layer (activation) noise." />
+
+**Parameter sharing.** A technique where multiple neurons or connections use the same set of weights. Instead of learning separate weights, the model learns one shared weight that is reused in multiple places, which reduces the total number of trainable parameters, the memory and the chance of overfitting. In a CNN the same filter is applied across the entire image, so the model can recognize an apple anywhere. It is mainly used in CNNs and RNNs. A limitation: shared weights may not capture location-specific patterns in some problems. <Cite id="class-dl-chp2" loc="slide 120" /> The textbook: sharing parameters reduces the degrees of freedom of the model and is used in recurrent and convolutional networks. <Cite id="class-dl-m2" loc="p. 25" />
+
+<Img id="class-regularization-param-sharing-idea" caption="Without parameter sharing each connection has its own weight; with sharing one weight W is reused, so there are fewer parameters." />
+
+<Img id="class-regularization-param-sharing-fruit" caption="Parameter sharing in a CNN: the same filter is applied at the top, center and bottom of the image." />
+
+## Comparison: which method does what
+
+| Method | What it acts on | Main idea |
+|---|---|---|
+| L1 (Lasso) | Weights | Penalty $\lambda \sum \lvert w \rvert$; some weights become 0 (feature selection) |
+| L2 (Ridge) | Weights | Penalty $\lambda \sum w^2$; weights become small but not 0 |
+| Elastic Net | Weights | L1 + L2 together |
+| Weight decay | Weights | Shrinks the weights after every update (almost the same as L2) |
+| Dropout | Neurons | Randomly turns neurons OFF during training |
+| Batch normalization | Activations | Normalizes the outputs of each layer; faster, stable training |
+| Early stopping | Training duration | Stops when validation loss stops improving |
+| Data augmentation | Training data | Creates new samples from existing data |
+| Noise injection | Inputs, weights, activations | Adds small random noise during training |
+| Parameter sharing | Number of parameters | Reuses the same weights in many places |
+
+<Cite id="class-dl-chp2" loc="slide 100" />
 
 ## Where this was asked
 
-| If the question says | What to write | Seen as |
+| Question | What to write | Solution |
 |---|---|---|
-| "Explain dropout" or "dropout and its advantages" | Definition, why needed, steps, diagram, test-time scaling, why it stops overfitting, advantages | <PYQ id="2023-12/q1c" /> <PYQ id="2024-05/q1c" /> <PYQ id="2024-12/q1c" /> |
-| "Explain regularization" | What it is, why it is needed, the four families, one line each on the main methods | <PYQ id="2025-05/q1b" /> |
-| "Overfitting and underfitting" | Both definitions, the table, the learning curve, causes and fixes, bias and variance | <PYQ id="2025-05/q1d" /> |
-| "L1 and L2 regularization" | Both ideas and penalties in words, the diamond and circle picture, the comparison table | <PYQ id="2024-05/q5a" /> |
-| "Early stopping, batch normalization, data augmentation" | Definition, steps, advantage and use for each, with the batch norm steps | <PYQ id="2023-12/q3b" /> |
+| "Explain regularization in neural network" | Definition, why it is needed, the penalty idea, λ, short list of methods | <PYQ id="2025-05/q1b" /> |
+| "Explain overfitting and underfitting" | Definitions, fruit example, curves, table, bias and variance, fixes | <PYQ id="2025-05/q1d" /> |
+| "Explain dropout. How does it solve overfitting?" | Definition, random drop, dropout rate, training vs testing, advantages | <PYQ id="2023-12/q1c" /> <PYQ id="2024-05/q1c" /> <PYQ id="2024-12/q1c" /> |
+| "L1 and L2 regularization" | Formulas, what each does, feature selection, comparison table | <PYQ id="2024-05/q5a" /> |
+| "Early stopping, batch normalization and data augmentation" | Problem, definition, how it works, advantages of each | <PYQ id="2023-12/q3b" /> |
+| "Need for regularization; early stopping and dropout" | Overfitting problem, regularization, the two methods | <PYQ id="assignment-1/q2a" /> |
+| "Data augmentation and its types with examples" | Definition, six techniques with examples, text and audio | <PYQ id="assignment-1/q2b" /> |
 
 ## Quick revision
 
-- Overfitting: great on training data, poor on new data (high variance). Underfitting: poor on both (high bias).
-- Regularization: anything that lowers the error on new data rather than on training data.
-- L2 adds $\dfrac{\lambda}{2}\sum w_i^2$ and shrinks every weight a little each step (weight decay). L1 adds $\lambda\sum |w_i|$ and pushes many weights to zero.
-- Dropout: switch off random neurons while training; keep everything at test time (with scaling).
-- Early stopping: stop where the validation loss is lowest and use those weights.
-- Batch norm: subtract the batch average, divide by the spread, then scale by $\gamma$ and shift by $\beta$.
-- Augmentation: only changes that keep the label.
+- Underfitting: too simple, high bias, poor on training and testing. Overfitting: too complex, high variance, very good on training but poor on testing. Good fit: balanced.
+- Regularization: Total Loss = Prediction Error + Regularization Penalty. λ is the control knob: 0 overfits, small is best, large underfits.
+- L1: $\lambda \sum |w|$, can make weights 0, feature selection (Lasso). L2: $\lambda \sum w^2$, small but not 0 weights (Ridge, weight decay). Elastic Net: both.
+- Dropout: randomly turn neurons OFF during training only (common rate 0.5). Early stopping: stop when validation loss stops improving (patience). Data augmentation: new samples, same label.
+- Batch normalization: $y = \gamma \hat x + \beta$ with $\hat x = (x - \mu)/\sqrt{\sigma^2 + \epsilon}$; fixes internal covariate shift, faster and stable training.

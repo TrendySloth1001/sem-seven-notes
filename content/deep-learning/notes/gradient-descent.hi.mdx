@@ -1,635 +1,762 @@
 ---
 title: "Gradient descent and its variants"
 module: 2
-summary: "Gradient descent woh tarika hai jisse network apne loss pe neeche ki taraf chalta hai: woh baar baar har weight ko uske gradient ke ulte direction mein ek chhota step move karta hai. Iske variants do cheezon mein alag hain: har step kitna data use karta hai (batch, stochastic, mini-batch), aur har step ka size kitni samajhdaari se decide hota hai (momentum, Nesterov, AdaGrad, RMSProp, Adam)."
+summary: "Network better weights kaise dhundta hai, jaise class mein padhaya gaya: gradient (loss ka slope) optimizer ko batata hai kis taraf jaana hai, gradient descent steps leta hai, aur uske variants (stochastic, mini-batch, momentum, Nesterov, AdaGrad, RMSProp, Adam) har ek pichle ki ek kamzori fix karta hai. Pehle theory teacher ki definitions ke saath, phir wo chhote sums jo puchhe jaate hain."
 keyIdeas:
-  - "Gradient loss pe upar (uphill) ki taraf point karta hai, isliye hum ulta step lete hain: new w = w minus learning rate times gradient."
-  - "Learning rate step ka size decide karta hai: bahut chhota ho to slow, bahut bada ho to bottom ke paar jump karta hai aur blow up ho sakta hai."
-  - "Batch GD har step mein saara data use karta hai, SGD ek example, aur mini-batch ek chhota group. Mini-batch hi normally use hota hai."
-  - "Momentum aur Nesterov ek velocity add karte hain jo past steps yaad rakhti hai; isse seedhe raste pe speed badhti hai aur zig-zag kam hota hai."
-  - "AdaGrad, RMSProp aur Adam har weight ko uska apna step size dete hain, uske recent gradients ke size ke hisaab se. Adam saath mein momentum bhi use karta hai."
+  - "A gradient is the slope of the loss function. It tells which direction reduces the loss and how quickly the loss changes. Update rule: W_new = W_old − η · ∂L/∂W."
+  - "Gradient Descent (GD) is an optimization algorithm that updates the weights and biases to reduce the loss. Its goal is to find the minimum loss by moving the weights in the correct direction."
+  - "Batch GD ek update ke liye poora dataset use karta hai, SGD ek sample, mini-batch GD ek chhota batch (16, 32, 64, 128). Practice mein mini-batch sabse zyada use hota hai."
+  - "Momentum pichla update yaad rakhta hai, NAG gradient nikalne se pehle aage dekhta hai, AdaGrad har weight ko apna learning rate deta hai, RMSProp sirf recent gradients use karta hai, Adam = Momentum + RMSProp."
+  - "Learning rate bahut chhota to learning slow, bahut bada to minimum skip ho sakta hai, proper learning rate fast aur stable learning deta hai."
 references:
-  - gfdl-ch4
-  - gfdl-ch8
-  - kingma2014
-  - duchi2011
-  - sutskever2013
-  - ruder2016
-  - hinton-lec6
-  - rumelhart1986
-  - cs231n-optimization
-  - cs231n-nn3
-  - nptel-dl
-  - d2l-gd
-  - d2l-sgd
-  - d2l-minibatch
-  - d2l-momentum
-  - d2l-adagrad
-  - d2l-rmsprop
-  - d2l-adam
-  - gfg-gradient-descent
-  - gfg-gd-variants
-  - gfg-sgd
-  - gfg-momentum
-  - gfg-adam
-  - w3s-ml-learning
-  - av-gd-variants
-  - av-gd-guide
-  - mlm-minibatch
-  - mlm-adam
-  - ibm-gradient-descent
-  - keras-sgd
-  - keras-adam
-  - keras-rmsprop
-  - keras-adagrad
-  - pytorch-sgd
-  - pytorch-adam
-  - wiki-gradient-descent
-  - wiki-sgd
+  - class-dl-chp2
+  - class-dl-m1
+  - class-dl-m2
 ---
 
-Naye ideas se pehle, purane ideas jo tumhe chahiye. Agar pata hain to agle section pe chale jao.
+Naye ideas se pehle wo purani baatein jo chahiye. Agar pata hai to seedha agle section par jao.
 
-## Pehle basics
+## Basics pehle
 
-- Network mein kuch adjustable numbers hote hain jinhe **weights** (aur biases) kehte hain. Training ka matlab hai inki achhi values dhoondhna.
-- **Loss** ek number hai jo batata hai ki network training data pe kitna galat hai. Kam loss = better.
-- Kisi weight ke liye loss ka **gradient** uska slope hai: us weight ko thoda sa badhane pe loss kitna aur kis direction mein badalta hai.
-- **Backpropagation** woh method hai jo ye saare slopes efficiently nikalta hai. Gradient descent woh hai jo inhe **use** karta hai.
-- Ek **epoch** = saare training examples pe ek poora pass. Ek **iteration** (ya step) = ek weight update.
+- **Weight** ek number hai jo batata hai network ek input ko kitni importance deta hai. **Bias** learning ko help karne ke liye add kiya gaya extra number hai. Weights aur biases hi **parameters** hain: wo numbers jo network seekhta hai. <Cite id="class-dl-chp2" loc="slide 4" />
+- Network **prediction** banata hai. **Loss** error hai: prediction actual value se kitni door hai. Teacher ke example mein fruit ka actual weight 180 g hai, prediction 220 g hai, to loss high hai. <Cite id="class-dl-chp2" loc="slide 57" />
+- Loss function **sirf batata hai ki kitna error hai**. Ye nahi batata ki kis direction mein move karna hai, kitni speed se, ya kaun sa weight badalna hai. Isliye ek aur concept chahiye: gradient. <Cite id="class-dl-chp2" loc="slide 57" />
+- **Loss function** ek training example ka error hai; **cost function** poore training set ka average error hai. <Cite id="class-dl-m1" loc="p. 28" />
+- **Epoch** poore training dataset ka ek complete pass hai <Cite id="class-dl-chp2" loc="slide 69" />. **Batch** training samples ka ek chhota group hai jo saath mein process hota hai <Cite id="class-dl-chp2" loc="slide 110" />.
 
-## Gradient descent kya hai
+## Gradient
 
-**Definition.** Gradient descent ek iterative optimization algorithm hai jo loss ko kam karta hai: woh baar baar har weight ko uske gradient ke opposite direction (downhill direction) mein ek chhota step move karta hai. Ye syllabus module <Syl m="2" />, "Training, Optimization and Regularization" mein cover hota hai (module 1 mein bhi introduce hota hai).
+<Box kind="definition">
 
-Exam mein English mein likho: "Gradient descent is an iterative optimization algorithm that minimizes the loss by moving each weight a small step opposite to its gradient."
+**Gradient:** the slope of the loss function. It tells us which direction reduces the loss and how quickly the loss changes. <Cite id="class-dl-chp2" loc="slide 57" />
 
-**Ye kyun zaroori hai.** Network mein hazaaron ya lakhon weights hote hain, aur koi formula nahi hai jo seedha unki best values de de. Lekin hum har weight ke liye loss ka slope measure kar sakte hain. Gradient descent us slope ko use karke weights ko thoda thoda improve karta hai, aur ye kisi bhi size ke network pe kaam karta hai.
+</Box>
 
-**Everyday analogy: fog mein pahaad se neeche utarna.** Tum ek pahaad pe ho, ghana kohra (fog) hai, aur tumhe valley tak pahunchna hai. Valley dikh nahi rahi, lekin pairon ke neeche zameen kis taraf dhalaan hai ye feel kar sakte ho. To tum sabse steep downhill direction mein ek chhota step lete ho, phir feel karte ho, phir step lete ho. Zameen ki height = loss, aur tumhari position = weights ka set.
+**Rozmarra ka example.** Aap kohre mein ek pahaad par khade ho aur ghati tak pahunchna hai. Ghati dikhti nahi, par pair ke neeche slope mehsoos hota hai. Slope batata hai neeche kis taraf hai aur kitna steep hai. Gradient wahi slope hai, aur "think of it as the slope of a hill". <Cite id="class-dl-chp2" loc="slide 63" />
 
-**Update rule.** Shabdon mein: *new weight = old weight − learning rate × gradient*.
+<Img id="class-gradient-descent-what-is-gd" caption="Teacher ki Gradient Descent ki definition aur uske chaar steps, jahan training ke saath loss girta hai." />
 
-$$
-w \leftarrow w - \eta \, \frac{\partial L}{\partial w}
-$$
+Gradient ko $\dfrac{\partial L}{\partial W}$ likhte hain aur matlab hai "weight badalne par loss kitna badalta hai?". Ye do cheezein batata hai: <Cite id="class-dl-chp2" loc="slide 58" />
 
-$w$ ek weight hai, $\eta$ (eta) **learning rate** hai (ek chhota positive step size jaise 0.1 ya 0.01), aur $\dfrac{\partial L}{\partial w}$ gradient hai. <Cite id="gfdl-ch4" loc="§4.3" />
+1. **Direction:** loss kam karne ke liye weights kis taraf move karein.
+2. **Magnitude:** weights badalne par loss kitna badalta hai. Bada gradient matlab steep slope, bade weight updates aur fast learning. Chhota gradient matlab flat slope, chhote updates aur slow learning.
 
-**Minus sign kyun kaam karta hai.** Agar slope positive hai, to weight badhne pe loss badhta hai, isliye hum weight kam karte hain. Agar slope negative hai, to use subtract karne se weight badhta hai, jo phir se loss kam karta hai. Bottom ke paas slope lagbhag 0 hota hai, isliye steps apne aap chhote ho jaate hain.
+Gradient **backpropagation ke dauran calculate hota hai** aur optimizer (GD, Adam, SGD wagairah) use weights update karne ke liye use karta hai. <Cite id="class-dl-chp2" loc="slide 58" />
 
-## Algorithm kaise kaam karta hai
+| Gradient | Matlab | Optimizer kya karta hai |
+|---|---|---|
+| **Positive** (slope > 0) | Weight badhne par loss badhta hai | Weight ko ulti direction mein move karo (kam karo) |
+| **Negative** (slope < 0) | Current direction mein loss ghatta hai | Usi direction mein update karte raho (gradient descent rule) |
+| **Zero** | Koi slope nahi | Updates bahut chhote ho jaate hain ya ruk jaate hain; aksar global minimum, local minimum ya saddle point ke paas |
 
-1. **Initialise:** weights ko chhoti random values do aur learning rate choose karo.
-2. **Forward pass:** predictions aur loss compute karo.
-3. **Backward pass:** backpropagation se har weight ke liye loss ka gradient nikalo.
-4. **Update:** upar wale rule se har weight update karo.
-5. **Repeat:** steps 2 se 4 tab tak dohrao jab tak loss girna band na ho jaaye ya planned epochs khatam na ho jaayein.
+<Img id="class-backpropagation-gradient-types" caption="Positive, negative aur zero gradient: slope optimizer ko batata hai kis taraf move karna hai." />
+
+**Don't confuse (teacher ki table).** <Cite id="class-dl-chp2" loc="slide 58" />
+
+| | Gradient | Gradient descent |
+|---|---|---|
+| Matlab | Change ki direction aur size batata hai | Gradient use karke weights update karta hai |
+| Ye kya hai? | Backpropagation ke dauran calculate hota hai | Ek optimization algorithm |
+| Role | Information (slope) | Action (weight update) |
+
+## Optimization kya hai?
+
+<Box kind="definition">
+
+**Optimization** is the process of finding the best values of weights and biases so that the loss becomes as small as possible. An **optimizer** updates the weights after every training step to improve the model's predictions. <Cite id="class-dl-chp2" loc="slide 59" />
+
+</Box>
+
+Textbook ke words mein: optimization matlab "finding the parameters θ of a neural network that significantly reduce a cost function J(θ)". <Cite id="class-dl-m2" loc="p. 44" />
+
+Optimizer: (1) calculate karta hai weights loss ko kaise affect karte hain (backpropagation ke gradients se), (2) weights ko sahi direction mein update karta hai, (3) loss bahut chhota hone tak repeat karta hai. Ye **backpropagation ke baad aur agli prediction se pehle** kaam karta hai, aur sirf training ke dauran. <Cite id="class-dl-chp2" loc="slide 59" />
 
 ```mermaid
-%% caption: Gradient descent ka loop. Loop ka har chakkar ek iteration hai; jab loss improve hona band ho jaata hai to loop ruk jaata hai.
+%% caption: Training mein optimizer kahan baithta hai, jaise teacher draw karte hain. Forward propagation aur loss batate hain kitna galat hain; backpropagation gradient deta hai; optimizer use weights update karne ke liye use karta hai, aur loop repeat hota hai.
 flowchart TD
-  A["Random initial weights, η choose karo"] --> B["Forward pass aur loss"]
-  B --> C["Backpropagation: gradients"]
-  C --> D["Update: w ← w − η × gradient"]
-  D --> E{"Loss abhi bhi gir raha hai?"}
-  E -- "Haan" --> B
-  E -- "Nahi" --> F["Stop: trained weights"]
+  A["Training data"] --> B["Forward propagation"]
+  B --> C["Prediction"]
+  C --> D["Loss function"]
+  D --> E["Backpropagation"]
+  E --> F["Optimizer"]
+  F --> G["Update weights"]
+  G --> H["Better prediction"]
+  H -->|"repeat"| B
 ```
 
-<Img id="img-dl-n2-gd-contour" caption="Laal arrows gradient descent ke steps hain. Har step rings (barabar loss ki lines) paar karke centre ki taraf jaata hai, jahan loss sabse kam hai." />
+<Cite id="class-dl-chp2" loc="slide 59" />
 
-**Worked sum: bowl-shaped loss pe teen steps.**
+<Img id="class-backpropagation-optimization-flow" caption="Training loop mein optimizer ki jagah: ye loss kam karta hai, weights aur biases update karta hai, aur backpropagation ke baad kaam karta hai." />
+
+Teacher common optimizers list karte hain: Gradient Descent (GD), Stochastic Gradient Descent (SGD), Mini-Batch GD, Momentum, Nesterov (NAG), AdaGrad, RMSProp aur Adam. <Cite id="class-dl-chp2" loc="slide 59" /> Ye syllabus <Syl m="2" /> hai.
+
+## Gradient descent (GD)
+
+<Box kind="definition">
+
+**Gradient Descent (GD)** is an optimization algorithm that updates the weights and biases to reduce the loss. Its goal is to find the minimum loss by moving the weights in the correct direction. <Cite id="class-dl-chp2" loc="slide 60" />
+
+</Box>
+
+**Ye kaunsi problem solve karta hai?** Prediction ke baad network ko pata hai ki wo galat hai, par ye nahi pata ki kaun sa weight badalna hai, weight badhana hai ya ghatana hai, aur kitna badalna hai. Sahi method ke bina model improve nahi kar sakta. <Cite id="class-dl-chp2" loc="slide 60" />
+
+### Step by step kaise kaam karta hai
+
+Gradient Descent: <Cite id="class-dl-chp2" loc="slide 60" />
+
+1. Loss ka gradient (slope) calculate karta hai.
+2. Wo direction dhundta hai jahan loss ghatta hai.
+3. Weights update karta hai.
+4. Loss bahut chhota hone tak process repeat karta hai.
+
+Zyada detail mein teacher ke chhe steps: weights randomly initialize karo, forward propagation karo, loss calculate karo, backpropagation se gradients calculate karo, weights update karo, aur loss minimum hone tak repeat karo. <Cite id="class-dl-chp2" loc="slide 63" />
+
+<Box kind="definition">
+
+**Update rule:** $W_{new} = W_{old} - \eta \dfrac{\partial L}{\partial W}$, jahan $W$ weight hai, $\eta$ (eta) learning rate hai, $L$ loss function hai aur $\dfrac{\partial L}{\partial W}$ gradient (slope) hai. <Cite id="class-dl-chp2" loc="slide 63" />
+
+</Box>
+
+Minus sign isliye hai kyunki gradient uphill point karta hai aur humein downhill jaana hai.
+
+<Img id="class-gradient-descent-working-steps" caption="GD kaise kaam karta hai uski teacher ki sheet: chhe steps, formula aur symbols, working flow, aur learning-rate ka effect." />
+
+```mermaid
+%% caption: Gradient descent ka working flow. Loop ke har pass mein weights thoda downhill jaate hain, to loss ghatta hai aur prediction zyada accurate hoti hai.
+flowchart TD
+  A["Initialize weights"] --> B["Forward propagation"]
+  B --> C["Loss calculation"]
+  C --> D["Backpropagation"]
+  D --> E["Gradient calculation"]
+  E --> F["Weight update"]
+  F --> G["Repeat"]
+  G -->|"until loss is minimum"| B
+```
+
+<Cite id="class-dl-chp2" loc="slide 63" />
+
+**Sum 1: gradient descent ka ek step.** <Cite id="class-dl-chp2" loc="slide 63" />
 
 <Sum>
 
 <Given>
 
-ek weight jiska loss $L(w) = (w - 1)^2$ hai (sabse neeche ka point $w = 1$ pe), gradient $2(w - 1)$, start $w = 4$, learning rate $\eta = 0.1$.
+$W_{old} = 5$, learning rate $\eta = 0.1$, gradient $\dfrac{\partial L}{\partial W} = 3$.
 
 </Given>
 
 <Find>
 
-teen gradient descent steps ke baad $w$ aur loss.
+naya weight.
 
 </Find>
 
 <Steps>
 
-1. $w = 4$ pe gradient: $2(4 - 1) = 6$. *(Slope batata hai ki uphill kis taraf hai.)*
-2. Step 1: $w = 4 - 0.1 \times 6 = 4 - 0.6 = 3.4$. *(Slope ke against learning rate × gradient jitna move karo.)*
-3. $w = 3.4$ pe gradient: $2(3.4 - 1) = 4.8$; step 2: $w = 3.4 - 0.48 = 2.92$. *(Wahi rule, naya slope.)*
-4. $w = 2.92$ pe gradient: $2(2.92 - 1) = 3.84$; step 3: $w = 2.92 - 0.384 = 2.536$. *(Slope chhota hai, isliye step bhi chhota.)*
-5. Har point pe loss: $(4-1)^2 = 9$, $(3.4-1)^2 = 5.76$, $(2.92-1)^2 = 3.6864 \approx 3.69$, $(2.536-1)^2 = 2.359 \approx 2.36$. *(Check karo ki sach mein neeche gaye.)*
+1. Step size $= \eta \times$ gradient $= 0.1 \times 3 = 0.3$. *Reason: step = learning rate × slope.*
+2. Gradient positive hai, to $W$ badhne par loss badhta hai. Ulti taraf jao: $W_{new} = 5 - 0.3 = 4.7$.
 
 </Steps>
 
 <Answer>
 
-teen steps ke baad $w = 2.536$ aur loss 9 se girke lagbhag 2.36 ho gaya.
+$W_{new} = 4.7$
 
 </Answer>
 
 <Box kind="verify">
 
-Yahan har step bottom se distance ($w - 1$) ko $1 - 2\eta = 0.8$ se multiply karta hai. Distance: $3 \to 2.4 \to 1.92 \to 1.536$, to $w = 1 + 1.536 = 2.536$. Same answer, alag tarike se. Loss $1.536^2 = 2.359$ bhi match karta hai, aur har step pe gira, jaisa chhote learning rate ke saath hona chahiye.
+Wapas daalo: $4.7 + 0.3 = 5$, starting weight. Gradient positive tha, isliye weight neeche gaya.
 
 </Box>
 
 </Sum>
 
-<Figure caption="Ek weight ka loss jo bowl jaisa hai, (1 − w)², jo (w − 1)² ke barabar hai. Gradient descent right wall pe upar (w = 4) se start karta hai aur bottom w = 1 (dashed line) ki taraf neeche chalta hai. Bottom se door slope steep hai aur bottom pe flat.">
-  <CurvePlot curves="mse-loss" x="-2,4.5" y="0,10" xLabel="weight w" yLabel="loss" mark="min:mse-loss" />
-</Figure>
+### Cost curve, minima aur saddle point
 
-## Learning rate
+**Cost (loss) curve** dikhata hai ki weights badalne par loss kaise badalta hai: x-axis weight (model parameter) hai aur y-axis loss (error). Gradient descent ka objective higher loss se lowest possible loss tak jaana hai. <Cite id="class-dl-chp2" loc="slide 63" />
 
-Gradient descent mein learning rate sabse important setting hai.
+- **Global minimum:** poori cost curve ka sabse neecha point. Ye smallest possible loss deta hai, best solution aur most accurate model. Ye gradient descent ki desired destination hai. <Cite id="class-dl-chp2" loc="slide 61" />
+- **Local minimum:** cost curve ke ek chhote region ka sabse neecha point. Ye aas-paas ka minimum lagta hai, par curve par ek aur point hai jiska loss aur kam hai. Model yahan ruk sakta hai ye sochkar ki learning khatam ho gayi. Aisa isliye hota hai kyunki complex neural networks mein kai valleys hoti hain, aur gradient descent slope follow karta hai aur pehli valley mein settle ho sakta hai. <Cite id="class-dl-chp2" loc="slide 61" />
+- **Saddle point:** wo point jahan gradient (slope) lagbhag zero hai, par wo na minimum hai na maximum. Optimizer bahut slow ho jaata hai kyunki use lagta hai ki wo minimum ke lagbhag pahunch gaya. Deep neural networks mein ye bahut common hai. <Cite id="class-dl-chp2" loc="slide 61" />
 
-| Learning rate | What happens |
+**Easy trick (teacher ki):** global minimum = poori duniya ka sabse neecha point; local minimum = aapke mohalle ka sabse neecha point; saddle point = ghode ki zeen par baithne jaisa, ek direction mein flat par dusri mein curved. <Cite id="class-dl-chp2" loc="slide 62" />
+
+<Img id="class-gradient-descent-minima-table" caption="Global minimum, local minimum aur saddle point ki chhe points par comparison." />
+
+<Img id="class-gradient-descent-local-minimum" caption="Local minimum: GD loss 8 par ruk sakta hai jabki loss 2 behtar hai, kyunki wo pehli valley mein settle ho gaya." />
+
+Textbook wo aur flat jagahein batata hai jo optimization mushkil banati hain: **ill-conditioning** (SGD "stuck" ho jaata hai: bahut chhote steps bhi cost badha dete hain), **plateaus** (chaude flat regions jahan gradient zero hai), **cliffs** (bahut steep regions jo exploding gradients dete hain, gradient clipping se theek hote hain), bahut deep graphs mein **long-term dependencies**, aur **inexact gradients**. <Cite id="class-dl-m2" loc="pp. 45-48" />
+
+### Learning rate
+
+<Box kind="definition">
+
+**Learning rate (η):** decides the size of each step while updating the weights. <Cite id="class-dl-chp2" loc="slide 63" />
+
+</Box>
+
+| Learning rate | Kya hota hai |
 |---|---|
-| Too small | Bahut saare tiny steps; training bahut slow, flat region mein atak sakti hai |
-| About right | Loss dheere dheere steadily low value tak girta hai |
-| Too large | Steps bottom ke upar se jump karte hain; loss jhoolta hai aur badh sakta hai (training **diverge** hoti hai) |
+| Chhota | Slow learning (tiny steps) |
+| Bada | Minimum skip (overshoot) ho sakta hai |
+| Proper | Fast aur stable learning |
 
-**Worked sum: bahut bada learning rate kya karta hai.**
+Textbook kehta hai ki learning rate trial and error se chuna ja sakta hai, par usually best hai ki ise learning curves dekh kar chuno jo objective function ko time ke saath plot karti hain. <Cite id="class-dl-m2" loc="p. 51" /> Module 1 add karta hai: high learning rate bade steps deta hai par minimum overshoot karne ka risk hai; low learning rate zyada precise hai, par zyada time aur computation lagta hai. <Cite id="class-dl-m1" loc="p. 29" />
+
+### Gradient ke advantages aur disadvantages
+
+Teacher likhte hain: advantage, ye learning ke liye sahi direction dikhata hai, loss kam karne mein help karta hai aur lagbhag har optimizer use karta hai. Disadvantage: gradient bahut chhota ho jaaye to learning slow ho jaati hai (vanishing gradient); gradient bahut bada ho jaaye to learning unstable ho jaati hai (exploding gradient). <Cite id="class-dl-chp2" loc="slide 58" /> In dono problems ko backpropagation ke note mein samjhaya gaya hai.
+
+## Gradient descent ke types: batch, stochastic aur mini-batch
+
+Teeno types mein bas itna fark hai ki **ek weight update ke liye kitna data use hota hai**. Module 1 yun kehta hai: batch GD sab training examples evaluate hone ke baad hi update karta hai (ek training epoch); SGD ek-ek training example ke parameters update karta hai; mini-batch dono ideas combine karta hai. <Cite id="class-dl-m1" loc="p. 34" />
+
+### Batch gradient descent
+
+Batch Gradient Descent weights update karne se pehle gradient calculate karne ke liye poora training dataset use karta hai. Teacher ka example 1,00,000 fruit images hai: total loss calculate karo, gradients calculate karo, weights update karo (ek baar). Bade datasets ke liye ye process bahut slow hai. Ye har update ke liye poora dataset use karta hai, zyada time leta hai, zyada memory chahiye aur weights kam frequently update hote hain. <Cite id="class-dl-chp2" loc="slide 68" />
+
+### Stochastic gradient descent (SGD)
+
+<Box kind="definition">
+
+**Stochastic Gradient Descent (SGD)** is an optimization algorithm that updates the model's weights after processing only one training sample at a time. Instead of waiting for the entire dataset, SGD updates the weights immediately after each sample. <Cite id="class-dl-chp2" loc="slide 68" />
+
+</Box>
+
+SGD kaise kaam karta hai: <Cite id="class-dl-chp2" loc="slide 68" />
+
+1. Ek training sample pick karo.
+2. Forward propagation karo.
+3. Loss calculate karo.
+4. Backpropagation karo.
+5. Weights turant update karo.
+6. Agle sample ke liye repeat karo.
+
+Formula: $W_{new} = W_{old} - \eta \dfrac{\partial L_i}{\partial W}$, jahan $L_i$ **ek** training sample ka loss hai aur $\dfrac{\partial L_i}{\partial W}$ us ek sample ka gradient. Batch GD ke ulta, SGD ek sample ka loss use karta hai, poore dataset ka nahi. <Cite id="class-dl-chp2" loc="slide 69" />
+
+<Img id="class-gradient-descent-sgd-concept" caption="SGD ki teacher ki definition aur uske chhe steps." />
+
+<Img id="class-gradient-descent-sgd-epoch" caption="Paanch fruits ke saath SGD: har fruit weights ko ek baar update karta hai, aur sab samples process hone par ek epoch khatam hota hai." />
+
+**Advantages:** batch GD se faster, kam memory, weights turant update (har sample ke baad), bahut bade datasets ke liye suitable, noisy updates ki wajah se kuch local minima se nikal sakta hai. **Disadvantages:** training path noisy (zig-zag) hai, training mein loss fluctuate karta hai, minimum par settle hone mein zyada time lag sakta hai, learning rate ke prati sensitive hai. **SGD tab use karo jab** dataset bahut bada ho, faster training chahiye, memory limited ho, ya online learning chahiye. **Tab avoid karo jab** dataset bahut chhota ho, stable aur smooth convergence prefer ho, ya precise updates speed se zyada important hon. <Cite id="class-dl-chp2" loc="slide 70" />
+
+### Mini-batch gradient descent
+
+<Box kind="definition">
+
+**Mini-Batch Gradient Descent** divides the training dataset into small groups called mini-batches. Instead of updating after one sample (SGD) or all samples (Batch GD), it updates after each mini-batch. <Cite id="class-dl-chp2" loc="slide 71" />
+
+</Box>
+
+**Ye kaunsi problem solve karta hai:** SGD har sample ke baad update karta hai, to learning path noisy (zig-zag) hota hai, loss fluctuate karta hai aur minimum overshoot ho sakta hai. Humein aisa method chahiye jo Batch GD se faster ho par SGD se zyada stable. <Cite id="class-dl-chp2" loc="slide 71" />
+
+Kaise kaam karta hai: <Cite id="class-dl-chp2" loc="slide 72" />
+
+1. Dataset ko mini-batches mein split karo.
+2. Ek batch ke liye forward propagation karo.
+3. Loss calculate karo.
+4. Backpropagation gradients calculate karta hai.
+5. Weights update karo.
+6. Agle mini-batch ke liye repeat karo.
+
+Formula: $W_{new} = W_{old} - \eta \dfrac{\partial L_{batch}}{\partial W}$, jahan $L_{batch}$ ek mini-batch ka loss hai. <Cite id="class-dl-chp2" loc="slide 72" />
+
+Ek mini-batch mein samples ki sankhya **batch size** kehlati hai. Common batch sizes 16, 32, 64 aur 128 hain. <Cite id="class-dl-chp2" loc="slide 71" />
+
+<Img id="class-gradient-descent-minibatch-concept" caption="SGD ke zig-zag se naye concept tak: mini-batch, uske paanch steps aur wo kya deta hai." />
+
+<Img id="class-gradient-descent-minibatch-batchsize" caption="Batch size: 100 fruits aur batch size 20 se 5 mini-batches bante hain, to ek epoch mein weights 5 baar update hote hain." />
+
+**Sum 2: ek epoch mein kitne weight updates?** <Cite id="class-dl-chp2" loc="slide 71" />
 
 <Sum>
 
 <Given>
 
-wahi bowl $L(w) = (w - 1)^2$, start $w = 4$, lekin $\eta = 1.1$.
+100 fruits ka dataset aur batch size 20. Saath mein 8 fruits batch size 2 ke saath, aur 1000 images batch size 32 ke saath.
 
 </Given>
 
 <Find>
 
-do steps ke baad $w$ aur loss.
+batch GD, SGD aur mini-batch GD ke liye ek epoch mein updates ki sankhya.
 
 </Find>
 
 <Steps>
 
-1. $w = 4$ pe gradient $6$ hai; step 1: $w = 4 - 1.1 \times 6 = 4 - 6.6 = -2.6$. *(Step itna bada hai ki bottom (1) ke paar kood jaata hai.)*
-2. $w = -2.6$ pe gradient: $2(-2.6 - 1) = -7.2$; step 2:
-
-   $$
-   \begin{aligned}
-   w &= -2.6 - 1.1 \times (-7.2) \\
-   &= -2.6 + 7.92 \\
-   &= 5.32
-   \end{aligned}
-   $$
-
-   *(Wapas aur bhi door kood jaata hai.)*
-3. Loss:
-
-   $$
-   \begin{aligned}
-   9 &\to (-3.6)^2 \\
-   &= 12.96 \\
-   &\to (4.32)^2 \\
-   &= 18.6624 \\
-   &\approx 18.66
-   \end{aligned}
-   $$
-
-   *(Loss badh raha hai, matlab training diverge ho rahi hai.)*
+1. **Batch GD:** sab samples ek update ke liye use hote hain, to ek epoch mein **1 update**.
+2. **SGD:** har sample par ek update, to 100 samples se **100 updates**.
+3. **Mini-batch, 100 fruits, batch size 20:** $100 \div 20 = 5$ batches, to **5 updates**.
+4. **Mini-batch, 8 fruits, batch size 2:** $8 \div 2 = 4$ batches, to **4 updates**.
+5. **Mini-batch, 1000 images, batch size 32:** $1000 \div 32 = 31.25$, to 31 poore batches ($31 \times 32 = 992$ images) aur ek aakhri chhota batch 8 images ka, **32 updates**.
 
 </Steps>
 
 <Answer>
 
-$w$ jaata hai $4 \to -2.6 \to 5.32$ aur loss badhta hai $9 \to 12.96 \to 18.66$.
+Batch GD 1, SGD 100, mini-batch 5 (100 fruits, batch size 20 ke liye). 1000 images aur batch size 32 ke liye 32 updates hote hain.
 
 </Answer>
 
 <Box kind="verify">
 
-Yahan har step bottom se distance ko $1 - 2 \times 1.1 = -1.2$ se multiply karta hai. Distance: $3 \to -3.6 \to 4.32$, to $w = 1 - 3.6 = -2.6$ aur phir $1 + 4.32 = 5.32$. Size har baar 1.2 guna badhta hai (minus sign ka matlab side flip hoti hai), aur isi wajah se bahut bada rate blow up karta hai.
+Use hui images: $31 \times 32 + 8 = 992 + 8 = 1000$, to har image ek epoch mein ek baar use hoti hai.
 
 </Box>
 
 </Sum>
 
-Ek common practical rule: moderate learning rate se start karo aur jab loss improve hona band ho to use kam karo (isse learning-rate **schedule** kehte hain). <Cite id="hinton-lec6" /> <Cite id="gfdl-ch8" loc="§8.3.1" />
+**Mini-batch ke advantages:** batch GD se faster, SGD se zyada stable, efficient memory usage, GPUs par parallel processing support, deep learning mein sabse zyada use hota hai. **Disadvantages:** suitable batch size chunna padta hai, kuch fluctuations ab bhi hain, batch size training performance ko affect karta hai (bahut chhota to noisy updates, bahut bada to batch GD jaisa slow). Practice mein gradient descent ka sabse commonly used version yahi hai. <Cite id="class-dl-chp2" loc="slide 73" />
 
-## Gradient descent ke advantages, disadvantages aur applications
+<Img id="class-gradient-descent-batch-vs-sgd" caption="Batch GD aur SGD: data used, updates per epoch, speed, memory, convergence aur best use par comparison." />
 
-**Advantages:** samajhna aur code karna simple hai; kisi bhi differentiable loss aur kisi bhi size ke network pe kaam karta hai; sirf first derivatives chahiye, jo backpropagation sasta deta hai; agar learning rate kaafi chhota ho to downhill jaana guaranteed hai.
+<Img id="class-gradient-descent-minibatch-compare" caption="Batch GD, SGD aur mini-batch GD side by side." />
 
-**Disadvantages:** learning rate choose karna tricky hai; local minimum mein atak sakta hai ya flat regions aur saddle points pe bahut dheere chalta hai; lambi patli valleys mein zig-zag karta hai; plain (full-batch) gradient descent bade datasets pe slow hai. <Cite id="gfdl-ch8" loc="§8.2" />
+<Img id="class-gradient-descent-loss-curves" caption="Loss curves: batch GD smooth steps leta hai, SGD zig-zag noisy path leta hai." />
 
-**Applications:** har tarah ke neural network ki training (images ke liye CNNs, text aur speech ke liye RNNs aur transformers), linear aur logistic regression, recommendation systems aur matrix factorisation. <Cite id="ibm-gradient-descent" />
-
-## Ek simple model ke liye update rule derive karna
-
-<PYQ id="2023-12/q1b" /> exactly yahi poochta hai, isliye yahi ek derivation yaad rakhne layak hai.
-
-**Set-up.** Humare paas $N$ input-output pairs $(x_1, y_1), \dots, (x_N, y_N)$ hain aur model $\hat{y} = xw$ hai, jisme ek parameter $w$ hai.
-
-**1. Sum-of-squared error.** Pair $n$ ke liye prediction $x_n w$ hai, to error $y_n - x_n w$ hai. Ise square karo (taaki positive aur negative errors cancel na ho jaayein) aur saare pairs pe add karo:
-
-$$
-E(w) = \frac{1}{2}\sum_{n=1}^{N} \left(y_n - x_n w\right)^2
-$$
-
-$\dfrac{1}{2}$ optional hai; ye bas us 2 ko cancel karta hai jo differentiate karne pe aata hai.
-
-**2. Chain rule se differentiate karo.** $(y_n - x_n w)^2$ ka $w$ ke respect mein slope $2(y_n - x_n w)\cdot(-x_n)$ hai, to
-
-$$
-\frac{\partial E}{\partial w} = -\sum_{n=1}^{N} (y_n - x_n w)\,x_n
-$$
-
-**3. Gradient descent mein daalo**, learning rate $\alpha$ ke saath:
-
-$$
-w \leftarrow w - \alpha\frac{\partial E}{\partial w} = w + \alpha \sum_{n=1}^{N} (y_n - x_n w)\,x_n
-$$
-
-Shabdon mein: har example ke liye (error × input) lo, saare examples pe sum karo aur $\alpha$ se scale karo. Agar predictions bahut chhote hain to $w$ badhta hai; bahut bade hain to $w$ ghatta hai.
-
-**Worked sum: real numbers ke saath ek update.**
-
-<Sum>
-
-<Given>
-
-data pairs $(x, y) = (1, 2)$ aur $(2, 4)$, model $\hat{y} = xw$, start $w = 0$, learning rate $\alpha = 0.1$.
-
-</Given>
-
-<Find>
-
-start pe error $E$, gradient, naya $w$ aur naya $E$.
-
-</Find>
-
-<Steps>
-
-1. $w = 0$ pe errors: $2 - 1 \times 0 = 2$ aur $4 - 2 \times 0 = 4$. *(Error = true output − prediction.)*
-2.
-
-   $$
-   \begin{aligned}
-   E &= \frac{1}{2}(2^2 + 4^2) \\
-   &= \frac{1}{2}(4 + 16) \\
-   &= 10
-   \end{aligned}
-   $$
-
-   *(Square karo, add karo, aadha karo.)*
-3. Gradient:
-
-   $$
-   \begin{aligned}
-   \frac{\partial E}{\partial w} &= -(2 \times 1 + 4 \times 2) \\
-   &= -(2 + 8) \\
-   &= -10
-   \end{aligned}
-   $$
-
-   *(Error × input ka sum, minus sign ke saath.)*
-4. Naya $w = 0 - 0.1 \times (-10) = 0 + 1 = 1$. *(Update rule; negative gradient $w$ ko upar dhakelta hai.)*
-5. Naye errors: $2 - 1 = 1$ aur $4 - 2 = 2$, to $E = \dfrac{1}{2}(1 + 4) = 2.5$. *(Naye weight se error dobara nikalo.)*
-
-</Steps>
-
-<Answer>
-
-$E$ 10 se start hota hai, gradient −10 hai, $w$ 1 ban jaata hai aur $E$ girke 2.5 ho jaata hai.
-
-</Answer>
-
-<Box kind="verify">
-
-Dono points $y = 2x$ pe hain, to best weight $w = 2$ hai; wahan gradient $-(0 \times 1 + 0 \times 2) = 0$ hai, jaisa bottom pe hona chahiye. Humara step $w$ ko 0 se 2 ki taraf le gaya, aur ek aur step pe gradient $-(1 \times 1 + 2 \times 2) = -5$, to $w = 1 + 0.1 \times 5 = 1.5$ aur $E = \dfrac{1}{2}(0.5^2 + 1^2) = 0.625$. Error girta ja raha hai, matlab rule sahi kaam kar raha hai.
-
-</Box>
-
-</Sum>
-
-## Data ki amount ke hisaab se types: batch, stochastic aur mini-batch
-
-**Types kyun hain.** Training loss saare examples ka average hai. Teen basic types sirf is baat mein alag hain ki **ek update se pehle gradient nikalne ke liye kitne examples use hote hain**. <Cite id="gfdl-ch8" loc="§8.1.3" />
-
-**Everyday analogy.** Public opinion kis taraf hai ye jaanne ke liye: batch GD har decision se pehle har citizen se poochta hai (accurate lekin slow), SGD ek random insaan se poochta hai (fast lekin noisy), aur mini-batch ek chhote random group se, maan lo 64 logon se, poochta hai (kaafi accurate aur fast).
-
-```mermaid
-%% caption: Teeno types sirf is mein alag hain ki har gradient mein kitne examples jaate hain. "Gradient compute karo" ke baad sab same hai.
-flowchart LR
-  D["Training data: N examples"] --> B["Batch GD: saare N"]
-  D --> S["SGD: 1 random example"]
-  D --> M["Mini-batch GD: m random examples"]
-  B --> G["Average gradient compute karo"]
-  S --> G
-  M --> G
-  G --> U["Update: w ← w − η × gradient"]
-```
-
-**1. Batch (full-batch) gradient descent.** **Saare** training examples pe jao, unke gradients ka average lo, phir ek update karo. Ek epoch mein ek update.
-
-- *Advantages:* exact gradient, smooth aur stable path, convex problems pe steady convergence.
-- *Disadvantages:* bade datasets pe bahut slow aur memory-hungry; jab tak poora dataset process na ho, koi progress nahi; steps mein noise nahi hota, isliye local minimum ya saddle point ke paas atak sakta hai.
-- *Used for:* chhote datasets jo memory mein fit ho jaate hain.
-
-**2. Stochastic gradient descent (SGD).** Data shuffle karo, phir **har ek** example ke baad sirf uske gradient se update karo. $N$ examples ho to ek epoch mein $N$ updates. <Cite id="gfg-sgd" />
-
-- *Advantages:* har step bahut sasta; learning turant shuru; streaming (online) data pe kaam karta hai; noise chhote bure spots se bahar kudne mein help kar sakta hai.
-- *Disadvantages:* ek example ka gradient noisy hota hai, isliye loss upar neeche jumps karta hai aur path zig-zag hota hai; minimum ke paas weights hilte rehte hain jab tak learning rate time ke saath kam na karo; GPU ki parallel power achhe se use nahi kar paata.
-- *Used for:* online learning, bahut bade ya streaming datasets.
-
-<Img id="img-dl-n2-gd-sgd-noise" caption="Hazaaron updates mein SGD ka loss: overall girta hai, par upar-neeche kudta rehta hai kyunki har step sirf ek example use karta hai." />
-
-**3. Mini-batch gradient descent.** Shuffled data ko $m$ examples ke chhote groups (**mini-batches**) mein baanto, jaise 32, 64 ya 128, aur har group ke baad update karo. Ek epoch mein $N/m$ updates.
-
-- *Advantages:* SGD se kam noisy, batch GD se bahut sasta, GPUs pe fast kyunki poora batch ek matrix operation hai; thoda noise generalization mein bhi help karta hai.
-- *Disadvantages:* batch size ek aur setting hai tune karne ke liye; thoda noise abhi bhi hai; batch GPU memory mein fit hona chahiye.
-- *Used for:* lagbhag saari deep learning. Libraries mein "SGD" ka matlab usually mini-batch SGD hota hai. <Cite id="hinton-lec6" /> <Cite id="mlm-minibatch" />
-
-Teeno same update rule use karte hain; sirf gradient badalta hai. Batch GD gradient ko saare $N$ examples pe average karta hai, SGD ek example se leta hai, aur mini-batch batch ke $m$ examples pe average karta hai.
-
-**Worked sum: ek epoch mein updates ginna.**
-
-<Sum>
-
-<Given>
-
-$N = 1000$ training examples, mini-batch size $m = 50$.
-
-</Given>
-
-<Find>
-
-har type ke liye ek epoch mein kitne weight updates.
-
-</Find>
-
-<Steps>
-
-1. Batch GD: saare 1000 examples milke ek gradient dete hain, to **1 update**. *(Ek full pass pe ek update.)*
-2. SGD: har example pe ek update, to $1000 / 1 =$ **1000 updates**. *(Har example apna khud ka step hai.)*
-3. Mini-batch: $1000 / 50 =$ **20 updates**. *(50 ke har group pe ek update.)*
-
-</Steps>
-
-<Answer>
-
-ek epoch mein 1 (batch), 1000 (SGD) aur 20 (mini-batch) updates.
-
-</Answer>
-
-<Box kind="verify">
-
-Har case mein, updates × examples per update = ek epoch mein dekhe gaye 1000 examples hona chahiye: $1 \times 1000 = 1000$, $1000 \times 1 = 1000$, $20 \times 50 = 1000$. Teeno sahi hain.
-
-</Box>
-
-</Sum>
-
-| | Batch GD | Stochastic GD | Mini-batch GD |
+| Feature | Batch GD | SGD | Mini-batch GD |
 |---|---|---|---|
-| Examples per update | Saare $N$ | 1 | $m$ (jaise 32 to 256) |
-| Updates per epoch | 1 | $N$ | $N/m$ |
-| Gradient | Exact | Bahut noisy | Thoda noisy |
-| Cost per update | High | Bahut low | Low |
-| Path to the minimum | Smooth | Zig-zag | Mostly smooth |
-| Memory | Poora dataset | Ek example | Ek batch |
-| GPU use | Achha lekin har step slow | Poor | Excellent |
-| Used for | Chhote datasets | Online learning | Lagbhag saari deep learning |
+| Uses | Entire dataset | One sample | Small batch |
+| Speed | Slow | Very fast | Fast |
+| Learning path | Smooth | Zig-zag | Slight zig-zag (balanced) |
+| Stability | Stable | Noisy | Balanced |
+| Memory | High | Low | Medium |
+| Updates per epoch | One | One per sample | One per batch |
 
-## Plain gradient descent kaafi kyun nahi hai
-
-- **Ravines (zig-zag).** Lambi patli valley mein gradient zyada tar valley ke across point karta hai, isliye steps ek wall se doosri wall pe uchhalte hain aur floor ke along dheere chalte hain. <Cite id="hinton-lec6" />
-- **Flat regions aur saddle points.** Jahan slope lagbhag zero hai, wahan steps tiny ho jaate hain aur progress ruk jaati hai. <Cite id="gfdl-ch8" loc="§8.2.3" />
-- **Local minima.** Kisi aise low point pe settle ho sakta hai jo sabse low nahi hai. <Cite id="gfdl-ch8" loc="§8.2.2" />
-- **Saare weights ke liye ek learning rate.** Kuch weights ke gradients bahut bade hain aur kuch ke bahut chhote, lekin sabko same $\eta$ milta hai.
-
-Neeche ke improved optimizers ye problems fix karte hain: **momentum** aur **Nesterov** zig-zag fix karte hain; **AdaGrad**, **RMSProp** aur **Adam** "sabke liye ek learning rate" wali problem fix karte hain.
-
-<Img id="img-dl-n2-gd-saddle" caption="Saddle point (laal dot): yahan slope zero hai, phir bhi ek direction mein ye minimum hai aur doosri mein maximum, isliye plain gradient descent ruk sakta hai." />
+<Cite id="class-dl-chp2" loc="slide 72" />
 
 ```mermaid
-%% caption: Syllabus ke optimizers ki family. Pehli branch badalti hai ki har step kitna data dekhta hai; baaki do badalti hain ki har step ka size kaise decide ho.
-flowchart TD
-  GD["Gradient descent: w ← w − η × gradient"] --> D["Har step mein kitna data"]
-  GD --> V["Velocity add karo (past steps ki memory)"]
-  GD --> A["Har weight ka apna step size"]
-  D --> D1["Batch, SGD, Mini-batch"]
-  V --> V1["Momentum"]
-  V1 --> V2["Nesterov (look ahead)"]
-  A --> A1["AdaGrad"]
-  A1 --> A2["RMSProp"]
-  V1 --> AD["Adam = momentum + RMSProp"]
-  A2 --> AD
+%% caption: Gradient descent ke teeno types mein bas itna fark hai ki ek weight update se pehle kitne samples use hote hain.
+flowchart LR
+  D["Training dataset"] --> A["Batch GD: all samples"]
+  D --> B["SGD: one sample"]
+  D --> C["Mini-batch GD: one small batch"]
+  A --> U["One weight update"]
+  B --> U
+  C --> U
 ```
 
-## Momentum-based gradient descent
+<Cite id="class-dl-chp2" loc="slide 72" />
 
-**Ye kya hai.** Memory wala gradient descent: har step naye gradient aur pichhle step (**velocity**) ka mix hota hai.
+Textbook add karta hai ki SGD minibatch ke $m$ examples ka average gradient lekar gradient ka unbiased estimate deta hai, aur har update ka computation time training examples ki sankhya ke saath nahi badhta. <Cite id="class-dl-m2" loc="pp. 49-51" />
 
-**Ye kyun zaroori hai.** Plain gradient descent ravines aur halki slopes pe slow hai, aur zig-zag karta hai.
+## Plain gradient descent kaafi kyun nahi: momentum
 
-**Analogy.** Pahaad se neeche ludhakti ball har bump pe ruk ke dobara start nahi karti; jis direction mein woh chalti rehti hai, usme speed pakadti jaati hai. <Cite id="hinton-lec6" />
+**Problem.** Mini-batch GD SGD se faster aur zyada stable hai, par training mein optimizer minimum ki taraf jaate hue zig-zag kar sakta hai. Smooth path ke bajaye wo direction badalta rehta hai. Wo ab bhi frequently direction badalta hai, narrow valleys mein slow hota hai, minimum ke aas-paas oscillate kar sakta hai aur converge hone mein zyada iterations leta hai. Isliye aisa optimizer chahiye jo zyada smoothly move kare aur minimum tak jaldi pahunche. <Cite id="class-dl-chp2" loc="slide 74" />
 
-**Kaise kaam karta hai.**
+<Box kind="definition">
 
-1. Velocity 0 se start karo.
-2. Har step pe purani velocity ko thoda chhota karo (usually uska 90 percent rakho) aur naya downhill push (learning rate × gradient) add karo.
-3. Weight ko velocity se move karo, raw gradient se nahi.
+**Momentum Gradient Descent** improves Gradient Descent by remembering the previous weight update. Instead of relying only on the current gradient, it also uses the previous direction. This helps the optimizer move faster in the correct direction and reduces zig-zag movement. <Cite id="class-dl-chp2" loc="slide 74" />
 
-$$
-v \leftarrow \alpha\,v - \eta\,\nabla L(w) \qquad w \leftarrow w + v
-$$
+</Box>
 
-$v$ velocity hai, $\alpha$ **momentum coefficient** (usually 0.9) aur $\nabla L(w)$ gradient. <Cite id="gfdl-ch8" loc="§8.3.2" />
+**Real-life example (teacher ka).** Socho aap ek bhaari shopping cart dhakel rahe ho. Shuru mein wo dheere chalti hai. Ek baar speed pakad le to usi direction mein chalti rehti hai. Raste mein chhote bumps hon tab bhi wo aage badhti rehti hai. Momentum bhi isi tarah speed banata hai. <Cite id="class-dl-chp2" loc="slide 74" />
 
-Jin directions mein gradient ka sign same rehta hai, wahan pushes jud jaate hain aur ball speed pakadti hai. Jahan gradient ka sign baar baar flip hota hai (ravine ke across zig-zag), wahan pushes cancel ho jaate hain aur uchhalna kam ho jaata hai. Rumelhart, Hinton aur Williams ne 1986 ke backpropagation paper mein hi ye term use kiya tha. <Cite id="rumelhart1986" />
+Kaise kaam karta hai: current gradient calculate karo, pichla update yaad rakho, pichle update ko current gradient ke saath combine karo, weights update karo, repeat karo. Isse faster convergence, smoother learning aur kam oscillation milta hai. <Cite id="class-dl-chp2" loc="slide 74" />
 
-**Worked sum: usi bowl pe momentum.**
+<Box kind="definition">
+
+**Momentum formulas.** Velocity update: $V_t = \beta V_{t-1} - \eta \dfrac{\partial L}{\partial W}$. Weight update: $W_{new} = W_{old} + V_t$. Yahan $V$ velocity (momentum) hai, $\beta$ momentum coefficient (usually 0.9), $\eta$ learning rate, $L$ loss aur $W$ weight hai. <Cite id="class-dl-chp2" loc="slide 75" />
+
+</Box>
+
+Textbook bhi yahi kehta hai: momentum algorithm past gradients ka exponentially decaying moving average accumulate karta hai aur unki direction mein chalta rehta hai; velocity $v$ "the direction and speed at which the parameters move" hai. <Cite id="class-dl-m2" loc="pp. 52-53" />
+
+<Img id="class-gradient-descent-momentum-concept" caption="Momentum: naya update current gradient aur pichle update ko combine karta hai." />
+
+<Img id="class-gradient-descent-momentum-formula" caption="Momentum ke do formulas aur har symbol ka matlab." />
+
+<Img id="class-gradient-descent-momentum-path" caption="Mini-batch GD zig-zag karta hai, momentum GD minimum ki taraf smooth curved path leta hai." />
+
+**Sum 3: do momentum steps.** <Cite id="class-dl-chp2" loc="slide 75" />
 
 <Sum>
 
 <Given>
 
-$L(w) = (w - 1)^2$, gradient $2(w - 1)$, start $w = 4$, $v = 0$, $\eta = 0.1$, $\alpha = 0.9$.
+$W = 1.0$, $V_0 = 0$, $\beta = 0.9$, $\eta = 0.1$. Dono steps par gradient 2 hai (steady slope).
 
 </Given>
 
 <Find>
 
-teen momentum steps ke baad $w$, plain gradient descent (2.536) se compare karke.
+momentum ke saath do steps ke baad $W$, aur plain GD ke do steps ke baad.
 
 </Find>
 
 <Steps>
 
-1. Step 1: gradient $6$; $v = 0.9 \times 0 - 0.1 \times 6 = -0.6$; $w = 4 - 0.6 = 3.4$. *(Abhi purani velocity nahi hai, to ye plain step hai.)*
-2. Step 2: gradient $2(3.4 - 1) = 4.8$;
-
-   $$
-   \begin{aligned}
-   v &= 0.9 \times (-0.6) - 0.48 \\
-   &= -0.54 - 0.48 \\
-   &= -1.02
-   \end{aligned}
-   $$
-
-   $w = 3.4 - 1.02 = 2.38$. *(Purani velocity naye push mein judti hai, to step bada hota hai.)*
-3. Step 3: gradient $2(2.38 - 1) = 2.76$;
-
-   $$
-   \begin{aligned}
-   v &= 0.9 \times (-1.02) - 0.276 \\
-   &= -0.918 - 0.276 \\
-   &= -1.194
-   \end{aligned}
-   $$
-
-   $w = 2.38 - 1.194 = 1.186$. *(Abhi bhi speed badh rahi hai.)*
+1. **Step 1 (momentum).** $V_1 = \beta V_0 - \eta \times 2 = 0 - 0.2 = -0.2$. $W_1 = 1.0 + (-0.2) = 0.8$.
+2. **Step 2 (momentum).** $V_2 = 0.9 \times (-0.2) - 0.1 \times 2 = -0.18 - 0.2 = -0.38$. $W_2 = 0.8 + (-0.38) = 0.42$.
+3. **Comparison ke liye plain GD.** Har step $\eta \times 2 = 0.2$ hai, to $W$ jaata hai $1.0 \to 0.8 \to 0.6$.
 
 </Steps>
 
 <Answer>
 
-teen steps ke baad momentum $w = 1.186$ tak pahunchta hai, jabki plain gradient descent abhi 2.536 pe hai.
+Momentum do steps mein $W = 0.42$ tak pahunchta hai, plain GD sirf $W = 0.6$ tak. Dusra momentum step (0.38) pehle (0.2) se bada hai kyunki pehle ke steps usi direction mein the.
 
 </Answer>
 
 <Box kind="verify">
 
-Weight velocities ke sum jitna move karta hai:
-
-$$
-\begin{aligned}
-4 + (-0.6) + (-1.02) + (-1.194) &= 4 - 2.814 \\
-&= 1.186
-\end{aligned}
-$$
-
-Same answer. Ek aur step pe gradient $0.372$, $v = -1.0746 - 0.0372 = -1.1118$ aur $w = 0.0742$, jo bottom (1) ke paar hai: momentum fast hai lekin overshoot karta hai, bilkul theory ke hisaab se.
+Dusri velocity doosre tareeke se check karo: $V_2 = -(0.9 \times 0.2 + 0.2) = -0.38$. Steps $0.2$ phir $0.38$ hain, aur $1.0 - 0.2 - 0.38 = 0.42$.
 
 </Box>
 
 </Sum>
 
-- *Advantages:* fast convergence, kam zig-zag, chhote bumps aur flat regions ke paar ludhak sakta hai.
-- *Disadvantages:* minimum ke paar overshoot kar sakta hai; ek aur setting ($\alpha$).
-- *Applications:* "SGD with momentum" image CNNs train karne mein bahut use hota hai (original ResNet aise hi train hua tha) aur ye usual baseline optimizer hai. <Cite id="gfg-momentum" />
+**Momentum kab use karein:** deep neural networks train karte waqt, GD oscillate kar raha ho, faster convergence chahiye, cost curve mein narrow valleys hon. **Advantages:** mini-batch GD se faster convergence, zig-zag kam, smooth weight updates, shallow local minima aur flat regions se nikalne mein help, deep learning mein widely used. **Disadvantages:** ek extra parameter ($\beta$) chunna padta hai, momentum zyada ho to minimum overshoot ho sakta hai, basic GD se thoda zyada computation. <Cite id="class-dl-chp2" loc="slide 76" />
+
+| Mini-batch GD | Momentum GD |
+|---|---|
+| Sirf current gradient use karta hai | Current gradient + previous update use karta hai |
+| Zyada zig-zag | Smoother path |
+| Slower convergence | Faster convergence |
+| Pichle step ki memory nahi | Pichli direction yaad rakhta hai |
+
+<Cite id="class-dl-chp2" loc="slide 76" />
 
 ## Nesterov accelerated gradient (NAG)
 
-**Ye kya hai.** Ek smarter momentum jo step lene se pehle aage dekhta hai.
+**Problem.** Momentum GD pichli direction yaad rakhta hai aur tez chalta hai, par apne momentum ki wajah se kabhi kabhi minimum se aage nikal jaata hai (overshoot). Use ye step lene ke baad hi pata chalta hai, jisse convergence slow ho sakta hai. Wo pichli velocity use karta hai par ye nahi jaanta ki aage kya hai. <Cite id="class-dl-chp2" loc="slide 77" />
 
-**Kaise kaam karta hai.** Plain momentum gradient wahan measure karta hai jahan tum abhi ho, phir jump karta hai. Nesterov pehle wahan jaata hai jahan velocity tumhe le jaane wali hai (**look-ahead point**), gradient **wahan** measure karta hai, aur phir correct karta hai. Jaise ek skier jo turn lene se pehle slope pe thoda aage dekh leta hai. <Cite id="sutskever2013" /> <Cite id="gfdl-ch8" loc="§8.3.3" />
+<Box kind="definition">
 
-$$
-v \leftarrow \alpha\,v - \eta\,\nabla L(w + \alpha v) \qquad w \leftarrow w + v
-$$
-
-Momentum se sirf ek change hai ki gradient kahan liya jaata hai: $w + \alpha v$ pe.
-
-- *Advantages:* slope flat hone se pehle hi dekh leta hai, isliye momentum se kam overshoot karta hai aur jaldi settle hota hai.
-- *Disadvantages:* thoda zyada complex; abhi bhi saare weights ke liye ek learning rate.
-- *Applications:* deep network training mein ek option ki tarah use hota hai, jaise Keras SGD mein `nesterov=True`. <Cite id="keras-sgd" />
-
-## AdaGrad (adaptive gradient)
-
-**Ye kya hai.** Ek optimizer jo har weight ko uska **apna** learning rate deta hai. <Cite id="duchi2011" />
-
-**Kaise kaam karta hai.** Har weight ke liye woh uske saare past gradients ke squares ka running **sum** rakhta hai. Step = gradient ko learning rate se guna karke, us sum ke square root se divide karo. Jin weights ke gradients bade rahe hain unhe chhote steps milte hain; jinke gradients chhote ya rare hain unhe relatively bade steps milte hain.
-
-$$
-r \leftarrow r + g^2 \qquad w \leftarrow w - \frac{\eta}{\delta + \sqrt{r}}\,g
-$$
-
-$g$ is weight ka gradient hai, $r$ uske squared gradients ka sum, aur $\delta$ ek tiny number (jaise $10^{-7}$) jo zero se divide hone se bachata hai. <Cite id="gfdl-ch8" loc="§8.5.1" />
-
-- *Advantages:* har weight ka rate haath se tune nahi karna padta; sparse data ke liye bahut achha jahan kuch features rare hain.
-- *Disadvantages:* sum sirf badhta hai, isliye effective learning rate ghatta rehta hai aur lambi training mein learning lagbhag ruk sakti hai.
-- *Applications:* rare words wale text aur natural language problems, sparse features wale recommendation systems. <Cite id="keras-adagrad" />
-
-## RMSProp (root mean square propagation)
-
-**Ye kya hai.** AdaGrad ka fix jo sum ki jagah squared gradients ka **moving average** use karta hai, taaki purane gradients dheere dheere bhool jaayein aur step size khatam na ho. Hinton ne ise apne course lectures mein propose kiya tha, kisi paper mein nahi. <Cite id="hinton-lec6" />
-
-$$
-r \leftarrow \rho\,r + (1-\rho)\,g^2 \qquad w \leftarrow w - \frac{\eta}{\sqrt{\delta + r}}\,g
-$$
-
-$\rho$ (rho) decay rate hai, usually 0.9: average zyada tar purani value hota hai plus naye squared gradient ka thoda sa hissa. <Cite id="gfdl-ch8" loc="§8.5.2" />
-
-- *Advantages:* har weight ka apna rate, aur rate khatam nahi hota; badalti (non-stationary) problems pe achha kaam karta hai.
-- *Disadvantages:* $\eta$ aur $\rho$ abhi bhi choose karne padte hain; khud ka momentum nahi hai.
-- *Applications:* recurrent neural networks aur reinforcement learning ke liye popular. <Cite id="keras-rmsprop" />
-
-## Adam (adaptive moment estimation)
-
-**Ye kya hai.** Adam dono achhe ideas combine karta hai: gradients ka momentum jaisa running average (**first moment**) aur squared gradients ka RMSProp jaisa running average (**second moment**). Ye aaj ke sabse zyada use hone wale optimizers mein se ek hai. <Cite id="kingma2014" />
-
-**Kaise kaam karta hai.**
-
-1. Average gradient update karo (direction, momentum jaisa).
-2. Average squared gradient update karo (size, RMSProp jaisa).
-3. Dono averages 0 se start hote hain, isliye pehle steps mein bahut chhote hote hain; isliye har ek ko ek correction factor se divide karo (**bias correction**).
-4. Har weight ko (corrected average gradient) ÷ √(corrected average squared gradient), times $\eta$ jitna step do.
-
-$$
-m \leftarrow \beta_1 m + (1-\beta_1)\,g \qquad v \leftarrow \beta_2 v + (1-\beta_2)\,g^2
-$$
-
-$$
-\hat{m} = \frac{m}{1-\beta_1^{\,t}} \qquad \hat{v} = \frac{v}{1-\beta_2^{\,t}} \qquad w \leftarrow w - \eta\,\frac{\hat{m}}{\sqrt{\hat{v}} + \epsilon}
-$$
-
-$t$ step number hai. Paper ke suggested defaults hain $\eta = 0.001$, $\beta_1 = 0.9$, $\beta_2 = 0.999$ aur $\epsilon = 10^{-8}$. <Cite id="kingma2014" /> <Cite id="gfdl-ch8" loc="§8.5.3" />
-
-- *Advantages:* fast, kam tuning mein achha kaam karta hai, noisy aur sparse gradients handle karta hai, har weight ka apna rate plus momentum.
-- *Disadvantages:* zyada settings aur zyada memory (har weight ke liye do averages); kuch tasks pe well-tuned SGD with momentum utna hi ya better generalize karta hai.
-- *Applications:* transformers, GANs, NLP models aur zyada tar quick experiments ka default choice. <Cite id="mlm-adam" />
-
-<Box kind="intuition">
-
-Adaptive optimizers (AdaGrad, RMSProp, Adam) har step ko lagbhag same size ka bana dete hain, chahe gradient ka size kuch bhi ho. Inka asli fayda un networks mein dikhta hai jinme lakhon weights hain aur unke gradients ke size mein bahut farak hai, jahan ek shared learning rate sabko suit nahi kar sakta.
+**Nesterov Accelerated Gradient (NAG)** is an improved version of Momentum Gradient Descent. Instead of calculating the gradient at the current position, NAG first looks ahead using the momentum and then calculates the gradient. This gives a more accurate update. <Cite id="class-dl-chp2" loc="slide 77" />
 
 </Box>
 
-## Saare optimizers side by side
+NAG kaise kaam karta hai: momentum se aage dekho, naye (look-ahead) position par gradient calculate karo, is improved gradient se weights update karo. **NAG move karne se pehle plan karta hai, isliye overshooting se bachta hai.** Result: better direction, kam overshooting aur faster convergence. <Cite id="class-dl-chp2" loc="slide 77" /> Textbook difference ek line mein kehta hai: Nesterov momentum mein gradient current velocity apply hone ke baad evaluate hota hai. <Cite id="class-dl-m2" loc="p. 54" />
 
-| Method | What it remembers | Update in words | Main benefit | Main weakness |
-|---|---|---|---|---|
-| Gradient descent | Kuch nahi | Gradient ke against step | Simple | Ravines mein slow, ek $\eta$ |
-| Momentum | Velocity (past gradients) | Velocity ke saath step | Fast, kam zig-zag | Overshoot kar sakta hai |
-| Nesterov | Velocity | Look-ahead point pe gradient | Momentum se kam overshoot | Thoda zyada complex |
-| AdaGrad | Squared gradients ka sum | Step ko √(sum) se divide | Har weight ka apna rate, rare features ke liye achha | Rate zero ki taraf ghatta hai |
-| RMSProp | Squared gradients ka moving average | Step ko √(average) se divide | Rate khatam nahi hota | $\rho$ aur $\eta$ chahiye |
-| Adam | Gradients aur squared gradients ke averages | Momentum plus RMSProp, bias correction ke saath | Kam tuning mein achha | Zyada settings; well-tuned SGD with momentum match kar sakta hai |
+**Real-life example (teacher ka).** Momentum GD: aap curve dekhne ke baad steering wheel ghumate ho. NAG: aap aage curve dekhte ho, phir curve tak pahunchne se pehle steering wheel ghumate ho. <Cite id="class-dl-chp2" loc="slide 77" />
 
-Sabse best kaun sa hai? Koi ek answer nahi hai; Goodfellow kehte hain ki koi consensus nahi hai, aur SGD (momentum ke saath ya bina), RMSProp aur Adam sab popular choices hain. <Cite id="gfdl-ch8" loc="§8.5.4" /> <Cite id="ruder2016" />
+Formulas (corrected, neeche box dekho): look-ahead position $W_{look} = W + \beta V_{t-1}$; velocity $V_t = \beta V_{t-1} - \eta \nabla L(W_{look})$; weight update $W_{new} = W_{old} + V_t$. <Cite id="class-dl-chp2" loc="slide 78" />
 
-Code mein ye ek line ke hain, jaise `keras.optimizers.SGD(learning_rate=0.01, momentum=0.9, nesterov=True)` ya `torch.optim.Adam(model.parameters(), lr=0.001)`. <Cite id="keras-sgd" /> <Cite id="pytorch-sgd" /> <Cite id="pytorch-adam" />
+<Box kind="verify">
 
-**Conclusion.** Gradient descent training ka engine hai: ye backpropagation ke gradients use karke har weight ko downhill move karta hai, aur iske variants sirf ye badalte hain ki har step kitna data use kare ya har step ka size kaise decide ho.
+**Correction.** Slide look-ahead position ko $W_{look} = W - \beta V_{t-1}$ likhti hai. Slide ke apne update $W_{new} = W_{old} + V_t$ aur $V_t = \beta V_{t-1} - \eta \nabla L$ ke saath, momentum mein minus sign pehle se $V$ ke andar hai, to weight $+\beta V_{t-1}$ se move karta hai aur look-ahead position $W + \beta V_{t-1}$ hai.
 
-Exam mein English mein likho: "Gradient descent is the engine of training; its variants only change how much data each step uses or how each step is sized."
+</Box>
 
-## Ye kahan poocha gaya
+<Img id="class-gradient-descent-nag-concept" caption="NAG: momentum se aage dekho, wahan gradient nikalo, phir weights update karo." />
 
-| If the question says | What to write | Seen as |
+<Img id="class-gradient-descent-nag-path" caption="Momentum GD minimum ke paas thoda overshoot karta hai; NAG kam overshoots ke saath smoother path leta hai." />
+
+**Sum 4: ek chhote curve par momentum versus NAG (class files mein nahi hai; idea dikhane ke liye add kiya).** Loss $L = W^2$ lo, jiska gradient $2W$ hai.
+
+<Sum>
+
+<Given>
+
+$W = 1$, $V_0 = 0$, $\beta = 0.9$, $\eta = 0.1$, loss $L = W^2$ (gradient $2W$).
+
+</Given>
+
+<Find>
+
+momentum aur NAG ke saath do steps ke baad $W$.
+
+</Find>
+
+<Steps>
+
+1. **Step 1 dono ke liye same hai.** Velocity 0 hai, to look-ahead position $W$ hi hai. Gradient $= 2 \times 1 = 2$. $V_1 = 0 - 0.1 \times 2 = -0.2$, $W_1 = 0.8$.
+2. **Momentum, step 2.** Current $W_1 = 0.8$ par gradient $1.6$ hai. $V_2 = 0.9 \times (-0.2) - 0.1 \times 1.6 = -0.18 - 0.16 = -0.34$. $W_2 = 0.8 - 0.34 = 0.46$.
+3. **NAG, step 2.** Aage dekho: $W_{look} = 0.8 + 0.9 \times (-0.2) = 0.62$. Wahan gradient $= 2 \times 0.62 = 1.24$. $V_2 = -0.18 - 0.1 \times 1.24 = -0.304$. $W_2 = 0.8 - 0.304 = 0.496$.
+
+</Steps>
+
+<Answer>
+
+Momentum $W_2 = 0.46$ deta hai, NAG $W_2 = 0.496$. NAG ne dekha ki look-ahead position pehle se minimum 0 ke kareeb hai, to wahan gradient chhota hai aur wo pehle brake lagata hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Minimum $W = 0$ par hai. Do steps ke baad momentum 0 ke zyada kareeb hai par zyada speed (velocity $-0.34$ vs $-0.304$) ke saath, jo agle steps mein overshoot ki wajah banti hai.
+
+</Box>
+
+</Sum>
+
+**NAG ke advantages:** Momentum GD se faster convergence, update se pehle aage dekhta hai, overshooting kam, zyada accurate weight updates. **Disadvantages:** Momentum GD se thoda zyada computation, samajhna aur implement karna zyada complex, $\beta$ (usually 0.9) tune karna padta hai. <Cite id="class-dl-chp2" loc="slide 79" />
+
+| | Momentum GD | NAG |
 |---|---|---|
-| "Calculate the sum-of-squared error for $y = xw$ and derive the gradient descent update rule" | $E = \dfrac{1}{2}\sum(y_n - x_n w)^2$, derivative step by step, $w \leftarrow w + \alpha\sum(y_n - x_n w)x_n$, do points wala check | <PYQ id="2023-12/q1b" /> |
-| "Explain gradient descent in deep learning" (5 marks) | Definition, kyun zaroori, fog wala idea, steps, update rule shabdon mein, learning rate, advantages aur disadvantages, types pe ek line | <PYQ id="2024-05/q1b" /> <PYQ id="2024-12/q1b" /> |
-| "Explain SGD and momentum-based gradient descent" | Dono ke liye: definition, kyun, kaise kaam karta hai, advantages, disadvantages, applications; diagram; comparison table | <PYQ id="2023-12/q5a" /> |
-| "Different types of gradient descent, explain any three" | Saare types list karo, phir batch, stochastic aur mini-batch working, pros aur cons, diagram aur comparison table ke saath | <PYQ id="2024-05/q3a" /> <PYQ id="2024-12/q3a" /> |
-| "Explain the gradient descent algorithm and discuss its types in detail" | Algorithm steps aur diagram, phir batch, SGD, mini-batch detail mein, aur momentum, Nesterov, AdaGrad, RMSProp aur Adam pe ek chhota paragraph | <PYQ id="2025-05/q2a" /> |
+| Gradient calculation | Current position par | Look-ahead position par |
+| Overshooting | Minimum overshoot kar sakta hai | Overshooting kam karta hai |
+| Speed | Mini-batch GD se faster | Momentum GD se faster aur zyada accurate |
+
+<Cite id="class-dl-chp2" loc="slide 79" />
+
+## AdaGrad (adaptive gradient)
+
+**Problem.** NAG movement ki direction better karta hai, par ab bhi sab weights ke liye ek fixed learning rate use karta hai. Neural network mein kuch weights ko bade updates chahiye aur kuch ko chhote, to har weight ke liye same learning rate hamesha best nahi hota. <Cite id="class-dl-chp2" loc="slide 80" />
+
+<Box kind="definition">
+
+**AdaGrad (Adaptive Gradient)** is an optimizer that gives each weight its own learning rate. Weights that are updated frequently get a smaller learning rate. Weights that are updated less often get a larger learning rate. This allows each parameter to learn at its own pace. <Cite id="class-dl-chp2" loc="slide 80" />
+
+</Box>
+
+Kaise kaam karta hai: gradient calculate karo, past gradients ka track rakho, learning rate automatically adjust karo. **Real-life example (teacher ka).** Teacher un students par kam dhyan deta hai jo topic pehle se samajhte hain aur struggle karne wale students par zyada; AdaGrad un weights ko zyada learning deta hai jinhe zaroorat hai. <Cite id="class-dl-chp2" loc="slide 80" />
+
+<Box kind="definition">
+
+**AdaGrad formulas.** Gradients accumulate karo: $G_t = G_{t-1} + g_t^2$ (element-wise square). Weight update: $W_{new} = W_{old} - \dfrac{\eta}{\sqrt{G_t} + \epsilon}\, g_t$. Yahan $\eta$ initial learning rate hai, $g_t$ current gradient, $G_t$ past squared gradients ka sum aur $\epsilon$ zero se divide hone se bachne ke liye chhoti value (usually $10^{-8}$). <Cite id="class-dl-chp2" loc="slide 81" />
+
+</Box>
+
+**Key idea:** bade past gradients se $\sqrt{G_t}$ bada hota hai, to learning rate chhota ho jaata hai; chhote past gradients se $\sqrt{G_t}$ chhota hota hai, to learning rate bada ho jaata hai. Textbook kehta hai ki ye learning rates ko "inversely proportional to the square root of the sum of all of their historical squared values" scale karta hai. <Cite id="class-dl-m2" loc="p. 59" />
+
+<Img id="class-gradient-descent-adagrad-concept" caption="AdaGrad ka concept: frequently updated weights ko chhota rate, rarely updated weights ko bada." />
+
+<Img id="class-gradient-descent-adagrad-formula" caption="AdaGrad ke do formulas aur har symbol ka matlab." />
+
+**Sum 5: do weights par AdaGrad (teacher ka example, dobara compute kiya).** <Cite id="class-dl-chp2" loc="slide 81" />
+
+<Sum>
+
+<Given>
+
+Weight $W_1$ (aksar update hota hai) ke gradients 0.6, 0.7, 0.5, 0.8 hain. Weight $W_2$ (kabhi kabhi update hota hai) ke gradients 0.1, 0.2, 0.1, 0.15 hain. Initial learning rate $\eta = 0.1$ ($\epsilon$ bahut chhota hai, ignore).
+
+</Given>
+
+<Find>
+
+har step par accumulated $G_t$ aur learning rate $\eta / \sqrt{G_t}$.
+
+</Find>
+
+<Steps>
+
+1. **Gradients ka square.** $W_1$: 0.36, 0.49, 0.25, 0.64. $W_2$: 0.01, 0.04, 0.01, 0.0225.
+2. **Jodo (accumulate).** $W_1$: 0.36, 0.85, 1.10, 1.74. $W_2$: 0.01, 0.05, 0.06, 0.0825.
+3. **Learning rate $0.1 / \sqrt{G_t}$.** $W_1$: 0.167, 0.108, 0.095, 0.076. $W_2$: 1.000, 0.447, 0.408, 0.348.
+
+</Steps>
+
+<Answer>
+
+$W_1$ ka rate 0.167 se 0.076 tak girta hai; $W_2$ ka rate kaafi bada rehta hai (1.0 se 0.348). Aksar update hone wale weight ko chhota learning rate milta hai, jaisa AdaGrad promise karta hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Ek value check karo: $\sqrt{1.74} = 1.319$ aur $0.1 / 1.319 = 0.0758$. Ye bhi: $0.36 + 0.49 + 0.25 + 0.64 = 1.74$. (Slide mein $W_1$ ki pehli accumulated value 0.36 ki jagah 1.10 chhapi hai, isliye uski poori row shift ho gayi hai; upar ke numbers sahi hain.)
+
+</Box>
+
+</Sum>
+
+**AdaGrad tab use karo jab** features sparse hon (bahut values zero), kuch parameters ko doosron se zyada updates chahiye, alag weights alag speed se seekhein (text classification, NLP, recommendation systems). **Advantages:** learning rate automatically adjust karta hai, har parameter ka learning rate manually tune nahi karna padta, sparse data ke saath achha kaam karta hai. **Disadvantages:** learning rate lagatar ghatta hai, training time ke saath slow hoti hai, best solution tak pahunchne se pehle seekhna band kar sakta hai, lambi deep learning training ke liye ideal nahi. <Cite id="class-dl-chp2" loc="slide 82" />
+
+<Img id="class-gradient-descent-adagrad-limits" caption="AdaGrad ke advantages aur disadvantages: learning rate lagatar ghatta hai aur bahut chhota ho sakta hai." />
+
+## RMSProp (root mean square propagation)
+
+**Problem.** AdaGrad har weight ka learning rate adjust karta hai, par training chalti rehne par wo saare past squared gradients jodta rehta hai, to learning rate chhota hota jaata hai aur aakhir mein lagbhag zero ho jaata hai. Phir model bahut slowly seekhta hai ya seekhna band kar deta hai. <Cite id="class-dl-chp2" loc="slide 83" />
+
+<Box kind="definition">
+
+**RMSProp (Root Mean Square Propagation)** is an optimizer that adjusts the learning rate using only recent gradients instead of all past gradients. It uses a moving average of squared gradients. This prevents the learning rate from shrinking too much. <Cite id="class-dl-chp2" loc="slide 83" />
+
+</Box>
+
+Kaise kaam karta hai: current gradient calculate karo, recent squared gradients ka moving average rakho, learning rate adjust karo, **bahut purane gradients ignore karo**, weights update karo. Isse learning fast aur stable rehti hai. <Cite id="class-dl-chp2" loc="slide 83" />
+
+**Real-life example (teacher ka).** Exam ki taiyari: AdaGrad shuru se ab tak ki har galti yaad rakhta hai aur aakhir mein bahut cautious ho jaata hai; RMSProp mainly recent galtiyon par focus karta hai, purani galtiyan kam important ho jaati hain, aur aap improve karte rehte ho. <Cite id="class-dl-chp2" loc="slide 83" />
+
+<Box kind="definition">
+
+**RMSProp formulas.** Moving average: $S_t = \beta S_{t-1} + (1 - \beta)\, g_t^2$. Weight update: $W_{new} = W_{old} - \dfrac{\eta}{\sqrt{S_t} + \epsilon}\, g_t$. Yahan $S_t$ squared gradients ka moving average hai, $\beta$ decay rate (usually 0.9), $\eta$ learning rate, $g_t$ current gradient. <Cite id="class-dl-chp2" loc="slide 84" />
+
+</Box>
+
+Textbook wajah batata hai: AdaGrad learning rate ko squared gradient ki poori history ke hisaab se shrink karta hai aur kisi achhe region tak pahunchne se pehle rate bahut chhota kar sakta hai. RMSProp accumulation ko exponentially weighted moving average bana deta hai, aur naya hyperparameter $\rho$ (jo $\beta$ jaisa hai) average ki length control karta hai. <Cite id="class-dl-m2" loc="p. 61" />
+
+<Img id="class-gradient-descent-rmsprop-concept" caption="RMSProp: AdaGrad jaisa hi idea par sirf recent squared gradients use hote hain, to learning rate stable rehta hai." />
+
+<Img id="class-gradient-descent-rmsprop-formula" caption="RMSProp ka moving average aur weight update, har symbol ke matlab ke saath." />
+
+**Sum 6: RMSProp ke numbers (teacher ka example, dobara compute kiya).** <Cite id="class-dl-chp2" loc="slide 84" />
+
+<Sum>
+
+<Given>
+
+Ek weight, gradients $g_t$ = 0.4, −0.2, 0.1, −0.3, 0.2 ($t = 1$ se 5), $\beta = 0.9$, $\eta = 0.1$, $S_0 = 0$ ($\epsilon$ ignore).
+
+</Given>
+
+<Find>
+
+har step par $S_t$ aur learning-rate factor $\eta / \sqrt{S_t}$.
+
+</Find>
+
+<Steps>
+
+1. **Squares:** $g_t^2$ = 0.16, 0.04, 0.01, 0.09, 0.04.
+2. **$S_1$** $= 0.9 \times 0 + 0.1 \times 0.16 = 0.016$.
+3. **$S_2$** $= 0.9 \times 0.016 + 0.1 \times 0.04 = 0.0144 + 0.004 = 0.0184$.
+4. **$S_3$** $= 0.9 \times 0.0184 + 0.1 \times 0.01 = 0.01656 + 0.001 = 0.01756$.
+5. **$S_4$** $= 0.9 \times 0.01756 + 0.1 \times 0.09 = 0.015804 + 0.009 = 0.024804$.
+6. **$S_5$** $= 0.9 \times 0.024804 + 0.1 \times 0.04 = 0.0223236 + 0.004 = 0.0263236$.
+7. **Factor $0.1 / \sqrt{S_t}$:** 0.79, 0.74, 0.75, 0.63, 0.62.
+
+</Steps>
+
+<Answer>
+
+$S_t$ = 0.016, 0.0184, 0.01756, 0.0248, 0.0263 aur factor 0.62 aur 0.79 ke beech rehta hai: wo zero nahi hota, yahi RMSProp ka point hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Comparison ke liye, wahi gradients par AdaGrad $G_t$ = 0.16, 0.20, 0.21, 0.30, 0.34 accumulate karta hai aur uska factor $0.1/\sqrt{G_t}$ = 0.25, 0.22, 0.22, 0.18, 0.17 girta hi rehta hai. (Slide $t = 2$ se 5 ke liye $S_t$ = 0.017, 0.0163, 0.0217, 0.0205 chhapti hai, jo formula se nahi aate; upar ki values aati hain.)
+
+</Box>
+
+</Sum>
+
+**RMSProp tab use karo jab** deep neural networks ya recurrent neural networks train kar rahe ho, adaptive learning rate chahiye, lambi training chahiye. **Advantages:** AdaGrad ki decreasing learning rate problem solve karta hai, adaptive learning rate, faster convergence, stable learning, deep learning aur RNNs ke liye achha. **Disadvantages:** $\beta$ aur learning rate tune karne padte hain, AdaGrad se thoda zyada computation, aksar Adam usse behtar nikalta hai. <Cite id="class-dl-chp2" loc="slide 85" />
+
+<Img id="class-gradient-descent-rmsprop-vs-adagrad" caption="Fruit example: AdaGrad ka learning rate girte girte lagbhag zero ho jaata hai; RMSProp ka healthy rehta hai." />
+
+## Adam (adaptive moment estimation)
+
+**Problem.** Momentum pichli direction yaad rakhta hai aur learning tez karta hai. RMSProp learning rate automatically adjust karta hai. Dono achhe hain, par har ek sirf ek problem solve karta hai. Kya better nahi hoga agar dono ek saath use kar sakein? <Cite id="class-dl-chp2" loc="slide 86" />
+
+<Box kind="definition">
+
+**Adam (Adaptive Moment Estimation)** is an optimizer that combines Momentum (remembers the previous direction) and RMSProp (adaptive learning rate). It is one of the most popular optimizers in deep learning because it provides fast, stable and efficient training. <Cite id="class-dl-chp2" loc="slide 86" />
+
+</Box>
+
+Adam kaise kaam karta hai: current gradient calculate karo, momentum se pichle updates yaad rakho, RMSProp se learning rate adjust karo, weights update karo, loss minimize hone tak repeat karo. **Real-life example (car chalana):** momentum direction yaad rakhta hai, RMSProp road ke hisaab se speed adjust karta hai, Adam dono ek saath karta hai. <Cite id="class-dl-chp2" loc="slide 86" />
+
+<Box kind="definition">
+
+**Adam formulas** <Cite id="class-dl-chp2" loc="slide 87" />
+
+1. First moment (momentum): $m_t = \beta_1 m_{t-1} + (1 - \beta_1)\, g_t$
+2. Second moment (RMSProp): $v_t = \beta_2 v_{t-1} + (1 - \beta_2)\, g_t^2$
+3. Bias correction: $\hat m_t = \dfrac{m_t}{1 - \beta_1^t}$ aur $\hat v_t = \dfrac{v_t}{1 - \beta_2^t}$
+4. Weight update: $W_{new} = W_{old} - \eta \dfrac{\hat m_t}{\sqrt{\hat v_t} + \epsilon}$
+
+$\beta_1$ usually 0.9, $\beta_2$ usually 0.999, $\eta$ learning rate aur $\epsilon$ (usually $10^{-8}$) zero se divide hone se bachata hai.
+
+</Box>
+
+Textbook Adam ko "a variant on the combination of RMSProp and momentum" kehta hai aur **bias correction** samjhata hai: ye isliye hai kyunki first aur second moments origin (zero) se shuru hote hain, to shuru ke estimates bahut chhote hote. Adam hyperparameters ke choice ke prati kaafi robust hai. <Cite id="class-dl-m2" loc="p. 64" />
+
+<Img id="class-gradient-descent-adam-concept" caption="Adam: Momentum plus RMSProp, jo fast, stable aur efficient training deta hai." />
+
+<Img id="class-gradient-descent-adam-formula" caption="Adam ke chaar formulas, har symbol ke matlab ke saath." />
+
+<Img id="class-gradient-descent-adam-flow" caption="Adam ka training flow: gradient, first moment, second moment, bias correction, weight update." />
+
+**Sum 7: Adam ka pehla step.** <Cite id="class-dl-chp2" loc="slide 87" />
+
+<Sum>
+
+<Given>
+
+Pehla gradient $g_1 = 0.4$, $m_0 = v_0 = 0$, $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\eta = 0.1$ ($\epsilon$ ignore).
+
+</Given>
+
+<Find>
+
+pehla weight change.
+
+</Find>
+
+<Steps>
+
+1. $m_1 = 0.9 \times 0 + 0.1 \times 0.4 = 0.04$.
+2. $v_1 = 0.999 \times 0 + 0.001 \times 0.16 = 0.00016$.
+3. **Bias correction.** $\hat m_1 = 0.04 / (1 - 0.9) = 0.4$ aur $\hat v_1 = 0.00016 / (1 - 0.999) = 0.16$. Correction ke bina shuru ki values bahut chhoti hoti.
+4. **Update size.** $\eta \times \hat m_1 / \sqrt{\hat v_1} = 0.1 \times 0.4 / 0.4 = 0.1$, to $W$ 0.1 se ghatta hai.
+
+</Steps>
+
+<Answer>
+
+$W_{new} = W_{old} - 0.1$. Pehla Adam step gradient kitna bhi ho, lagbhag $\eta$ jitna hota hai.
+
+</Answer>
+
+<Box kind="verify">
+
+$\sqrt{0.16} = 0.4$ aur $0.4 / 0.4 = 1$, to step bilkul $\eta \times 1 = 0.1$ hai.
+
+</Box>
+
+</Sum>
+
+**Adam tab use karo jab** DNNs, CNNs, RNNs aur LSTMs train kar rahe ho, dataset bada ho, fast convergence chahiye, ya abhi koi optimizer select nahi kiya. **Advantages:** Momentum aur RMSProp combine karta hai, fast convergence, adaptive learning rate, smooth weight updates, kam hyperparameter tuning, zyadatar deep learning applications mein achha, sabse widely used optimizer. **Disadvantages:** thodi zyada memory chahiye, SGD se computationally zyada expensive, kuch tasks mein SGD ke mukable best generalization nahi bhi de sakta. <Cite id="class-dl-chp2" loc="slide 88" />
+
+## Sab optimizers side by side
+
+Textbook ki ek-line summary: <Cite id="class-dl-m2" loc="p. 65" />
+
+- Vanilla gradient descent bas gradient follow karta hai (learning rate se scale karke).
+- **Momentum** method decay rate ke saath first moment use karke speed pakadta hai.
+- **AdaGrad** sparse features handle karne ke liye second moment bina decay ke use karta hai.
+- **RMSProp** AdaGrad se tez hone ke liye second moment decay rate ke saath use karta hai.
+- **Adam** first aur second dono moments use karta hai, aur generally best choice hai.
+- Kuch aur variations bhi hain, jaise Nesterov accelerated gradient aur AdaDelta.
+
+```mermaid
+%% caption: Har optimizer apne se pehle wale ki kamzori fix karta hai, jaise teacher ek ke baad ek banate hain. Aakhri box wahi hai jo Adam combine karta hai.
+flowchart TD
+  A["Batch GD: slow for large data"] --> B["SGD: fast but noisy"]
+  B --> C["Mini-batch GD: balanced but zig-zags"]
+  C --> D["Momentum: remembers direction, may overshoot"]
+  D --> E["NAG: looks ahead, but one learning rate for all"]
+  E --> F["AdaGrad: own rate per weight, but rate keeps shrinking"]
+  F --> G["RMSProp: only recent gradients, but no momentum"]
+  G --> H["Adam: Momentum + RMSProp"]
+```
+
+<Cite id="class-dl-chp2" loc="slides 68 to 86" />
+
+<Img id="class-gradient-descent-optimizers-compare" caption="Momentum, RMSProp aur Adam: har ek kya karta hai, learning rate aur main benefit." />
+
+| Optimizer | Idea | Learning rate | Kya fix karta hai |
+|---|---|---|---|
+| Momentum | Pichli direction yaad rakhta hai | Fixed | Mini-batch GD ka zig-zag |
+| NAG | Gradient se pehle aage dekhta hai | Fixed | Momentum ki overshooting |
+| AdaGrad | Har weight ka apna rate (sab past squared gradients ka sum) | Adaptive, ghatta rehta hai | Sab weights ke liye ek rate |
+| RMSProp | Recent squared gradients ka moving average | Adaptive, stable rehta hai | AdaGrad ka shrinking rate |
+| Adam | Momentum + RMSProp, bias correction ke saath | Adaptive + momentum | Har ek akela sirf ek problem solve karta hai |
+
+<Cite id="class-dl-chp2" loc="slides 79 to 88" />
+
+## Ye kahan puchha gaya
+
+| Question | Kya likhna hai | Solution |
+|---|---|---|
+| "Explain Gradient Descent in Deep Learning" | Definition, kaunsi problem solve karta hai, 4 steps, update rule, learning rate, minima | <PYQ id="2024-05/q1b" /> <PYQ id="2024-12/q1b" /> |
+| "Types of gradient descent, explain any three" | Batch, SGD, mini-batch: working, formula, advantages, disadvantages, table | <PYQ id="2024-05/q3a" /> <PYQ id="2024-12/q3a" /> <PYQ id="2025-05/q2a" /> |
+| "SGD and momentum based gradient descent" | SGD ke steps aur formula, momentum velocity aur weight update, comparison | <PYQ id="2023-12/q5a" /> |
+| $y = xw$ ke liye sum-of-squared error se update rule derive karo | $E$, $\partial E / \partial w$, update rule, chhota example | <PYQ id="2023-12/q1b" /> |
+| "AdaGrad, RMSProp and Adam with diagrams" | Har ek ki problem, idea, formula, advantages, disadvantages; comparison | <PYQ id="assignment-1/q2c" /> |
 
 ## Quick revision
 
-- Update rule: new weight = old weight − learning rate × gradient, $w \leftarrow w - \eta\,\partial L/\partial w$. Minus sign = downhill.
-- Learning rate bahut chhota: slow. Bahut bada: overshoot karta hai aur diverge ho sakta hai.
-- $\hat{y} = xw$ ke liye: $E = \dfrac{1}{2}\sum(y_n - x_n w)^2$, $\partial E/\partial w = -\sum(y_n - x_n w)x_n$.
-- Batch: har step saara data (exact, slow). SGD: ek example (fast, noisy). Mini-batch: $m$ examples, usual choice.
-- Momentum: velocity = 0.9 × old velocity − η × gradient; speed badhata hai aur zig-zag kam karta hai. Nesterov: look-ahead point pe gradient.
-- AdaGrad √(squared gradients ka sum) se divide karta hai; RMSProp √(moving average) se; Adam = momentum + RMSProp + bias correction.
+- Gradient = loss ka slope. Direction aur magnitude deta hai. Update: $W_{new} = W_{old} - \eta\, \partial L / \partial W$.
+- Gradient positive ho ya negative, slope ke ulta move karo; zero ho to shayad minimum (ya saddle point) par ho.
+- Batch GD: sab samples, ek epoch mein ek update. SGD: ek sample, har sample par update. Mini-batch: har batch par update (16, 32, 64, 128); sabse zyada use hota hai.
+- Momentum: pichla update yaad rakhta hai ($\beta = 0.9$). NAG: aage dekho, phir gradient nikalo.
+- AdaGrad: har weight ka apna learning rate, par rate ghatta rehta hai. RMSProp: recent squared gradients ka moving average. Adam: Momentum + RMSProp, bias correction ke saath.
+- Chhota learning rate: slow. Bada: minimum skip ho sakta hai. Proper: fast aur stable.

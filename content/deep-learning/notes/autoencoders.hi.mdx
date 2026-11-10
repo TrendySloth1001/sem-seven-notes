@@ -1,438 +1,970 @@
 ---
 title: "Autoencoders"
 module: 3
-summary: "Autoencoder ek network hai jo apne input ko ek chhote code mein squeeze karna seekhta hai aur phir usi code se input ko wapas rebuild karta hai, bina kisi label ke. Usse kya karne pe force kiya jaata hai (narrow code, noisy input, kam active neurons, steady code), usi se undercomplete, denoising, sparse aur contractive types bante hain, aur syllabus mein iska main use image compression hai."
+summary: "Autoencoder ek aisa network hai jo apne input ko chhote code mein squeeze karna seekhta hai aur phir us code se input wapas banata hai, bina labels ke. Use kis cheez ke liye majboor kiya jaata hai ye badalne se class ke nau types bante hain: vanilla, linear, undercomplete, overcomplete, sparse, contractive, denoising, convolutional aur variational. Note ke ant mein latent space aur applications hain."
 keyIdeas:
-  - "Autoencoder mein ek encoder (input se short code), ek code (bottleneck) aur ek decoder (code se wapas input) hota hai. Ise aise train karte hain ki output input jaisa ho jaaye."
-  - "Isko labels nahi chahiye, kyunki input hi apna target hai. Isliye ise unsupervised (ya self-supervised) learning kehte hain."
-  - "Agar code input se chhota hai (undercomplete), toh network ko sirf important patterns rakhne padte hain. Agar code barabar ya bada hai (overcomplete), toh woh seedha copy kar sakta hai, isliye use regularizer chahiye."
-  - "Denoising: kharab (noisy) input do, clean wala maango. Sparse: sirf kuch code neurons active ho sakte hain. Contractive: input thoda badle toh code mushkil se badalna chahiye."
-  - "Squared error ke saath train kiya gaya linear autoencoder PCA wala hi subspace seekhta hai; non-linear autoencoders curved patterns seekhte hain jo PCA nahi kar sakta."
-  - "Image compression mein encoder short code banata hai jo store ya send hota hai, aur decoder usse ek approximate (lossy) image wapas banata hai."
+  - "An Autoencoder is an unsupervised neural network that learns to compress the input into a smaller representation (encoding) and then reconstruct the original input from that compressed representation. Goal: Input ≈ Output."
+  - "Parts: Input → Encoder (compress) → Latent space / Code / Bottleneck → Decoder (reconstruct) → Output. Reconstruction loss (MSE ya L1) minimize karke backpropagation se train hota hai."
+  - "Undercomplete: code size < input size, to network ko compress karna padta hai. Overcomplete: code size > input size, to regularization chahiye warna wo input copy kar sakta hai."
+  - "Sparse: sirf kuch hidden neurons active (sparsity penalty, L1 ya KL divergence). Denoising: noisy input, clean target. Contractive: input mein chhota change to code mein chhota change (contractive penalty)."
+  - "Variational autoencoder (VAE) latent space mein probability distribution (mean μ aur variance σ²) seekhta hai, z = μ + σ ε sample karta hai aur naya data generate kar sakta hai. VAE loss = reconstruction loss + KL divergence loss."
 references:
-  - gfdl-ch14
-  - gfdl-ch7
-  - nptel-dl
-  - vincent2008
-  - vincent2010
-  - rifai2011
-  - kingma2013-vae
-  - gfg-vae
-  - av-denoising-autoencoder
-  - wiki-dimensionality-reduction
-  - balle2016
-  - theis2017
-  - ufldl-autoencoders
-  - gfg-autoencoders
-  - gfg-autoencoder-types
-  - gfg-autoencoder-working
-  - gfg-undercomplete-autoencoder
-  - gfg-overcomplete-autoencoder
-  - gfg-denoising-autoencoder
-  - gfg-sparse-autoencoder
-  - gfg-contractive-autoencoder
-  - keras-blog-autoencoders
-  - keras-denoising-autoencoder
-  - tf-autoencoder
-  - wiki-autoencoder
-  - wiki-pca
-  - wiki-image-compression
-  - wiki-kl-divergence
-  - wiki-jacobian
-  - ibm-autoencoder
-  - av-autoencoders
-  - mlm-autoencoder-features
-  - tp-autoencoders
+  - class-dl-chp2
+  - class-dl-chp3
+  - class-dl-m3
 ---
 
-Naye ideas se pehle, purane ideas jo chahiye woh yahan hain. Agar aapko pehle se pata hai, toh next section pe chale jao.
+Naye ideas se pehle wo purani baatein jo chahiye. Agar pata hai to seedha agle section par jao.
 
-## Pehle basics
+## Basics pehle
 
-- Neural network ek bada formula hai jisme bahut saare adjust hone wale numbers hote hain, jinhe **weights** kehte hain (aur **biases**, jo har neuron pe add hone wale extra numbers hain).
-- **Layer** matlab neurons ki ek row. Har neuron apne inputs ka weighted sum leta hai aur use ek **activation function** (jaise sigmoid ya ReLU) se pass karta hai.
-- **Training** matlab weights ko aise adjust karna ki network ka output **target** (jo answer humein chahiye) ke paas aa jaaye.
-- **Loss** ek number hai jo batata hai ki output target se kitna door hai. Kam matlab better.
-- **Backpropagation** nikaalta hai ki loss ke liye har weight kitna zimmedaar hai, aur **gradient descent** har weight ko thoda sa hilata hai taaki loss kam ho.
-- **Supervised learning** ko har example ka label chahiye (ye photo "cat" hai). **Unsupervised learning** mein labels nahi hote; network ko data mein patterns khud dhoondhne padte hain.
-- **Regularization** matlab koi bhi trick jo network ko sirf ratta maarne (memorize karne) se rokti hai, jaise loss mein ek penalty add karna.
+- **Neuron** inputs leta hai, har ek ko **weight** se multiply karta hai, **bias** add karta hai, aur result activation function se guzarta hai. Weights aur biases wo **parameters** hain jo network seekhta hai. <Cite id="class-dl-chp2" loc="slide 4" />
+- **Loss** error hai: output us se kitna door hai jo humein chahiye tha. Network **backpropagation** (gradient peeche flow karta hai) aur weight update se loss kam karta hai. <Cite id="class-dl-chp3" loc="slide 3" />
+- **Supervised learning** ko labels chahiye (har example ka sahi answer). **Unsupervised learning** ko labels nahi chahiye. Autoencoder ko labels nahi chahiye kyunki **input hi uska target hai**. <Cite id="class-dl-chp3" loc="slide 6" />
+- **Dimensionality** un values ki sankhya hai jo ek example describe karti hain. 28 × 28 image mein 28 × 28 = 784 pixel values hain, to uski 784 dimensions hain. <Cite id="class-dl-chp3" loc="slide 4" />
 
-## Introduction: autoencoder kya hai
+## Autoencoder kya hai?
 
-**Analogy.** Socho aap apne dost ko SMS pe ek lamba address bhejte ho. Aap har word poora type nahi karte; aap short version likhte ho ("Flat 3B, Shanti Apts, nr station, Thane W"). Dost use padhke poora address wapas bana leta hai. Achha short version likhne ke liye aapko pata hona chahiye ki kaunse parts important hain.
+**Problem.** Bahut saara real-world data (images, audio, text) bahut bada hota hai. Problems hain high storage requirement, slow processing, kai unnecessary features aur useful patterns seekhne mein difficulty. Humein data ko important information khoye bina compress karne ka method chahiye. <Cite id="class-dl-chp3" loc="slide 2" />
 
 <Box kind="definition">
 
-**Autoencoder:** ek neural network jise apne input ko output tak copy karna sikhaya jaata hai, beech ki ek narrow layer ke through jise **code** kehte hain (isko bottleneck ya latent representation bhi kehte hain). Pehla half, **encoder**, input ko code mein squeeze karta hai; doosra half, **decoder**, code se input ko wapas banata hai. Wapas bane output ko **reconstruction** kehte hain.
+**Autoencoder:** an unsupervised neural network that learns to compress the input into a smaller representation (encoding) and then reconstruct the original input from that compressed representation. **Goal: Input ≈ Output.** <Cite id="class-dl-chp3" loc="slide 2" />
 
 </Box>
 
-Ye syllabus <Syl m="3" /> hai.
+Textbook ke words: "Autoencoders are self-supervised machine learning models which are used to reduce the size of input data by recreating it." Ye supervised models ki tarah train hote hain, par inference mein unsupervised models ki tarah kaam karte hain, isliye inhe self-supervised kehte hain. PCA jaisi dusri dimensionality reduction techniques ke mukable ek advantage ye hai ki autoencoders **complex non-linear correlations** capture kar sakte hain. <Cite id="class-dl-m3" loc="p. 4" />
 
-**Ye kyun zaroori hai.**
+**"Autoencoder" naam kyun?** *Auto* matlab wo automatically (bina labels ke) seekhta hai; *encoder* matlab wo data compress karta hai. To autoencoder automatically encode (compress) aur decode (reconstruct) karna seekhta hai. <Cite id="class-dl-chp3" loc="slide 2" />
 
-- Zyaadatar real data (photos, sound, sensor readings) ke labels nahi hote, aur labelling slow aur mehngi hai. Autoencoder sirf data se seekhta hai, kyunki **input hi apna target hai**.
-- Real data mein bahut repetition hota hai. Photo mein paas-paas ke pixels lagbhag same hote hain. Autoencoder ek **short summary** dhoondhta hai jo important patterns rakhti hai aur repetition hata deti hai.
-- Ye summary compression, noise hataane, high-dimensional data ko plot karne, unusual inputs pakadne aur doosre network ke liye ready-made features ke kaam aati hai.
+**Rozmarra ka example.** Aap ek lamba chapter padhte ho aur paanch line ka chhota summary likhte ho (encoder aur code). Baad mein sirf un paanch lines se chapter dobara likhne ki koshish karte ho (decoder). Agar summary mein important points the to rewrite chapter jaisa lagta hai. Agar space ki limit na hoti to aap chapter ko seedha copy kar dete, aur kuch seekhte nahi; **chhoti summary size aapko samajhne par majboor karti hai**.
 
-**Key point.** Copy karna bekaar lagta hai. Trick ye hai ki hum network ko perfectly copy **nahi** karne dete. Hum ek restriction lagate hain (narrow code, noisy input, penalty), taaki input ko achhe se rebuild karne ka ek hi tareeka bache: data ke real patterns seekhna. Woh patterns, jo code mein store hote hain, wahi humein chahiye. <Cite id="gfdl-ch14" />
+<Img id="class-autoencoders-what-is" caption="Teacher ki definition: input encoder se latent space (code, bottleneck) tak jaata hai, phir decoder output reconstruct karta hai. Goal: Input ≈ Output." />
 
-Exam mein English mein likho: "An autoencoder is trained to copy its input to its output through a narrow code, so it is forced to learn the important features of the data."
+### Main components
 
-## Main components aur architecture
+<Img id="class-autoencoders-main-components" caption="Autoencoder ke paanch parts aur har ek kya karta hai." />
 
-| Part | What it is | What it does |
-|---|---|---|
-| Input layer | Data, jaise $28\times28$ image jo 784 numbers mein flatten ki gayi | Jise compress karna hai |
-| Encoder | Ek ya zyada layers jo patli hoti jaati hain | Input ko short code mein badalta hai |
-| Code (bottleneck) | Beech ki sabse patli layer | Input ki short summary rakhta hai |
-| Decoder | Layers jo phir se chaudi hoti hain, aksar encoder ki mirror image | Code ko wapas full-size output banata hai |
-| Output layer | Input jitni hi size | Wapas bana input (reconstruction) |
-| Loss | Reconstruction error | Batata hai network ne input kitna achha rebuild kiya |
+| Part | Kya karta hai |
+|---|---|
+| **Input** | Raw data (image, audio, text) |
+| **Encoder (compress)** | Dimensionality kam karta hai aur important information nikalta hai |
+| **Latent space / Code / Bottleneck** | Chhoti compressed representation (important features) |
+| **Decoder (reconstruct)** | Code se original data reconstruct karta hai |
+| **Output** | Reconstructed data; input jaisa dikhta hai |
 
-<Img id="img-dl-n2-ae-schema" caption="Classic autoencoder ka shape: encoder input X ko chhote code h mein dabata hai, aur decoder usse X' dobara banata hai." />
+<Cite id="class-dl-chp3" loc="slide 2" />
 
-<Figure caption="Ek deep undercomplete autoencoder. Encoder 6 inputs ko 2-number code tak patla karta hai; decoder use wapas 6 tak chauda karta hai. Output layer input jitni hi badi hai, aur goal hai output = input.">
-  <NetworkFigure layers="6,4,2,4,6" title="Encoder, code, decoder" labels="Input x,Encoder,Code h,Decoder,Output r" />
-</Figure>
+```mermaid
+%% caption: Autoencoder jaise teacher draw karte hain. Loss output ko input se compare karta hai, aur backpropagation weights update karta hai.
+flowchart LR
+  A["Input"] --> B["Encoder: compress"]
+  B --> C["Latent space / code / bottleneck"]
+  C --> D["Decoder: reconstruct"]
+  D --> E["Output"]
+  E -->|"loss: compare with input"| F["Backpropagation: update weights"]
+  F -.-> B
+```
 
-**Ek formula jo yaad rakhna hai.** Symbols mein encoder hai $h = f(x)$ (input $x$ code $h$ banta hai), decoder hai $r = g(h)$ (code reconstruction $r$ banta hai), aur training reconstruction loss $L(x, g(f(x)))$ ko kam karti hai. Words mein: "rebuild hua output original input se kitna alag hai?" Real numbers ke liye usual choice **squared error** hai: har output value ko uski input value se subtract karo, square karo, aur sab add karo.
+<Cite id="class-dl-chp3" loc="slide 4" /> Ye syllabus <Syl m="3" /> hai.
 
-$$
-L(x, r) = \sum_{i=1}^{d} (x_i - r_i)^2
-$$
+<Img id="class-autoencoders-big-picture" caption="Autoencoder flow (big picture): input, encoder, bottleneck, decoder, output, latent representation aur latent code ke saath." />
 
-Yahan $d$ input values ki ginti hai, $x_i$ $i$-th input value hai aur $r_i$ $i$-th rebuilt value. 0 se 1 ke beech ke inputs (jaise pixel brightness) ke liye binary cross-entropy bhi common hai. <Cite id="gfdl-ch14" loc="§14.1" /> <Cite id="keras-blog-autoencoders" />
+Teacher do paas ke words alag karte hain: **latent representation** encoder ki seekhi hui overall compact representation hai, aur **latent code** wo numerical vector hai jo use represent karta hai (jaise [0.8, 0.3, 0.6, 0.2, …]). Dono interchangeably use hote hain. <Cite id="class-dl-chp3" loc="slide 4" />
 
-**Chhota worked example.**
+<Img id="class-autoencoders-big-picture-parts" caption="Har part numbers mein: 28 × 28 apple image (784 pixels) encoder mein 784 → 128 → 64 → 16 shrink hoti hai aur decoder mein 16 → 64 → 128 → 784 badhti hai." />
 
-Given: input $x = [1, 0, 1, 0]$ aur reconstruction $r = [0.9, 0.1, 0.8, 0.0]$.
-To find: squared-error loss $L(x, r)$.
+**Sum 1: code kitna chhota hai?** <Cite id="class-dl-chp3" loc="slide 4" />
 
-1. Har output ko uske input se subtract karo, ye dekhne ke liye ki har value kitni galat hai: $1 - 0.9 = 0.1$, $0 - 0.1 = -0.1$, $1 - 0.8 = 0.2$, $0 - 0 = 0$.
-2. Har difference ka square karo, taaki upar ki galti aur neeche ki galti dono positive count hon: $0.01$, $0.01$, $0.04$, $0$.
-3. Squares add karo, kyunki poore input ke liye loss ek hi number hota hai: $0.01 + 0.01 + 0.04 + 0 = 0.06$.
+<Sum>
 
-**Loss $L = 0.06$** (koi unit nahi; perfect copy pe $0$ aata).
+<Given>
+
+$28 \times 28$ pixels ka input. Encoder ise $784 \to 128 \to 64 \to 16$ kam karta hai.
+
+</Given>
+
+<Find>
+
+input values ki sankhya, aur code kitni baar chhota hai.
+
+</Find>
+
+<Steps>
+
+1. **Input values:** $28 \times 28 = 784$.
+2. **Code size:** 16 values (bottleneck).
+3. **Compression:** $784 \div 16 = 49$.
+
+</Steps>
+
+<Answer>
+
+Code mein 784 ki jagah 16 values hain: wo 49 guna chhota hai.
+
+</Answer>
 
 <Box kind="verify">
 
-Alag order mein add karo:
-
-$$
-(0.04 + 0) + (0.01 + 0.01) = 0.04 + 0.02 = 0.06
-$$
-
-Same answer. Range check: har value zyada se zyada $0.2$ galat hai, toh har square zyada se zyada $0.04$ hai aur chaar milke zyada se zyada $0.16$; $0.06$ $0$ aur $0.16$ ke beech hai, toh answer sensible hai.
+Peeche se check karo: $16 \times 49 = 784$. Decoder ko sirf 16 numbers se saare 784 pixels rebuild karne hain, isliye output input ke close ho sakta hai, identical nahi.
 
 </Box>
 
-## Autoencoder kaise kaam karta hai (training)
+</Sum>
+
+## Autoencoder kaise kaam karta hai aur kaise train hota hai
+
+Teacher ke steps (image ke liye): <Cite id="class-dl-chp3" loc="slide 2" />
+
+1. Input (image / data) do.
+2. Encoder ise compress karta hai.
+3. Important information bottleneck mein store hoti hai.
+4. Decoder original data reconstruct karta hai.
+5. Output ko input se compare karo.
+6. Loss calculate hota hai.
+7. Backpropagation weights update karta hai.
+8. Output input jaisa hone tak repeat karo.
+
+Textbook kehta hai ki unlabeled dataset ko supervised problem ki tarah frame kiya jaata hai: output $\hat x$, input $x$ ka reconstruction, jo **reconstruction error** $L(x, \hat x)$ minimize karke train hota hai, jo original input aur reconstruction ka difference naapta hai. Bottleneck key hai: "without the presence of an information bottleneck, our network could easily learn to simply memorize the input values by passing these values along through the network". <Cite id="class-dl-m3" loc="p. 6" />
+
+<Img id="class-autoencoders-how-works" caption="Autoencoder train karne ke aath steps (loss output ko input se compare karta hai)." />
+
+<Img id="class-autoencoders-training-process" caption="Training process: input, encoder, compressed code, decoder, output; input se compare, loss, backpropagation, weights update; reconstruction error minimum hone tak repeat." />
+
+### Loss function
+
+Loss input aur output ka difference naapta hai. Do sabse common loss functions: <Cite id="class-dl-chp3" loc="slide 3" />
+
+- **MSE loss:** $L_{MSE} = \dfrac{1}{n}\sum_{i=1}^{n} (x_i - \hat x_i)^2$
+- **L1 loss (MAE):** $L_{L1} = \dfrac{1}{n}\sum_{i=1}^{n} |x_i - \hat x_i|$
+
+jahan $x_i$ original input hai aur $\hat x_i$ reconstructed output.
+
+<Img id="class-autoencoders-loss-function" caption="Loss function: MSE aur L1 (MAE), symbols ke matlab ke saath." />
+
+**Sum 2: reconstruction loss.** <Cite id="class-dl-chp3" loc="slide 12" />
+
+<Sum>
+
+<Given>
+
+Input $x = [1, 2, 3, 4]$ aur reconstructed output $\hat x = [0.9, 1.9, 3.1, 4.0]$ (teacher ke linear autoencoder ka example).
+
+</Given>
+
+<Find>
+
+MSE loss aur L1 loss.
+
+</Find>
+
+<Steps>
+
+1. **Differences** $x_i - \hat x_i$: $0.1, 0.1, -0.1, 0$.
+2. **MSE:** squares $0.01, 0.01, 0.01, 0$; sum $= 0.03$; $n = 4$ se divide: $0.03 / 4 = 0.0075$.
+3. **L1:** absolute values $0.1, 0.1, 0.1, 0$; sum $= 0.3$; 4 se divide: $0.3 / 4 = 0.075$.
+
+</Steps>
+
+<Answer>
+
+MSE $= 0.0075$ aur L1 $= 0.075$. Dono chhote hain kyunki output input ke kareeb hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Perfect reconstruction ($\hat x = x$) dono ke liye 0 deta. Agar output door hota (jaise sab zero), to MSE $(1 + 4 + 9 + 16)/4 = 7.5$ hota, to loss achhe aur bure ko saaf alag karta hai.
+
+</Box>
+
+</Sum>
+
+### Training mein kya dhyan rakhein (teacher ki list)
+
+**Code (bottleneck) size** sabse critical hyperparameter hai: ye decide karta hai data kitna compress hoga aur ye regularization term ki tarah bhi kaam kar sakta hai. **Layers ki sankhya** bhi critical hai: zyada depth model complexity badhati hai, kam depth process karne mein faster. **Har layer mein nodes** encoder ki har agli layer ke saath kam hote hain (aur decoder mein wapas badhte hain). Do famous reconstruction losses MSE aur L1 hain. <Cite id="class-dl-chp3" loc="slide 7" />
+
+### Ideal autoencoder do cheezein balance karta hai
+
+Use inputs ke prati itna sensitive hona chahiye ki accurate reconstruction bana sake, aur itna insensitive ki training data ko simply memorize ya overfit na kare. To loss ke do terms hote hain: reconstruction loss $L(x, \hat x)$ aur ek **regularizer** jo memorization discourage karta hai: $L(x, \hat x) + \text{regularizer}$. Regularizer ke aage ek scaling parameter trade-off adjust karta hai. <Cite id="class-dl-m3" loc="p. 7" />
+
+## Architecture
+
+<Img id="class-autoencoders-architecture" caption="Architecture: 28 × 28 image (784 pixels) encoder mein jaati hai, bottleneck (compressed code) se guzarti hai, aur decoder reconstructed output deta hai." />
+
+- **Encoder:** high-dimensional input ko chhoti representation mein badalta hai aur important features nikalta hai (784 pixels se 64 features). <Cite id="class-dl-chp3" loc="slide 3" />
+- **Bottleneck:** sabse chhoti hidden layer; sirf sabse important information store karti hai. Ise latent space, code ya compressed representation bhi kehte hain. <Cite id="class-dl-chp3" loc="slide 3" />
+- **Decoder:** bottleneck representation se original input reconstruct karta hai; low-dimensional code ko wapas high-dimensional data mein badalta hai. Output input ke jitna ho sake close hona chahiye. <Cite id="class-dl-chp3" loc="slide 3" />
+
+<Img id="class-autoencoders-encoder-bottleneck-decoder" caption="Encoder, bottleneck aur decoder har ek kya karta hai." />
+
+**Advantages:** automatically seekhta hai (unsupervised), labels nahi chahiye, data compress karta hai, useful features seekhta hai, redundancy hataata hai, kai applications ke liye useful. **Disadvantages:** output hamesha input jaisa identical nahi, compression mein kuch information kho sakti hai, sahi bottleneck size chahiye, bade data ke liye computationally expensive ho sakta hai. <Cite id="class-dl-chp3" loc="slide 3" />
+
+### Autoencoders ki properties
+
+Teacher ki slides teen properties batati hain. <Cite id="class-dl-chp3" loc="slide 6" />
+
+- **Data-specific:** autoencoders sirf us data jaisa data meaningfully compress kar sakte hain jis par wo train hue. Handwritten digits par train hua autoencoder landscape photos compress nahi kar sakta. (Ye gzip jaise standard compression algorithm se alag hain.)
+- **Lossy:** output bilkul input jaisa nahi hota; wo ek close par degraded representation hota hai. Lossless compression chahiye to ye sahi raasta nahi.
+- **Unsupervised:** train karne ke liye explicit labels nahi chahiye. Aur precise kahein to ye **self-supervised** hain, kyunki ye training data se apne labels khud banate hain.
+
+### Autoencoder versus PCA
+
+<Img id="class-autoencoders-vs-pca" caption="Don't confuse: autoencoder versus PCA (type, learning, data, architecture, power, use)." />
+
+| Aspect | Autoencoder | PCA (Principal Component Analysis) |
+|---|---|---|
+| Type | Neural network (deep learning) | Mathematical technique (linear algebra) |
+| Learning | Non-linear features seekhta hai | Linear features seekhta hai |
+| Data | Complex data ke saath achha | Simple / linear data ke saath achha |
+| Architecture | Encoder + bottleneck + decoder | Koi encoder ya decoder nahi |
+| Power | Zyada powerful | Simpler |
+
+<Cite id="class-dl-chp3" loc="slide 3" />
+
+Textbook: kyunki neural networks non-linear relationships seekh sakte hain, autoencoder ko "a more powerful (nonlinear) generalization of PCA" maana ja sakta hai. PCA data ko describe karne wala lower-dimensional **hyperplane** dhundta hai; autoencoders non-linear **manifolds** seekh sakte hain (manifold simple words mein ek continuous, non-intersecting surface hai). <Cite id="class-dl-m3" loc="p. 13" />
+
+<Img id="class-autoencoders-pca-vs-ae" caption="Linear versus non-linear dimensionality reduction: laal PCA line aur autoencoder ka hara curve." />
+
+<Img id="class-autoencoders-manifold" caption="3D non-linear Swiss roll aur 3D mein ek 2D linear manifold: autoencoders aise curved manifolds seekh sakte hain." />
+
+## Autoencoders ke types
+
+Teacher nau types draw karte hain: <Cite id="class-dl-chp3" loc="slide 8" />
+
+| # | Type | Matlab | Main purpose |
+|---|---|---|---|
+| 1 | **Vanilla** | Ek encoder aur ek decoder wala basic autoencoder | Input compress aur reconstruct karna seekhta hai |
+| 2 | **Linear** | Sirf linear activation functions | Simple linear relationships seekhta hai (PCA jaisa) |
+| 3 | **Undercomplete** | Hidden layer (code) mein input se kam neurons | Data compress karta hai aur important features seekhta hai |
+| 4 | **Overcomplete** | Hidden layer mein input se zyada neurons | Detailed features seekhta hai (input copy karne se bachne ke liye regularization chahiye) |
+| 5 | **Sparse** | Sirf kuch neurons active ho sakte hain | Memorization se bachkar useful features seekhta hai |
+| 6 | **Contractive** | Aise features seekhta hai jo chhote input changes par bahut kam badalte hain | Model ko chhote input variations ke prati robust banata hai |
+| 7 | **Denoising** | Input jaan-boojh kar noisy, par output clean data hona chahiye | Noise hataata hai aur clean input reconstruct karta hai |
+| 8 | **Convolutional (CAE)** | Fully connected layers ke bajaye convolutional layers | Compression, denoising aur image reconstruction ke liye image features seekhta hai |
+| 9 | **Variational (VAE)** | Fixed code ke bajaye probability distribution seekhta hai | Training data jaisa naya data generate karta hai (generative model) |
 
 ```mermaid
-%% caption: Autoencoder ka training loop. Wahi input andar bhi jaata hai aur usi se output compare hota hai, isliye label ki zaroorat nahi.
-flowchart LR
-  X["Input x"] --> E["Encoder"]
-  E --> H["Code h"]
-  H --> D["Decoder"]
-  D --> R["Reconstruction r"]
-  R --> L["Loss: r ko x se compare karo"]
-  X --> L
-  L --> B["Backpropagation encoder aur decoder weights update karta hai"]
+%% caption: Nau autoencoder types is hisaab se group kiye gaye ki kya badla gaya hai. Basic design same hai; sirf code ya input par constraint badalta hai.
+flowchart TD
+  A["Autoencoder: encoder, code, decoder"] --> B["Size of the code"]
+  A --> C["Regularization"]
+  A --> D["Layers and probability"]
+  B --> B1["Vanilla, Linear"]
+  B --> B2["Undercomplete: code smaller than input"]
+  B --> B3["Overcomplete: code larger than input"]
+  C --> C1["Sparse: few active neurons"]
+  C --> C2["Denoising: noisy input, clean target"]
+  C --> C3["Contractive: stable code"]
+  D --> D1["Convolutional: conv layers"]
+  D --> D2["Variational: distribution in latent space"]
 ```
 
-1. Ek input lo (label ki zaroorat nahi).
-2. **Encode:** encoder use short code mein squeeze karta hai.
-3. **Decode:** decoder code se full-size output wapas banata hai.
-4. **Compare:** loss measure karta hai ki output input se kitna door hai.
-5. **Learn:** backpropagation aur gradient descent decoder aur encoder dono ke weights adjust karte hain taaki loss kam ho.
-6. Bahut saare examples aur epochs pe **repeat** karo. Training ke baad aksar sirf encoder rakhte hain (code banane ke liye) ya sirf decoder (code se rebuild karne ke liye).
+<Cite id="class-dl-chp3" loc="slides 8 and 29" />
 
-**Ek real wale ka size.** Classic MNIST example 784 pixels ko 32-number code mein compress karta hai, lagbhag 24.5 guna chhota. <Cite id="keras-blog-autoencoders" />
+<Img id="class-autoencoders-type-vanilla" caption="Type 1: vanilla autoencoder (ek encoder, ek decoder)." />
 
-**Deep autoencoders.** Encoder aur decoder mein kai layers ho sakti hain. Deep wale better codes seekh sakte hain; 30-unit code wale ek deep autoencoder ne 30 dimensions wale PCA se kam reconstruction error diya. <Cite id="gfdl-ch14" loc="§14.3" /> <Cite id="gfdl-ch14" loc="§14.9" />
+<Img id="class-autoencoders-type-linear" caption="Type 2: linear autoencoder (sirf linear activation functions, PCA jaisa)." />
 
-**Autoencoders ke advantages**
+<Img id="class-autoencoders-type-undercomplete" caption="Type 3: undercomplete autoencoder (code input se chhota)." />
 
-- Bina labels ke seekhte hain, isliye huge unlabelled datasets use kar sakte hain.
-- Non-linear (curved) patterns seekhte hain, PCA ke ulat.
-- Flexible: ek hi idea se compression, denoising, anomaly detection aur feature learning hota hai.
+<Img id="class-autoencoders-type-overcomplete" caption="Type 4: overcomplete autoencoder (code bada, regularization chahiye)." />
 
-**Disadvantages**
+<Img id="class-autoencoders-type-sparse" caption="Type 5: sparse autoencoder (sirf kuch neurons active)." />
 
-- Rebuilt output **lossy** hota hai (paas, exact nahi), aur images ke liye aksar thoda blurry.
-- **Data-specific:** faces pe train hua model maps jaisi cheezon pe kharab karta hai. <Cite id="keras-blog-autoencoders" />
-- Agar code bahut bada ho ya network bahut powerful, toh **copy karke cheat** kar sakta hai, isliye restriction chahiye.
-- Code size aur depth chunne mein trial and error lagta hai, aur training mein time lagta hai.
+<Img id="class-autoencoders-type-contractive" caption="Type 6: contractive autoencoder (code mein bade changes penalize hote hain)." />
 
-## Linear autoencoder aur PCA
+<Img id="class-autoencoders-type-denoising" caption="Type 7: denoising autoencoder (noisy input, clean output)." />
 
-**Linear autoencoder** koi activation function use nahi karta, toh encoder aur decoder sirf weighted sums (matrix multiplications) karte hain. Ye sirf flat (straight-line, flat-plane) patterns dhoondh sakta hai.
+<Img id="class-autoencoders-type-cae" caption="Type 8: convolutional autoencoder (dense layers ke bajaye conv layers)." />
 
-**PCA se rishta.** **PCA** (principal component analysis) ek classic method hai jo un directions ko rakhta hai jinme data sabse zyada failta hai aur baaki ko hata deta hai. Chhote code wala linear autoencoder yahi seekhta hai: agar 2-D points ek seedhi line ke paas hain, toh ek 1-number code jo bataye "line pe kitni door" unhe achhe se rebuild karne ke liye kaafi hai.
+<Img id="class-autoencoders-type-vae" caption="Type 9: variational autoencoder (fixed code ke bajaye distribution μ, σ aur sampled z)." />
 
-<Box kind="exam">
-
-**Likhne wala key fact:** jab decoder linear ho aur loss mean squared error ho, toh undercomplete autoencoder **PCA wala hi subspace** span karna seekhta hai. Non-linear encoder aur decoder ke saath ye PCA ka zyada powerful, **non-linear generalization** ban jaata hai: curved patterns follow kar sakta hai. <Cite id="gfdl-ch14" loc="§14.1" /> <Cite id="wiki-pca" />
-
-</Box>
-
-| | PCA / linear autoencoder | Non-linear autoencoder |
-|---|---|---|
-| Patterns it can find | Flat (lines, planes) | Curved |
-| Training | PCA ka direct solution hai; linear AE gradient descent use karta hai | Gradient descent |
-| Power | Limited | Zyada, par overfit ho sakta hai |
-| Speed | Fast | Slower |
-
-## Undercomplete aur overcomplete autoencoders
+### Vanilla autoencoder
 
 <Box kind="definition">
 
-**Undercomplete autoencoder:** code input se **chhota** hai.
-**Overcomplete autoencoder:** code input se **bada** hai. (Same size wale code mein bhi overcomplete wali hi problem hai.)
+**Vanilla Autoencoder:** the basic (standard) autoencoder that learns to compress the input into a smaller representation (code) and then reconstruct the original input. It consists of Encoder → Bottleneck (Code) → Decoder. <Cite id="class-dl-chp3" loc="slide 9" />
 
 </Box>
 
-**Undercomplete: bottleneck seekhne pe majboor karta hai.** Agar aapko poori movie ek sentence mein batani ho, toh aap sirf important baat hi bologe. Chhote code ke saath network har value copy nahi kar sakta, toh use training data ke sabse important ("salient") features rakhne padte hain. Koi extra penalty nahi chahiye; ise plain reconstruction loss se train karte hain, kyunki narrow code khud copying rokta hai. <Cite id="gfdl-ch14" loc="§14.1" /> <Cite id="gfg-undercomplete-autoencoder" />
+"Vanilla" matlab basic ya standard version: ye sparse constraints, noise addition, convolution layers ya variational learning jaisi special techniques use nahi karta. <Cite id="class-dl-chp3" loc="slide 9" /> Ye image compression, feature extraction, dimensionality reduction, data representation learning aur data mein basic patterns seekhne ke liye use hota hai. **Disadvantages:** noise effectively nahi hata sakta, naya data generate nahi kar sakta, sahi design na ho to input memorize kar sakta hai, advanced autoencoders se kam powerful. <Cite id="class-dl-chp3" loc="slide 10" />
 
-<Box kind="pitfall">
+<Img id="class-autoencoders-vanilla-works" caption="Vanilla autoencoder kaise kaam karta hai: saat steps aur loss loop." />
 
-Sirf narrow code kaafi nahi hai. Agar encoder aur decoder bahut powerful (deep aur wide) hain, toh woh phir bhi "cheat" kar sakte hain: theory mein ek 1-number code bhi training set ke index jaisa kaam kar sakta hai, toh network useful features seekhne ki jagah ratta maar leta hai. Capacity sensible rakho. <Cite id="gfdl-ch14" loc="§14.1" />
+### Linear autoencoder
+
+<Box kind="definition">
+
+**Linear Autoencoder:** an autoencoder that uses only linear activation functions (or no activation function) in both the encoder and the decoder. It learns only linear relationships in the data. <Cite id="class-dl-chp3" loc="slide 11" />
 
 </Box>
 
-**Overcomplete: cheat karne ki jagah.** Input jitne ya usse bade code ke saath, ek simple network bhi har input value seedha aage pass karke perfect score le sakta hai aur kuch nahi seekhta. Isliye overcomplete autoencoder tabhi useful hai jab woh **regularized** ho: use "input copy karo" ke alawa ek extra rule milta hai. Iska fayda ek bada, rich code hai jo bahut saare features describe kar sakta hai. <Cite id="gfdl-ch14" loc="§14.2" /> <Cite id="gfg-overcomplete-autoencoder" />
+Vanilla autoencoder linear aur non-linear dono patterns seekh sakta hai, par kuch datasets mein sirf simple linear relationships hote hain, jahan non-linear activations unnecessary hain aur computation badhate hain. ReLU, Sigmoid, Tanh ya Leaky ReLU use nahi hota. <Cite id="class-dl-chp3" loc="slide 11" />
 
-<Figure caption="Left: undercomplete, code (2 neurons) input (5) se chhota hai, toh network ko summary banani padti hai. Right: overcomplete, code (6) input (3) se bada hai, toh extra rule ke bina woh bas copy kar sakta hai.">
-  <NetworkFigure layers="5,2,5" title="Undercomplete" labels="Input,Code,Output" />
-  <NetworkFigure layers="3,6,3" title="Overcomplete" labels="Input,Code,Output" />
-</Figure>
+**Mathematical idea.** Encoder: Code $Z = W_1 X + b_1$. Decoder: Output $\hat X = W_2 Z + b_2$, jahan $W$ weights hai aur $b$ bias. Kahin bhi activation function use nahi hota. <Cite id="class-dl-chp3" loc="slide 12" />
+
+<Img id="class-autoencoders-linear-math" caption="Linear autoencoder: Z = W1 X + b1 aur X̂ = W2 Z + b2, bina activation function ke." />
+
+**PCA se relationship.** Linear autoencoder Principal Component Analysis jaisa hi behave karta hai: dono dimensions kam karte hain, important information preserve karte hain aur data compress karte hain. Difference ye hai ki linear autoencoder neural-network based hai, training se seekhta hai aur deep networks tak extend ho sakta hai, jabki PCA ek statistical technique hai jo mathematical decomposition use karti hai aur sirf linear dimensionality reduction tak limited hai. <Cite id="class-dl-chp3" loc="slide 12" />
+
+<Img id="class-autoencoders-linear-pca" caption="Linear autoencoder ka PCA se relationship." />
+
+**Advantages:** simple architecture, fast training, low computational cost, implement karna aasan. **Disadvantages:** sirf linear relationships seekhta hai, complex non-linear patterns capture nahi kar sakta, real-world image data ke liye kam accurate. Apple example mein sirf brightness changes (linear) achhe se kaam karte hain; alag backgrounds, rotations aur shapes (non-linear) se reconstruction kharab aati hai. <Cite id="class-dl-chp3" loc="slides 11 and 12" />
+
+### Undercomplete autoencoder
+
+**Problem.** Vanilla autoencoder bina meaningful features seekhe input ko seedha output mein copy kar sakta hai. Agar network ke paas enough neurons hain to wo data samajhne ke bajaye memorize kar sakta hai. Humein network ko sirf sabse important information seekhne par majboor karne ka tareeka chahiye. <Cite id="class-dl-chp3" loc="slide 13" />
+
+<Box kind="definition">
+
+**Undercomplete Autoencoder:** an autoencoder in which the hidden layer (Bottleneck/Code) has fewer neurons than the input layer. Because of this smaller bottleneck, the network is forced to compress the data and keep only the important features. <Cite id="class-dl-chp3" loc="slide 13" />
+
+</Box>
+
+Ise "undercomplete" isliye kehte hain kyunki **Code Size < Input Size**. Example: Input layer 784 neurons, bottleneck 64 neurons, output layer 784 neurons: bottleneck input se chhota hai. <Cite id="class-dl-chp3" loc="slide 13" /> Textbook ise yun samjhata hai: "the simplest architecture for constructing an autoencoder is to constrain the number of nodes present in the hidden layer(s) of the network, limiting the amount of information that can flow through the network". Reconstruction error ke hisaab se network ko penalize karke model input ke sabse important attributes seekhta hai. <Cite id="class-dl-m3" loc="p. 12" />
+
+<Img id="class-autoencoders-under-definition" caption="Undercomplete autoencoder: definition, humein ye kyun chahiye, aur ise undercomplete kyun kehte hain." />
+
+**Kaise kaam karta hai.** (1) Input encoder mein jaata hai. (2) Encoder information compress karta hai. (3) Bottleneck sirf important features store karta hai. (4) Decoder original input reconstruct karta hai. (5) Loss calculate hota hai. (6) Weights backpropagation se update hote hain. <Cite id="class-dl-chp3" loc="slide 13" />
+
+<Img id="class-autoencoders-under-working" caption="Undercomplete autoencoder: chhe steps aur training loop." />
+
+<Img id="class-autoencoders-under-architecture" caption="Undercomplete autoencoder ka architecture: 784 → 64 → 784, goal Input ≈ Output kam neurons ke saath." />
+
+<Img id="class-autoencoders-under-fruit" caption="Fruit example: original apple image mein shape, colour, background aur chhote details hain; bottleneck sirf important information (shape, colour) rakhta hai." />
+
+**Main idea.** Bottleneck network ko memorize ke bajaye seekhne par majboor karta hai: sirf sabse useful information guzarti hai. Example: 100 input features, bottleneck 20, aur 100 output features: model ko 100 features sirf 20 mein compress karne hain, jisse sabse informative features seekhne ko encourage milta hai. <Cite id="class-dl-chp3" loc="slide 14" />
+
+<Img id="class-autoencoders-under-bottleneck" caption="Bottleneck network ko memorize ke bajaye seekhne par majboor karta hai." />
+
+**Advantages:** meaningful features seekhta hai, data efficiently compress karta hai, input ki simple copying rokta hai, overfitting kam karta hai, train karna aasan. **Disadvantages:** bahut chhota bottleneck important information kho sakta hai, reconstruction quality ghat sakti hai, bottleneck size chunna important hai. <Cite id="class-dl-chp3" loc="slide 14" /> Ye image compression, feature extraction, dimensionality reduction, data representation learning aur deep networks ko pre-train karne ke liye use hota hai. <Cite id="class-dl-chp3" loc="slide 13" />
+
+Textbook ek caution add karta hai: undercomplete autoencoder mein explicit regularization term nahi hota, to ye sunishchit karne ka ek hi tareeka hai ki wo memorize nahi kar raha, hidden nodes ki sankhya restrict karna. Deep autoencoders ke liye encoder aur decoder ki capacity bhi matter karti hai: agar wo kaafi powerful hon to ek-node bottleneck bhi memorize kar sakta hai. <Cite id="class-dl-m3" loc="p. 15" />
+
+| | Undercomplete | Vanilla |
+|---|---|---|
+| Bottleneck | Input se chhota | Basic architecture; size specifically constrained nahi |
+| Purpose | Data compression force karta hai | Strongly compress kar bhi sakta hai, nahi bhi |
+| Kya seekhta hai | Important features | Reconstruction ka basic version |
+| Risk | Bottleneck bahut chhota ho to information kho sakti hai | Bada ho to input copy kar sakta hai |
+
+<Cite id="class-dl-chp3" loc="slide 14" />
+
+### Overcomplete autoencoder
+
+<Box kind="definition">
+
+**Overcomplete Autoencoder:** an autoencoder in which the hidden layer (Code/Bottleneck) has more neurons than the input layer. This larger hidden layer allows the network to learn more detailed feature representations. It is called overcomplete because **Code Size > Input Size**. <Cite id="class-dl-chp3" loc="slide 15" />
+
+</Box>
+
+Example: 784 input neurons, 1024 bottleneck neurons, 784 output neurons. Ye richer feature representations seekhne, zyada information preserve karne, fine details capture karne aur reconstruction quality improve karne mein help karta hai. <Cite id="class-dl-chp3" loc="slide 15" /> **Catch:** hidden layer mein input se zyada neurons hain, to network ke paas input memorize karne ki capacity hai, isliye **regularization techniques (sparse regularization, dropout, noise injection) add ki jaati hain** taaki wo copy karne ke bajaye meaningful features seekhe. Textbook ke words mein, overcomplete case mein "even a linear encoder and linear decoder can learn to copy the input to the output without learning anything useful about the data distribution". <Cite id="class-dl-chp3" loc="slides 16 and 17" />
+
+<Img id="class-autoencoders-over-definition" caption="Overcomplete autoencoder: definition aur key point (input se zyada neurons)." />
+
+<Img id="class-autoencoders-over-example" caption="Example: 784 → 1024 → 784, bottleneck input se bada hai." />
+
+<Img id="class-autoencoders-over-architecture" caption="Overcomplete autoencoder ka architecture: wo detailed features seekhta hai jabki Input ≈ Output." />
+
+<Img id="class-autoencoders-over-main-idea" caption="Main idea: bada code memorize kar sakta hai, to regularization (sparse, dropout, noise injection) add hoti hai." />
+
+<Img id="class-autoencoders-shapes" caption="Shallow aur deep, undercomplete aur overcomplete autoencoders (textbook ka figure)." />
+
+**Advantages:** rich feature representations seekhta hai, better reconstruction quality, zyada information preserve, complex datasets ke liye useful. **Disadvantages:** input memorize kar sakta hai, overfitting ka zyada risk, usually regularization chahiye, undercomplete se computationally zyada expensive. <Cite id="class-dl-chp3" loc="slide 16" />
+
+**Sum 3: undercomplete ya overcomplete?** <Cite id="class-dl-chp3" loc="slides 13 and 15" />
+
+<Sum>
+
+<Given>
+
+Teen autoencoders, har ek mein 784 input values: (a) code 64, (b) code 1024, (c) code 784.
+
+</Given>
+
+<Find>
+
+kaun undercomplete hai aur kaun overcomplete.
+
+</Find>
+
+<Steps>
+
+1. **(a)** $64 < 784$: code input se chhota, to **undercomplete**.
+2. **(b)** $1024 > 784$: code input se bada, to **overcomplete**.
+3. **(c)** $784 = 784$: code na chhota na bada; ye undercomplete nahi hai (compress karne par majboor nahi).
+
+</Steps>
+
+<Answer>
+
+(a) undercomplete, (b) overcomplete, (c) koi nahi (plain vanilla design). (a) ka compression ratio $784 \div 64 = 12.25$ hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Rule: code size $k$ ko input size $n$ se compare karo: $k < n$ undercomplete, $k > n$ overcomplete. (c) borderline case hai jiska naam class sheets nahi deti.
+
+</Box>
+
+</Sum>
 
 | | Undercomplete | Overcomplete |
 |---|---|---|
-| Code size | Input se chhota | Input se bada (ya barabar) |
-| What stops copying | Narrow bottleneck | Add kiya gaya regularizer (sparsity, noise, contraction) |
-| Advantage | Simple, extra penalty nahi, compression deta hai | Rich, detailed features |
-| Disadvantage | Bahut narrow toh detail khota hai; bahut powerful toh phir bhi ratta maar sakta hai | Regularize na karo toh identity (pure copy) seekh leta hai |
-| Typical use | Compression, dimensionality reduction | Doosre task ke liye features |
+| Hidden layer size | Input se kam neurons ($k < n$) | Input se zyada neurons ($k > n$) |
+| Purpose | Compression force karta hai | Richer representations seekhta hai par regularize na ho to input memorize kar sakta hai |
+| Information passed | Sirf important information guzarti hai | Input se zyada information pass kar sakta hai |
+| Regularization ki zaroorat | Memorization ka kam risk | Memorization ka high risk; regularization chahiye (sparse, dropout, weight decay) |
 
-## Autoencoders mein regularization
+<Cite id="class-dl-chp3" loc="slides 14 and 16" />
 
-**Ye kya hai.** Sirf code chhota karne ki jagah, **regularized autoencoder** loss mein ek doosra goal add karta hai, taaki network ko input rebuild bhi karna pade **aur** koi aur achhi property bhi rakhni pade. Words mein: **total loss = reconstruction error + ek penalty**. (Book ke symbols mein, $J = L(x, g(f(x))) + \Omega$, jahan $\Omega$, "omega", penalty hai.) <Cite id="gfdl-ch14" loc="§14.2" />
+## Regularized autoencoders
 
-**Ye kyun zaroori hai.** Isse hum bada (overcomplete bhi) code use kar sakte hain bina network ke seedha copy kiye. Extra rule decide karta hai ki kis tarah ke features seekhe jaayenge.
+Textbook inhe aise autoencoders kehta hai jo code dimension aur encoder-decoder ki capacity chunne ki ability dete hain. Encoder aur decoder ko shallow aur code size ko chhota rakhkar model capacity limit karne ke bajaye, regularized autoencoders **aisa loss function use karte hain jo model ko input ko output mein copy karne ki ability ke alawa aur properties rakhne ke liye encourage karta hai**: representation ki sparsity, representation ke derivative ki smallness, aur noise ya missing inputs ke prati robustness. Regularized autoencoder non-linear aur overcomplete ho sakta hai phir bhi data distribution ke baare mein kuch useful seekh sakta hai, chahe uski capacity trivial identity function seekhne jitni ho. <Cite id="class-dl-chp3" loc="slide 29" />
 
-**Practice mein use hone wali teen achhi properties** (har ek se ek syllabus type banta hai):
+Teacher ki wajah: autoencoder ka kaam input ko jitna accurately ho sake reconstruct karna hai; agar model bahut powerful hai to wo useful features seekhne ke bajaye training data memorize kar sakta hai, isliye hum regularization use karte hain. <Cite id="class-dl-chp3" loc="slide 31" />
 
-| Property wanted | Type |
-|---|---|
-| Noise ya missing values se robust | Denoising |
-| Sirf kuch code neurons active | Sparse |
-| Chhote input changes pe code mushkil se badle | Contractive |
+| Regularization | Idea | Kahan use hota hai |
+|---|---|---|
+| **L1** | Weights ki absolute values par penalty; kuch weights zero ya zero ke kareeb ("don't use unnecessary weights") | General autoencoders |
+| **L2** | Weights ki squared values par penalty ("keep the weights small") | General autoencoders |
+| **Sparse regularization** | Sirf kuch neurons active hon, zyadatar activations zero ke kareeb | Sparse autoencoder |
+| **Denoising regularization** | Input mein jaan-boojh kar noise add; model wo important features seekhta hai jo kuch information damage hone par bhi bache rahein | Denoising autoencoder |
+| **Contractive regularization** | Encoder ko aisi representations banane ke liye encourage karta hai jo input ke chhote changes ke prati kam sensitive hon | Contractive autoencoder |
 
-Module 2 ki normal tricks bhi kaam karti hain, jaise weight decay aur dropout. <Cite id="gfdl-ch7" />
+<Cite id="class-dl-chp3" loc="slide 31" />
 
-```mermaid
-%% caption: Syllabus ki autoencoder family. Undercomplete type code size se control hota hai; baaki regularized hain aur bada code use kar sakte hain.
-flowchart TD
-  A["Autoencoder"] --> U["Undercomplete: chhota code"]
-  A --> O["Overcomplete: bada code"]
-  A --> RG["Regularized: loss plus penalty"]
-  O --> RG
-  RG --> DN["Denoising: noisy input, clean target"]
-  RG --> SP["Sparse: kam active code neurons"]
-  RG --> CT["Contractive: steady code"]
-```
+**Important clarification (teacher ki).** L1 aur L2 regularization **techniques** hain; Sparse, Denoising, Contractive, VAE, Convolutional wagairah autoencoder **variants/types** hain. Ye mat kaho "L1 ek type ka autoencoder hai aur L2 doosra type". <Cite id="class-dl-chp3" loc="slide 31" />
 
-## Denoising autoencoder (DAE)
+<Img id="class-autoencoders-reg-l1-l2" caption="Autoencoders mein regularization: L1 (don't use unnecessary weights) aur L2 (keep the weights small)." />
 
-**Ye kya hai.** Denoising autoencoder ko input ki ek **kharab (noisy) copy** di jaati hai aur use **clean original** output karna sikhaya jaata hai. <Cite id="gfdl-ch14" loc="§14.2.2" />
+<Img id="class-autoencoders-reg-types" caption="Sparse, denoising aur contractive regularization aur har ek kis autoencoder mein use hoti hai." />
 
-**Analogy.** Teacher aapko ek page deta hai jisme kuch words smudge ho gaye hain aur kehta hai poora page likho. Aap ye tabhi kar sakte ho jab aapko language samajh aati ho, letters copy karke nahi.
-
-**Ye kyun zaroori hai.** Bade code wala plain autoencoder seedha copy kar sakta hai. Agar input kharab hai par target clean hai, toh copy karne se damage wapas aata hai aur punish hota hai, isliye network ko data ka real structure seekhna padta hai.
-
-**Kaise kaam karta hai, step by step**
-
-1. Ek clean input lo.
-2. Use ek random rule se **corrupt** karo: ya toh values ka ek random hissa zero kar do (**masking noise**, original paper mein use hua <Cite id="vincent2008" />) ya chhota random **Gaussian noise** add karo. <Cite id="gfdl-ch14" loc="§14.5.1" />
-3. Noisy copy ko encoder se pass karke code lo, aur decoder se output.
-4. Output aur **clean** input (noisy wala nahi) ke beech loss nikalo.
-5. Backpropagate karke update karo. Har baar jab example dikhao, **fresh noise** daalo, taaki network same kharab copy do baar na dekhe.
-
-**Formula (pehle words mein).** "Input corrupt karo, corrupted copy ko encode aur decode karo, phir clean input se compare karo": $J = L(x, g(f(\tilde{x})))$, jahan $\tilde{x}$ ("x tilde") corrupted input hai. <Cite id="gfdl-ch14" loc="§14.5" />
-
-<Img id="img-dl-n2-ae-denoise" caption="Denoising autoencoder ko noisy digit milta hai aur use saaf digit nikaalna sikhaya jaata hai, isliye uska code sirf asli shape rakhta hai." />
-
-```mermaid
-%% caption: Denoising autoencoder ki training. Noise sirf input mein add hota hai; loss output ko clean input se compare karta hai.
-flowchart LR
-  X["Clean input x"] --> C["Noise add karo ya kuch values mask karo"]
-  C --> XT["Noisy input x̃"]
-  XT --> E["Encoder f"]
-  E --> H["Code h"]
-  H --> D["Decoder g"]
-  D --> R["Output r"]
-  R --> L["Loss: r ko clean x se compare karo"]
-  X --> L
-```
-
-**Ye kaam kyun karta hai.** Real data (faces, digits) saare possible inputs ke space ke andar ek patli, curved surface ke paas hota hai, jise **manifold** kehte hain. Noise point ko us surface se door dhakelta hai; DAE use wapas laana seekhta hai, toh use seekhna padta hai ki real data kahan rehta hai. <Cite id="gfdl-ch14" loc="§14.5" />
-
-**Advantages:** robust features seekhta hai; bade code ke saath bhi seedha copy nahi seekhta; noise seedha hataata hai; stacked DAEs deep networks ko pretrain karne ka ek early tareeka the. <Cite id="vincent2010" />
-**Disadvantages:** noise ka type aur amount chunna padta hai (bahut kam kuch nahi sikhata, bahut zyada signal hi barbaad kar deta hai); sirf usi tarah ka noise hataata hai jispe train hua; output blurry ho sakta hai.
-
-**Applications:** noisy photos, purane scans aur audio saaf karna; robust feature learning; pretraining. <Cite id="keras-denoising-autoencoder" /> <Cite id="gfg-denoising-autoencoder" /> <Cite id="av-denoising-autoencoder" />
-
-Exam mein English mein likho: "A denoising autoencoder is trained to reconstruct the clean input from a corrupted copy, so it cannot simply copy and must learn robust features."
+<Img id="class-autoencoders-reg-relate" caption="Har regularization autoencoder types se kaise judti hai, aur very easy flow: autoencoder, reconstruction loss, overfitting?, regularization." />
 
 ## Sparse autoencoder
 
-**Ye kya hai.** Ek autoencoder jiska code bada ho sakta hai, par kisi bhi ek input ke liye **sirf kuch code neurons active ho sakte hain**; baaki zero ya zero ke bahut paas rehte hain. <Cite id="gfdl-ch14" loc="§14.2.1" />
+**Problem.** Overcomplete autoencoder mein hidden layer mein bahut neurons hote hain, to network useful features seekhne ke bajaye input ko simply memorize ya copy kar sakta hai. Humein aisa method chahiye jo network ko ek samay mein sirf kuch hi neurons use karne par majboor kare. <Cite id="class-dl-chp3" loc="slide 19" />
 
-**Analogy.** Ek bade hospital mein bahut saare specialists hote hain. Tooti haddi ke liye sirf bone doctor aur X-ray technician kaam karte hain; baaki chup rehte hain. Har specialist ek tarah ke case mein expert ban jaata hai. Waise hi har code neuron ek particular pattern (ek edge, ek stroke, ek texture) pe respond karna seekhta hai.
+<Box kind="definition">
 
-**Ye kyun zaroori hai.** Isse bina copying ke ek bada, rich code milta hai, aur features samajhna aasaan hota hai kyunki har neuron ka ek matlab hota hai.
-
-**Kaise kaam karta hai**
-
-1. Input ko normal tareeke se encode karo.
-2. Loss mein ek **sparsity penalty** add karo jo badhti hai jab bahut saare code neurons active hon. Dhyan do, penalty **activations** (code neurons ke outputs) pe hai, weights pe nahi.
-3. Ab training "achha rebuild karo" aur "kam se kam neurons use karo" ke beech balance karti hai, toh har input neurons ka ek chhota, alag group on karta hai.
-
-**Do common penalties (words mein).** Theory answer ke liye words kaafi hain; formula tabhi likho jab question maange.
-
-- **L1 penalty:** code values ke size add karo (minus sign ignore karke) aur ek strength number $\lambda$ ("lambda") se multiply karo: $\Omega = \lambda\sum_j |h_j|$. Har active neuron cost badhata hai, toh training zyaadatar code values ko zero ya zero ke bahut paas dhakel deti hai.
-- **KL-divergence penalty:** ek chhota target chuno ki har code neuron average mein kitni baar active hona chahiye (jaise 0.05, matlab lagbhag 5% time). Training set pe har neuron ki actual average activity measure karo, aur ek penalty add karo jo badhti hai jitna woh target se door jaaye. Jab average target ke barabar ho toh penalty zero hai. <Cite id="ufldl-autoencoders" /> <Cite id="wiki-kl-divergence" />
-
-**Chhota worked example (L1 penalty).**
-
-Given: code $h = [0.5, 0, -0.2, 0]$ aur strength $\lambda = 0.1$.
-To find: L1 sparsity penalty $\Omega$.
-
-1. Har code value ka size lo, sign hata ke, kyunki negative activity bhi activity hi hai: $0.5, 0, 0.2, 0$.
-2. Inhe add karo, code ki total activity paane ke liye: $0.5 + 0 + 0.2 + 0 = 0.7$.
-3. Strength se multiply karo, jo batati hai sparsity kitni important hai: $0.1 \times 0.7 = 0.07$.
-
-**Penalty $\Omega = 0.07$** (koi unit nahi).
-
-<Box kind="verify">
-
-Pehle multiply, phir add: $0.1 \times 0.5 = 0.05$ aur $0.1 \times 0.2 = 0.02$, aur $0.05 + 0.02 = 0.07$. Same answer. Sign check: L1 penalty kabhi negative nahi ho sakti, aur $0.07 > 0$.
+**Sparse Autoencoder:** an autoencoder that forces only a small number of hidden neurons to be active at a time, while most neurons remain inactive. Goal: learn important and meaningful features instead of memorizing the input. <Cite id="class-dl-chp3" loc="slide 19" />
 
 </Box>
 
-<Img id="img-dl-n2-ae-sparse" caption="Sparse autoencoder: kisi bhi ek input ke liye sirf kuch hidden units (bhare hue) active hote hain." />
+"Sparse" matlab bahut kam active neurons. Example: 100 neurons ki hidden layer jisme sirf 5 se 10 active hain aur baaki inactive; isliye representation ko sparse kehte hain. <Cite id="class-dl-chp3" loc="slide 19" />
 
-<Figure caption="6 neurons ke overcomplete code wala sparse autoencoder. Is ek input ke liye sirf 2 code neurons active hain; cross kiye hue inactive hain (zero ke paas). Alag input alag kuch neurons on karega.">
-  <NetworkFigure layers="4,6,4" title="Only a few code neurons fire" labels="Input,Code h,Output" dropped="1:1,1:2,1:4,1:5" />
-</Figure>
+Textbook: sparse autoencoders "an alternative method for introducing an information bottleneck **without requiring a reduction in the number of nodes** at our hidden layers" dete hain. Iske bajaye loss function **layer ki activations ko penalize** karta hai, to kisi bhi observation ke liye network sirf kuch neurons activate karke kaam karta hai. Ye regularization ka alag approach hai, kyunki hum normally network ke weights regularize karte hain, activations nahi. Kaun se neurons activate honge ye **data-dependent** hai: alag inputs alag nodes activate karte hain. <Cite id="class-dl-m3" loc="p. 17" />
 
-**Advantages:** bina copying ke rich, overcomplete code; neurons specialise karte hain, toh features samajhna aasaan; classification ke liye achhe features.
-**Disadvantages:** tune karne ke liye extra settings (target activity, penalty strength); bahut strong penalty reconstruction kharab karti hai; KL wale form ko bahut saare examples pe average activity chahiye.
+<Img id="class-autoencoders-sparse-definition" caption="Sparse autoencoder: definition aur goal (seekho, memorize mat karo)." />
 
-**Applications:** classifiers ke liye feature learning, images aur text mein parts ya patterns dhoondhna. <Cite id="gfg-sparse-autoencoder" />
+<Img id="class-autoencoders-sparse-need" caption="Sparse autoencoders humein kyun chahiye: memorization rokna, overfitting kam, meaningful features seekhna, overcomplete hidden layer allow karna." />
 
-## Contractive autoencoder (CAE)
+**Kaise kaam karta hai** (teacher ke chhe steps): <Cite id="class-dl-chp3" loc="slide 19" />
 
-**Ye kya hai.** Ek autoencoder jiske code ko **steady** rehna padta hai: agar input bas thoda sa badle, toh code mushkil se badalna chahiye. <Cite id="rifai2011" />
+1. Input encoder mein jaata hai.
+2. Encoder hidden layer mein activations banata hai.
+3. Sparsity constraint / penalty zyadatar neurons ko inactive rakhne ke liye encourage karti hai.
+4. Sirf kuch neurons strongly active hote hain.
+5. Decoder input reconstruct karta hai.
+6. **Reconstruction loss + sparsity penalty** minimize hote hain.
 
-**Analogy.** Car ka suspension. Road ke chhote bumps (input mein chhote, unimportant changes) passenger seat (code) ko mushkil se hilane chahiye. Road ka asli turn phir bhi car ko ghumata hai.
+<Img id="class-autoencoders-sparse-works" caption="Sparse autoencoder kaise kaam karta hai: Loss = Reconstruction Loss + Sparsity Penalty." />
 
-**Ye kyun zaroori hai.** Chhote bekaar changes (ek pixel ka noise, thoda brightness change) se ye nahi badalna chahiye ki network input ko kya "samajhta" hai. Steady code robust features deta hai.
+<Img id="class-autoencoders-sparse-idea" caption="Main idea: input, encoder, sirf kuch active neurons wali sparse hidden layer, decoder, reconstructed output." />
 
-**Kaise kaam karta hai**
+**Sparse representation aur sparsity kaise enforce hoti hai.** Sparsity ke bina bahut neurons active hote hain; sparsity ke saath sirf kuch active aur baaki inactive (near-zero). Loss function mein sparsity penalty add hoti hai: **Total Loss = Reconstruction Loss + Sparsity Penalty**, to model input sahi reconstruct karne aur zyadatar hidden neurons ko inactive rakhne ke liye encourage hota hai. Apple example mein hidden layer "round shape", "red colour", "smooth texture", "stem" ko alag neurons ki tarah seekh sakti hai, aur ek particular image ke liye sirf kuch activate hote hain. <Cite id="class-dl-chp3" loc="slide 20" />
 
-1. Input ko normal tareeke se encode karo.
-2. Measure karo ki code kitna **sensitive** hai: har code value aur har input value ke liye, jab woh input value thoda hilaao toh code value kitni badalti hai? Ye sensitivities ek table banati hain jise **Jacobian** kehte hain. <Cite id="wiki-jacobian" />
-3. Ek penalty add karo jo us table ki saari entries ke squares ka sum hai (iska squared **Frobenius norm**).
-4. Training do kheenchon ke beech balance karti hai: reconstruction loss chahta hai ki code badle jab input sach mein badle, aur penalty chahti hai ki woh kam se kam badle. Result: code un directions ko follow karta hai jinme real data badalta hai aur baaki ko ignore karta hai.
+<Img id="class-autoencoders-sparse-representation" caption="Sparse representation: sparsity ke bina bahut neurons active, sparsity ke saath sirf kuch active." />
 
-**Formula (sirf agar maanga jaaye):** total loss = reconstruction loss + strength $\times$ (squared sensitivities ka sum), yaani $J = L(x, g(f(x))) + \lambda\left\lVert \dfrac{\partial h}{\partial x}\right\rVert_F^2$, jahan $\lambda$ strength set karta hai. "Contractive" naam ka matlab: inputs ka ek chhota neighbourhood codes ke aur bhi chhote neighbourhood pe map hota hai. <Cite id="gfdl-ch14" loc="§14.7" />
+<Img id="class-autoencoders-sparse-enforced" caption="Sparsity kaise enforce hoti hai: sparsity penalty loss mein add hoti hai." />
 
-**Advantages:** chhote changes se robust features; data ka shape (uska manifold) seekhta hai.
-**Disadvantages:** badi layers ke liye sensitivity table compute karna mehenga hai; tune karne ke liye ek aur setting ($\lambda$).
+<Img id="class-autoencoders-sparse-fruit" caption="Fruit example: ek apple image ke liye sirf round shape, red colour aur smooth skin ke neurons active hain." />
 
-**Applications:** robust feature extraction, pretraining, noisy data pe classification. <Cite id="gfg-contractive-autoencoder" />
+### Sparsity constraint lagane ke do tareeke
 
-**DAE versus CAE.** Kareebi cousins. Denoising autoencoder **reconstruction** ko input ke chhote par finite changes se resist karwata hai. Contractive autoencoder **code (features)** ko input ke bahut hi chhote changes se resist karwata hai. <Cite id="gfdl-ch14" loc="§14.7" />
+Textbook: dono mein har training batch ke liye hidden layer activations naapi jaati hain aur excessive activations ko penalize karne ke liye loss mein ek term add hota hai. Do terms hain **L1 regularization** aur **KL divergence** (Kullback-Leibler divergence). <Cite id="class-dl-m3" loc="p. 19" />
 
-## Aur types jo dikh sakte hain
+- Activations par **L1 regularization** $\lambda \sum |a_j|$ (absolute activations ka sum) ke barabar penalty add karta hai, to activations zero ki taraf dhakel diye jaate hain.
+- **KL divergence** "measures and limits the average activation rate of hidden units in neural networks to keep activity low". Discrete distributions $P$ aur $Q$ ke liye: $D(P \| Q) = \sum P(x) \log \dfrac{P(x)}{Q(x)}$. <Cite id="class-dl-m3" loc="pp. 17 and 19" />
 
-- **Convolutional autoencoder:** encoder aur decoder mein dense layers ki jagah convolution layers use karta hai. Images ke liye best. <Cite id="keras-denoising-autoencoder" />
-- **Variational autoencoder (VAE):** encoder har code value ke liye ek average aur ek spread output karta hai, aur code unse sample hota hai, toh iska decoder naya data generate kar sakta hai. Ye zyada generative models mein aata hai. <Cite id="kingma2013-vae" /> <Cite id="gfg-vae" />
+Teacher ka poora loss $L = \lVert x - \hat x \rVert^2 + \lambda \sum_{j=1}^{k} KL(\rho \,\|\, \hat\rho_j)$ hai, jahan $\rho$ = desired sparsity (jaise 0.05), $\hat\rho_j$ = hidden neuron $j$ ki average activation aur $\lambda$ sparsity weight. <Cite id="class-dl-m3" loc="p. 18" />
 
-## Saare types side by side
+**Sum 4: L1 sparsity penalty (teacher ki activations).** <Cite id="class-dl-chp3" loc="slide 31" />
 
-| Type | Rule that stops copying | What it learns | Main use |
-|---|---|---|---|
-| Undercomplete | Code input se chhota | Sabse important features | Compression, dimensionality reduction |
-| Overcomplete | Code input se bada; regularizer chahiye | Rich features (sirf regularized ho toh) | Doosre task ke liye features |
-| Denoising | Noisy input, clean target | Robust features, noise kaise hataayein | Image aur audio cleaning |
-| Sparse | Kam code neurons active (activations pe penalty) | Ek neuron per pattern | Classification ke liye features |
-| Contractive | Chhote input changes pe code insensitive (derivatives pe penalty) | Real data directions follow karne wale features | Robust features |
+<Sum>
 
-## Application: image compression
+<Given>
 
-**Ye kya hai.** Autoencoder use karke image ko uske saare pixels ki jagah uske short code ke roop mein store ya send karna. Ye syllabus <Syl m="3" /> topic 3.3 hai.
+Sparse layer ki hidden activations: $0.9, 0, 0, 0.7, 0, 0, 0.8, 0$. Ek dense layer jisme 8 activations $0.5$ ki hain. $\lambda = 0.1$.
 
-**Ye kyun zaroori hai.** Images badi hoti hain. Ek $64 \times 64$ grey image 4096 numbers hai; agar code mein 256 numbers hain, toh store ya send karne ko 16 guna kam.
+</Given>
+
+<Find>
+
+har layer ka L1 sparsity penalty aur kitne neurons active hain.
+
+</Find>
+
+<Steps>
+
+1. **Sparse layer:** $\sum |a_j| = 0.9 + 0.7 + 0.8 = 2.4$. Penalty $= 0.1 \times 2.4 = 0.24$. Active neurons: 8 mein se 3.
+2. **Dense layer:** $\sum |a_j| = 8 \times 0.5 = 4.0$. Penalty $= 0.1 \times 4.0 = 0.40$. Active neurons: 8 mein se 8.
+
+</Steps>
+
+<Answer>
+
+Sparse layer par 0.24 aur dense layer par 0.40 penalty lagti hai, to penalty network ko sparse pattern ki taraf dhakelti hai jisme 8 mein se sirf 3 neurons active hain.
+
+</Answer>
+
+<Box kind="verify">
+
+$0.9 + 0.7 + 0.8 = 2.4$ aur $0.1 \times 2.4 = 0.24$. Dense layer ki total activation bada hai (4.0 vs 2.4), to badi penalty expected result hai.
+
+</Box>
+
+</Sum>
+
+**Sum 5: do distributions ke beech KL divergence (chhota check).** <Cite id="class-dl-m3" loc="p. 19" />
+
+<Sum>
+
+<Given>
+
+Do discrete distributions $P = (0.5, 0.5)$ aur $Q = (0.9, 0.1)$. Natural logarithm.
+
+</Given>
+
+<Find>
+
+$D(P \| Q) = \sum P(x) \ln \dfrac{P(x)}{Q(x)}$.
+
+</Find>
+
+<Steps>
+
+1. **Pehla term:** $0.5 \times \ln(0.5 / 0.9) = 0.5 \times (-0.588) = -0.294$.
+2. **Doosra term:** $0.5 \times \ln(0.5 / 0.1) = 0.5 \times 1.609 = 0.805$.
+3. **Jodo:** $-0.294 + 0.805 = 0.511$.
+
+</Steps>
+
+<Answer>
+
+$D(P \| Q) \approx 0.511$. Ye tabhi zero hota hai jab $P = Q$, to bada value matlab dono distributions zyada door hain.
+
+</Answer>
+
+<Box kind="verify">
+
+$Q = P = (0.5, 0.5)$ rakho: har term $0.5 \ln 1 = 0$, to $D = 0$. Formula distributions ke beech distance ki tarah behave karta hai (ye symmetric nahi hai, isliye ise divergence kehte hain).
+
+</Box>
+
+</Sum>
+
+**Sparse AE overcomplete se kaise alag hai:** sparse AE ki hidden layer bade ya chhote size ki ho sakti hai aur ek samay mein sirf kuch neurons active hote hain; overcomplete mein bada hidden layer hota hai, kai neurons active ho sakte hain aur wo memorize kar sakta hai. Sparse AE mein built-in sparsity regularization ka kaam karti hai. <Cite id="class-dl-chp3" loc="slides 17 and 19" /> Overcomplete ke liye ye useful kyun: "You have many neurons, but you can activate only a few at a time": overcomplete → many neurons → sparsity constraint → few active neurons → less memorization → better feature learning. <Cite id="class-dl-chp3" loc="slide 20" />
+
+<Img id="class-autoencoders-sparse-overcomplete" caption="Sparsity overcomplete autoencoders ke liye kyun useful hai: bahut neurons, ek samay mein sirf kuch active, kam memorization." />
+
+<Img id="class-autoencoders-sparse-how" caption="Sparse autoencoder kaise kaam karta hai: loss reconstruction loss plus sparsity penalty hai, aur backpropagation weights update karta hai." />
+
+<Img id="class-autoencoders-over-vs-sparse" caption="Overcomplete versus sparse autoencoder." />
+
+**Sparse autoencoders ke advantages:** meaningful features seekhta hai, memorization rokta hai, overfitting kam karta hai, overcomplete hidden layers ke saath achha, zyada useful aur interpretable representations. **Disadvantages:** extra sparsity constraint/penalty chahiye, sparsity level chunna important hai, training zyada complex ho sakti hai, bahut zyada sparsity important information kho sakti hai. <Cite id="class-dl-chp3" loc="slides 19 and 20" />
+
+## Denoising autoencoder
+
+**Problem.** Real-world data aksar noisy ya corrupted hota hai (random pixels, blur, sensor noise, distortions, missing information). Normal autoencoder jo bhi diya jaaye use reconstruct karna seekh sakta hai, noise samet. Humein aisa autoencoder chahiye jo noise hata kar original clean data recover kare. <Cite id="class-dl-chp3" loc="slide 23" />
+
+<Box kind="definition">
+
+**Denoising Autoencoder (DAE):** an autoencoder that receives a noisy input but is trained to reconstruct the original clean input. Main idea: Noisy Input → Autoencoder → Clean Output. It is called "denoising" because the network learns to remove unwanted noise from the input while keeping the important information. <Cite id="class-dl-chp3" loc="slide 23" />
+
+</Box>
+
+Textbook ki explanation: "The input seen by the autoencoder is not the raw input but a stochastically corrupted version. A denoising autoencoder is thus trained to reconstruct the original input from the noisy version." <Cite id="class-dl-m3" loc="p. 26" /> Aur: is approach se model training data ko memorize karne wala mapping nahi bana sakta, kyunki input aur target output ab same nahi; model input ko lower-dimensional manifold (wo high-density region jahan data concentrate hota hai) ki taraf map karne wala vector field seekhta hai, to agar ye manifold natural data ko accurately describe kare, "we've effectively canceled out the added noise". <Cite id="class-dl-m3" loc="p. 20" />
+
+<Img id="class-autoencoders-denoising-definition" caption="Denoising autoencoder: definition aur normal autoencoder se comparison (target original clean input hai)." />
+
+<Img id="class-autoencoders-denoising-problem" caption="Problem: real-world data noisy hota hai; normal autoencoder noise bhi reconstruct kar sakta hai." />
 
 ```mermaid
-%% caption: Autoencoder se image compression. Sirf short code store ya send hota hai; receiver ko approximate image wapas banane ke liye trained decoder chahiye.
+%% caption: Teacher ke diagram se denoising autoencoder ka overall process. Loss output ko clean input se compare karta hai, noisy se nahi.
 flowchart LR
-  A["Original image, 4096 pixels"] --> B["Encoder"]
-  B --> C["Code, 256 numbers"]
-  C --> D["Store ya send"]
-  D --> E["Decoder"]
-  E --> F["Rebuilt image, 4096 pixels"]
+  A["Clean input (target)"] --> B["Add noise: corrupt"]
+  B --> C["Noisy input"]
+  C --> D["Encoder"]
+  D --> E["Code"]
+  E --> F["Decoder"]
+  F --> G["Reconstructed output (clean)"]
+  G -->|"loss against the clean input"| H["Backpropagation: update weights"]
+  A -.-> H
 ```
 
-**Kaise kaam karta hai**
+<Cite id="class-dl-chp3" loc="slide 23" />
 
-1. Jis tarah ki images compress karni hain, unki bahut saari images pe ek undercomplete (usually convolutional) autoencoder train karo.
-2. **Compress:** image ko sirf encoder se chalao aur code rakh lo.
-3. Image ki jagah code **store ya send** karo.
-4. **Decompress:** code pe decoder chalao aur image wapas lo.
+<Img id="class-autoencoders-denoising-process" caption="Overall process: clean image, add noise, encoder, code, decoder, clean output; loss reconstructed output aur clean input ke beech calculate hota hai." />
 
-**Advantages:** us type ki images ke hisaab se tuned compression seekhta hai; ek trained model us tarah ki kisi bhi image pe kaam karta hai; denoising ke saath combine ho sakta hai.
-**Disadvantages:**
+**Key points.** Model ko diya gaya input noisy data hai; target/output original clean data hai; model seekhte hue noise automatically hataata hai; wo aise important features seekhta hai jo noise ke prati insensitive hain. **Remember: Input (noisy) ≠ Target (clean). Yahi main difference hai!** <Cite id="class-dl-chp3" loc="slide 23" />
 
-- Ye **lossy** hai: rebuilt image original ke paas hai, par exactly same nahi. <Cite id="keras-blog-autoencoders" />
-- Ye **data-specific** hai: faces pe train hua, faces achhe se compress karta hai par maps nahi. <Cite id="keras-blog-autoencoders" />
-- Dono sides ko trained decoder chahiye.
-- Simple autoencoder shayad hi kabhi JPEG ko beat karta hai. <Cite id="keras-blog-autoencoders" /> Dhyan se design kiye learned systems code ko round (quantize) bhi karte hain aur entropy coding se pack karte hain; inke baare mein report hua hai ki ye JPEG aur JPEG 2000 ko beat karte hain, ya JPEG 2000 ke competitive hain. <Cite id="balle2016" /> <Cite id="theis2017" /> <Cite id="wiki-image-compression" />
+**Training process.** Clean image lo, noise add karke noisy image banao, noisy image encoder ko do, decoder reconstructed image deta hai, aur use **clean target** se compare karo. Phir reconstruction loss, backpropagation, update weights. Loss functions MSE (mean squared error) ya MAE (mean absolute error) hain. <Cite id="class-dl-chp3" loc="slide 24" />
 
-## Aur applications
+<Img id="class-autoencoders-denoising-training" caption="Denoising autoencoder ka training process: reconstruction ko clean target se compare kiya jaata hai." />
 
-- **Dimensionality reduction:** plotting ya fast learning ke liye bahut saare features ko kuch mein squeeze karna. <Cite id="gfdl-ch14" loc="§14.9" /> <Cite id="wiki-dimensionality-reduction" />
-- **Feature learning aur pretraining:** trained encoder ko classifier ke pehle part ki tarah use karna. <Cite id="mlm-autoencoder-features" />
-- **Denoising:** DAE se noisy images ya signals saaf karna. <Cite id="tf-autoencoder" />
-- **Anomaly detection:** sirf normal data pe train karo (jaise normal bank transactions). Ajeeb input kharab rebuild hota hai, toh high reconstruction error use flag kar deta hai. <Cite id="tf-autoencoder" />
-- **Information retrieval:** short binary codes se database similar items bahut fast dhoondh leta hai (semantic hashing). <Cite id="gfdl-ch14" loc="§14.9" />
+<Img id="class-autoencoders-denoising-module" caption="Textbook ka figure: input image mein noise add karo, corrupted input autoencoder ko do, original image ke against reconstruction loss naapo." />
 
-Upar sab ke liye achhi further reading: <Cite id="gfg-autoencoders" /> <Cite id="gfg-autoencoder-types" /> <Cite id="gfg-autoencoder-working" /> <Cite id="ibm-autoencoder" /> <Cite id="av-autoencoders" /> <Cite id="tp-autoencoders" /> <Cite id="wiki-autoencoder" />, aur <Cite id="nptel-dl" /> ke autoencoder lectures.
+**Noise ke types** (teacher ke chaar): **Gaussian noise** (pixel values mein random variations), **salt-and-pepper noise** (random black aur white pixels), **masking noise** (kuch input values randomly hide), **speckle noise** (images mein aksar dikhne wala multiplicative noise). <Cite id="class-dl-chp3" loc="slide 24" />
 
-## Ye kahan poocha gaya
+<Img id="class-autoencoders-denoising-noise-types" caption="Noise ke types: Gaussian, salt-and-pepper, masking aur speckle noise." />
 
-| If the question says | What to write | Seen as |
+**Ye overfitting kyun kam karta hai?** Agar model input simply copy kare to wo noise bhi copy karega; par use clean version banane ke liye train kiya gaya hai. Isliye use har pixel memorize karne ke bajaye important underlying features seekhne padte hain. <Cite id="class-dl-chp3" loc="slide 24" />
+
+<Img id="class-autoencoders-denoising-why" caption="Denoising autoencoder overfitting kyun kam karta hai: wo input simply copy nahi kar sakta, kyunki target clean version hai." />
+
+**Sum 6: target clean input hai.** <Cite id="class-dl-chp3" loc="slide 24" />
+
+<Sum>
+
+<Given>
+
+Clean input $x = [0.2, 0.8]$. Noise add karne ke baad network ka input $\tilde x = [0.5, 0.4]$ hai. Network output $\hat x = [0.25, 0.75]$ deta hai.
+
+</Given>
+
+<Find>
+
+output ka clean input $x$ ke against MSE (sahi) aur noisy input $\tilde x$ ke against (galat target).
+
+</Find>
+
+<Steps>
+
+1. **Clean input ke against:** differences $0.2 - 0.25 = -0.05$ aur $0.8 - 0.75 = 0.05$; squares $0.0025$ aur $0.0025$; MSE $= 0.005 / 2 = 0.0025$.
+2. **Noisy input ke against:** differences $0.5 - 0.25 = 0.25$ aur $0.4 - 0.75 = -0.35$; squares $0.0625$ aur $0.1225$; MSE $= 0.185 / 2 = 0.0925$.
+
+</Steps>
+
+<Answer>
+
+Clean input ke against MSE $= 0.0025$ (chhota: noise hata diya gaya). Noisy input ke against $= 0.0925$. Denoising autoencoder pehle number ko chhota banane ke liye train hota hai, to uska output clean data ke close hota hai, noisy input ke nahi.
+
+</Answer>
+
+<Box kind="verify">
+
+$0.0925 / 0.0025 = 37$, to output clean input ke noisy input se 37 guna zyada kareeb hai. Isse dikhta hai ki output sach mein cleaned version hai.
+
+</Box>
+
+</Sum>
+
+**Advantages:** data se noise hataata hai, robust features seekhta hai, simple memorization kam karta hai, image restoration ke liye useful, generalization improve kar sakta hai; ise **data augmentation** ki tarah bhi use kiya ja sakta hai, kyunki restored images augmented data ki tarah use ho sakti hain. **Disadvantages:** suitable noisy training data chahiye, bahut zyada noise important information naqs kar sakta hai, noise ke saath useful details bhi hata sakta hai, sahi type aur level ka noise chunne ke liye domain knowledge lag sakti hai, training computationally zyada expensive ho sakti hai. <Cite id="class-dl-chp3" loc="slides 24 and 30" />
+
+| | Denoising autoencoder | Normal autoencoder |
 |---|---|---|
-| "Explain denoising autoencoder model" ya "What are denoising autoencoders?" | Definition, kyun zaroori, corrupt-phir-rebuild steps, flow diagram, masking ya Gaussian noise, advantages, uses | <PYQ id="2023-12/q1d" /> <PYQ id="2024-12/q1d" /> |
-| "What are undercomplete autoencoders?" | Code input se chhota, bottleneck important features pe majboor karta hai, PCA se link, zyada capacity ka risk, uses | <PYQ id="2024-05/q1d" /> |
-| "Main components of an autoencoder and its architecture" | Encoder, code, decoder, loss; labelled diagram; training steps; advantages aur uses | <PYQ id="2024-05/q3b" /> |
-| "Explain any three types of autoencoders" | Undercomplete, denoising aur sparse (ya contractive): idea, working, pros aur cons, use; comparison table | <PYQ id="2024-05/q5b" /> <PYQ id="2024-12/q5b" /> |
-| "Working of autoencoders and types in detail" | Pehle architecture aur training steps, phir undercomplete, overcomplete, denoising, sparse aur contractive; comparison table | <PYQ id="2025-05/q2b" /> |
+| Input | Noise / corrupted input | Clean input |
+| Target / output | Original clean input | Input ke same |
+| Purpose | Noise hataana aur clean data recover karna | Input ko jaisa hai waisa reconstruct karna |
+| Kya seekhta hai | Robust aur meaningful features | Noise bhi copy karna seekh sakta hai |
+| Use case | Noise removal, data cleaning | General representation learning |
+
+<Cite id="class-dl-chp3" loc="slide 23" />
+
+Teacher ka easy trick: **DAE = Denoise and Reconstruct Clean Data.** Applications: image denoising, image restoration, medical image processing, speech denoising, sensor noise hataana aur feature learning. <Cite id="class-dl-chp3" loc="slide 24" />
+
+## Contractive autoencoder
+
+**Problem.** Normal autoencoder input ke chhote changes ke prati bahut sensitive ho sakta hai. Brightness, position, pixel values ya noise mein ek tiny change bahut alag hidden representation bana sakta hai. Hum chahte hain ki autoencoder **stable features** seekhe jo input thoda badalne par zyada na badlein. <Cite id="class-dl-chp3" loc="slide 21" />
+
+<Box kind="definition">
+
+**Contractive Autoencoder:** an autoencoder that learns a representation that is insensitive to small changes in the input. In simple words: **small input change → small change in the encoded representation**. "Contract" means pull closer / make less sensitive. <Cite id="class-dl-chp3" loc="slide 21" />
+
+</Box>
+
+**Kaise kaam karta hai.** Contractive autoencoder mein ek additional penalty hoti hai jo encoder ko input thoda badalne par bahut zyada badalne se rokti hai. Training objective: **Total Loss = Reconstruction Loss + Contractive Penalty.** Contractive penalty hidden representation ko stable rakhne ke liye encourage karti hai. <Cite id="class-dl-chp3" loc="slide 21" />
+
+Textbook ka reasoning: bahut similar inputs ke liye learned encoding bhi bahut similar honi chahiye. Hum ise explicitly train kar sakte hain ye **require karke ki hidden layer activations ka derivative input ke respect mein chhota ho**. Ye denoising autoencoder jaisa hai, kyunki input ke chhote perturbations ko noise maana jaata hai. Book ke words: "denoising autoencoders make the reconstruction function (i.e. decoder) resist small but finite-sized perturbations of the input, while contractive autoencoders make the feature extraction function (i.e. encoder) resist infinitesimal perturbations of the input." <Cite id="class-dl-m3" loc="p. 22" />
+
+<Img id="class-autoencoders-contractive-problem" caption="Problem: normal autoencoder input ke ek tiny change ke prati bahut sensitive ho sakta hai." />
+
+<Img id="class-autoencoders-contractive-definition" caption="Contractive autoencoder: definition, ise contractive kyun kehte hain aur intuition." />
+
+<Img id="class-autoencoders-contractive-works" caption="Kaise kaam karta hai: Total Loss = Reconstruction Loss + Contractive Penalty." />
+
+<Img id="class-autoencoders-contractive-main-idea" caption="Main idea: input thoda badle to code sirf thoda badalta hai." />
+
+<Img id="class-autoencoders-contractive-diagram" caption="Kaise kaam karta hai (diagram): original input x aur thoda badla hua input x + Δx lagbhag same code dene chahiye." />
+
+**Mathematical idea.** Contractive autoencoder ek penalty add karta hai jo is par based hai ki encoder representation input ke changes ke prati kitna sensitive hai. Ek common form $L = L_{reconstruction} + \lambda \left\lVert \dfrac{\partial h}{\partial x} \right\rVert_F^2$ hai, jahan $h$ hidden representation hai, $x$ input, $\lambda$ contractive penalty ki strength, aur $\left\lVert \dfrac{\partial h}{\partial x} \right\rVert_F^2$ naapta hai ki hidden representation input ke prati kitni sensitive hai. Simple meaning: kam sensitivity → zyada stable features. <Cite id="class-dl-chp3" loc="slide 22" />
+
+<Img id="class-autoencoders-contractive-with-without" caption="Contractive constraint ke bina input ka chhota change bahut alag code deta hai (bahut sensitive); constraint ke saath code lagbhag same rehta hai." />
+
+<Img id="class-autoencoders-contractive-math" caption="Contractive penalty ka mathematical idea aur har symbol ka matlab." />
+
+<Img id="class-autoencoders-contractive-reconstruction" caption="Textbook ka figure: similar inputs ek neighbourhood ke andar constant output mein contract ho jaate hain, jo model ne training mein dekha uske hisaab se." />
+
+**Sum 7: ek-number contractive penalty (class files mein nahi hai; idea dikhane ke liye add kiya).** Ek weight wala encoder $h = w\,x$ lo, to slope $\partial h / \partial x = w$ hai.
+
+<Sum>
+
+<Given>
+
+Do encoders, $h = 0.5\,x$ aur $h = 3\,x$. Contractive strength $\lambda = 0.1$. Input $x = 1$ se $x = 1.1$ ho jaata hai.
+
+</Given>
+
+<Find>
+
+har encoder ke liye contractive penalty $\lambda (\partial h / \partial x)^2$ aur code mein change.
+
+</Find>
+
+<Steps>
+
+1. **Encoder 1 ($w = 0.5$):** penalty $= 0.1 \times 0.5^2 = 0.1 \times 0.25 = 0.025$. Code $0.5$ se $0.55$ hota hai, change $0.05$.
+2. **Encoder 2 ($w = 3$):** penalty $= 0.1 \times 3^2 = 0.1 \times 9 = 0.9$. Code $3$ se $3.3$ hota hai, change $0.3$.
+
+</Steps>
+
+<Answer>
+
+Encoder 1 ki penalty 0.025 aur code change 0.05; encoder 2 ki penalty 0.9 aur code change 0.3. Contractive penalty encoder 1 ko prefer karti hai, jiska code same input change ke liye kaafi stable hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Code change = slope $\times$ input change: $0.5 \times 0.1 = 0.05$ aur $3 \times 0.1 = 0.3$. Penalties ka ratio $0.9 / 0.025 = 36 = (3/0.5)^2$, jaisa hona chahiye.
+
+</Box>
+
+</Sum>
+
+**Advantages:** robust features seekhta hai, input ke chhote variations ke prati kam sensitive, stable representations banata hai, feature extraction ke liye useful. **Disadvantages:** basic autoencoder se zyada complicated, additional penalty term chahiye, sahi $\lambda$ chunna important hai, computationally zyada expensive. <Cite id="class-dl-chp3" loc="slide 22" />
+
+| | Sparse autoencoder | Contractive autoencoder |
+|---|---|---|
+| Kya karta hai | Kuch hi neurons active karta hai | Representation ko stable banata hai |
+| Kya use karta hai | Sparsity constraint | Contractive penalty $\lambda \lVert \partial h/\partial x \rVert_F^2$ |
+| Focus | Kaun se neurons activate hote hain? | Representation kitna badalti hai? |
+
+<Cite id="class-dl-chp3" loc="slide 22" />
+
+### Sparse, denoising aur contractive ki comparison
+
+| | Sparse | Denoising | Contractive |
+|---|---|---|---|
+| Idea | Sirf kuch hidden neurons active | Noisy input, clean target | Input mein chhota change, code mein chhota change |
+| Kya add hota hai | Activations par sparsity penalty (L1 ya KL divergence) | Input mein noise | Code ke derivative par contractive penalty |
+| Loss | Reconstruction loss + sparsity penalty | Clean input ke against reconstruction loss | Reconstruction loss + contractive penalty |
+| Main benefit | Memorization rokta hai; overcomplete layers ke saath kaam karta hai | Noise hataata hai; robust features | Stable features, chhote variations ke prati robust |
+| Easy memory trick | Few neurons ON | Dirty input se clean output | Codes ko paas kheencho |
+
+<Cite id="class-dl-chp3" loc="slides 19, 22 and 24" />
+
+## Convolutional autoencoder (CAE)
+
+**Problem.** Normal autoencoder fully connected layers use karta hai. Images ke liye ye efficient nahi: images mein spatial information hoti hai, paas ke pixels related hote hain, image flatten karne se 2D spatial structure khoti hai, aur fully connected layers ko bahut parameters chahiye. Humein images ke saath kaam karne ke liye specially designed autoencoder chahiye. <Cite id="class-dl-chp3" loc="slide 25" />
+
+<Box kind="definition">
+
+**Convolutional Autoencoder (CAE):** an autoencoder that uses convolutional layers in the encoder and decoder to learn and reconstruct image features. It is mainly used for image data. <Cite id="class-dl-chp3" loc="slide 25" />
+
+</Box>
+
+Encoder convolution aur pooling layers se bana hai jo features nikalti aur size kam karti hain; decoder upsampling / transposed convolution (deconvolution) aur convolution layers se image reconstruct karta hai. CAE spatial information preserve karta hai, image features automatically seekhta hai, fully connected networks se kam parameters use karta hai aur images compress, reconstruct aur denoise kar sakta hai. <Cite id="class-dl-chp3" loc="slides 25 and 26" /> Isme use hone wale convolution, max pooling aur flatten steps CNN ke note mein samjhaye gaye hain. <Cite id="class-dl-chp3" loc="slide 5" />
+
+<Img id="class-autoencoders-cae-definition" caption="Convolutional autoencoder: definition aur key idea (conv encoder, latent representation, deconv decoder)." />
+
+<Img id="class-autoencoders-cae-architecture" caption="CAE architecture aur working: encoder mein conv + pooling, chhota latent space, decoder mein upsampling / transposed conv." />
+
+<Img id="class-autoencoders-cae-why-conv" caption="Fully connected layers ke bajaye convolution kyun: flatten karne se spatial structure khoti hai, convolution use preserve karta hai." />
+
+**Advantages:** spatial information preserve karta hai, image data ke liye excellent, image features automatically seekhta hai, local patterns detect karne ke liye convolutional filters use karta hai, compression aur denoising ke liye useful. **Disadvantages:** mainly spatial/image data ke liye designed, basic autoencoder se zyada complex, training mein significant computational resources lag sakte hain, reconstruction fine details kho sakta hai. <Cite id="class-dl-chp3" loc="slide 26" />
+
+## Variational autoencoder (VAE)
+
+**Problem.** Normal autoencoder har input ke liye ek **fixed** latent representation seekhta hai (jaise apple image ka code [0.2, 0.7, 0.4]). Ye reconstruction ke liye useful hai par naya data generate karne ke liye naturally designed nahi hai. Agar hum chahte hain ki model training data jaisi nayi images banaye, to alag approach chahiye. <Cite id="class-dl-chp3" loc="slide 27" />
+
+<Box kind="definition">
+
+**Variational Autoencoder (VAE):** a generative autoencoder that learns a probability distribution in the latent space and can use it to generate new data similar to the training data. **Simple meaning:** VAE learns a distribution of data and samples from it to generate new data. <Cite id="class-dl-chp3" loc="slide 27" />
+
+</Box>
+
+Textbook: "A variational autoencoder (VAE) provides a probabilistic manner for describing an observation in latent space. Thus, rather than building an encoder which outputs a single value to describe each latent state attribute, we'll formulate our encoder to describe a **probability distribution** for each latent attribute." <Cite id="class-dl-m3" loc="p. 28" />
+
+**"Variational" kyun?** Ek fixed point ke bajaye encoder ek distribution seekhta hai jo **mean ($\mu$)** aur **variance ($\sigma^2$)** se describe hoti hai; to normal autoencoder mein Input → Encoder → Fixed code → Decoder → Output hota hai, jabki VAE mein Input → Encoder → $\mu$ aur $\sigma^2$ → latent space mein probability distribution → **ek point $z$ sample karo** → Decoder → Output. <Cite id="class-dl-chp3" loc="slide 27" />
+
+<Img id="class-autoencoders-vae-definition" caption="Variational autoencoder: definition aur uska simple meaning." />
+
+<Img id="class-autoencoders-vae-vs-normal" caption="Ise variational kyun kehte hain: normal autoencoder fixed code deta hai; VAE distribution (μ, σ²) deta hai aur usse ek point sample karta hai." />
+
+**Kaise kaam karta hai (high level).** Encoder $\mu$ aur $\sigma^2$ output karta hai; inse hum ek distribution banate hain; phir us distribution se ek point sample karte hain (random noise $\varepsilon$ use karke) aur decoder ko dete hain. <Cite id="class-dl-chp3" loc="slide 27" /> Textbook sheet mein sampling formula $z = \mu + \sigma \odot \varepsilon$ hai, $\varepsilon \sim N(0, I)$ ke saath: ye **reparameterization** hai (randomness $\varepsilon$ mein chali jaati hai taaki network ab bhi backpropagation se train ho sake). <Cite id="class-dl-m3" loc="p. 29" />
+
+<Img id="class-autoencoders-vae-how" caption="VAE high level par: encoder mean μ aur variance σ² output karta hai, sampling (random noise ε) decoder ke liye ek point deti hai." />
+
+<Img id="class-autoencoders-vae-architecture" caption="VAE ka main architecture: encoder (conv layers) → μ aur σ → latent distribution q(z|x) → sample z → decoder → reconstructed output." />
+
+<Img id="class-autoencoders-vae-steps" caption="VAE step by step: input, encoder μ aur σ deta hai, sampling, decoder." />
+
+<Img id="class-autoencoders-vae-infographic" caption="Textbook ki VAE sheet: encoder q(z|x), μ aur σ, sampling z = μ + σ ⊙ ε, decoder p(x|z), loss aur applications." />
+
+```mermaid
+%% caption: Variational autoencoder ka flow. Key idea hai distribution seekho, usse sample karo, decode karo, aur is tarah naya data generate karo.
+flowchart LR
+  A["Input"] --> B["Encoder"]
+  B --> C["Mean mu and variance sigma squared"]
+  C --> D["Probability distribution in latent space"]
+  D --> E["Sample z = mu + sigma x epsilon"]
+  E --> F["Decoder"]
+  F --> G["Reconstructed or newly generated output"]
+```
+
+<Cite id="class-dl-chp3" loc="slides 27 and 28" />
+
+**Sum 8: latent variable sample karna.** <Cite id="class-dl-m3" loc="p. 29" />
+
+<Sum>
+
+<Given>
+
+Ek latent attribute ke liye encoder $\mu = 0.5$ aur $\sigma = 0.2$ deta hai. $N(0, 1)$ se do random numbers $\varepsilon = 1.5$ aur $\varepsilon = -1$ hain.
+
+</Given>
+
+<Find>
+
+do sampled values $z = \mu + \sigma \varepsilon$.
+
+</Find>
+
+<Steps>
+
+1. **Pehla sample:** $z = 0.5 + 0.2 \times 1.5 = 0.5 + 0.3 = 0.8$.
+2. **Doosra sample:** $z = 0.5 + 0.2 \times (-1) = 0.5 - 0.2 = 0.3$.
+
+</Steps>
+
+<Answer>
+
+Same input do alag latent values deta hai, $z = 0.8$ aur $z = 0.3$, dono mean 0.5 ke aas-paas. Decoder ko dono se input achhe se reconstruct karna chahiye, jisse latent space smooth banta hai.
+
+</Answer>
+
+<Box kind="verify">
+
+Values mean ke lagbhag $1.5$ standard deviations ke andar hain: $|0.8 - 0.5| = 0.3 = 1.5 \times 0.2$ aur $|0.3 - 0.5| = 0.2 = 1 \times 0.2$.
+
+</Box>
+
+</Sum>
+
+### Reparameterization ki zaroorat kyun
+
+Random point sample karna aisi calculation nahi jisse backpropagation gradient guzaar sake. $z = \mu + \sigma \varepsilon$ likhne se random part ($\varepsilon$, jise gradient nahi chahiye) us part se alag ho jaata hai jo network seekhta hai ($\mu$ aur $\sigma$), to gradient encoder tak wapas flow kar sakta hai. (Class sheet formula dikhati hai aur kehti hai ki latent vector "sampled using reparameterization"; upar ki wajah standard hai aur short rakhi gayi hai kyunki class files ise aur samjhati nahi.) <Cite id="class-dl-m3" loc="p. 29" />
+
+### VAE loss function
+
+VAE do important losses use karta hai. **Total VAE Loss = Reconstruction Loss + KL Divergence Loss.** <Cite id="class-dl-chp3" loc="slide 28" />
+
+1. **Reconstruction loss:** check karta hai ki reconstructed output original input jaisa hai ya nahi (commonly MSE ya binary cross entropy).
+2. **KL divergence loss:** learned latent distribution ko standard normal distribution $N(0, 1)$ ke kareeb rakhta hai. Ye latent space ko smooth, continuous, well-organized aur sampling ke liye suitable banata hai.
+
+**KL divergence kyun chahiye?** KL term ke bina latent space irregular aur sample karne mein mushkil ho sakta hai; KL latent representations ko known distribution (commonly $N(0, 1)$) follow karne ke liye encourage karta hai, jisse naye points sample karna aur naya data generate karna aasan hota hai. <Cite id="class-dl-chp3" loc="slide 28" />
+
+<Img id="class-autoencoders-vae-loss" caption="VAE loss: reconstruction loss (MSE ya binary cross entropy) plus KL divergence loss; total VAE loss unka sum hai." />
+
+<Img id="class-autoencoders-vae-kl-why" caption="KL divergence kyun chahiye: iske bina latent space irregular hai; iske saath space smooth aur organized hai." />
+
+### Autoencoder versus VAE
+
+<Img id="class-autoencoders-vae-difference" caption="Normal autoencoder aur VAE ke beech sabse important difference." />
+
+| Feature | Normal autoencoder | Variational autoencoder (VAE) |
+|---|---|---|
+| Latent representation | Fixed code (point) seekhta hai | Probability distribution (μ aur σ²) seekhta hai |
+| Main purpose | Mainly reconstruction ke liye | Reconstruction + generation ke liye |
+| Sampling | Koi sampling nahi | Latent distribution se sample karta hai |
+| Latent space | Irregular ho sakta hai | Smooth, continuous space ko encourage karta hai |
+| KL divergence | Use nahi hota | Latent space regularize karne ke liye use hota hai |
+| Generative ability | Naya data generate nahi kar sakta | Naya similar data generate kar sakta hai |
+
+<Cite id="class-dl-chp3" loc="slide 28" />
+
+**VAE ke advantages:** naya data generate kar sakta hai, smooth latent space seekhta hai, image generation ke liye useful, meaningful latent representations seekhta hai, existing data ke variations generate kar sakta hai. **Disadvantages:** generated outputs kabhi kabhi blurry ho sakte hain, normal autoencoder se zyada complex, training mein reconstruction aur KL losses ko balance karna padta hai, generated samples dusre models jitne sharp nahi ho sakte. <Cite id="class-dl-chp3" loc="slide 28" />
+
+## Latent space aur uski visualization
+
+**Latent space** compressed code ki space hai: har input chhote numbers ke set se describe hota hai, aur latent space mein us input ka point uski representation hai. <Cite id="class-dl-chp3" loc="slide 4" />
+
+**Latent values ka matlab kya hai (textbook ka face example).** Encoding dimension 6 wala autoencoder faces ke bade dataset par ideally faces ke descriptive attributes seekhta hai jaise skin colour aur kya person chashma pehen raha hai. Har attribute ek single value se describe hota hai: Smile 0.99, Skin tone 0.85, Gender −0.73, Beard 0.85, Glasses 0.002, Hair colour 0.68. <Cite id="class-dl-m3" loc="p. 30" />
+
+<Img id="class-autoencoders-latent-attributes" caption="Ek face latent attributes (smile, skin tone, gender, beard, glasses, hair colour) mein encode hua, phir wapas decode." />
+
+VAE ke saath har latent attribute ek single value ke bajaye **probability distribution** hota hai. Decode karte waqt hum har latent distribution se randomly sample karke decoder ka input banate hain, aur "we expect an accurate reconstruction for any sample from the latent state distributions". <Cite id="class-dl-m3" loc="pp. 31-33" />
+
+<Img id="class-autoencoders-latent-sampled" caption="VAE har latent attribute ko distribution ki tarah encode karta hai; do alag samples dono accurate reconstruction mein decode hote hain." />
+
+**Latent space visualize karne se kya dikhta hai.** Teacher ki picture mein laal apples aur hare apples do-dimensional latent space ($z_1$, $z_2$) mein do clusters ki tarah hain. **Similar inputs ek dusre ke paas hote hain**, aur hum learned examples ke beech sample karke naya par similar data generate kar sakte hain. <Cite id="class-dl-chp3" loc="slide 28" /> Textbook wajah batata hai: encoder possible values ki ek range output karta hai jisme se hum sample karte hain, jo "a continuous, smooth latent space representation" enforce karta hai, to "values which are nearby to one another in latent space should correspond with very similar reconstructions". <Cite id="class-dl-m3" loc="p. 33" /> Latent space visualization ka aim (textbook ke practice questions mein se ek) isliye ye check karna hai ki autoencoder ne kya seekha hai: kya similar inputs saath baithte hain, kya groups (jaise laal aur hare apples) alag hain, aur kya space itna smooth hai ki naye samples generate ho sakein. <Cite id="class-dl-m3" loc="p. 35" />
+
+**Sources par note.** Class files latent-space plot banane ka tareeka nahi dikhatin (jaise 2D mein project karna); wo sirf picture, face attributes aur aim dikhati hain. Upar ka answer usi tak limited hai.
+
+## Autoencoders ke applications
+
+Teacher aath applications list karte hain: <Cite id="class-dl-chp3" loc="slides 34 and 35" />
+
+| # | Application | Autoencoder kya karta hai | Simple example |
+|---|---|---|---|
+| 1 | **Image / file compression** | Data size kam karta hai | Bade image ko compress karna |
+| 2 | **Image denoising** | Noise hataata hai | Noisy photo se clean photo |
+| 3 | **Dimensionality reduction** | Features ki sankhya kam karta hai | 1000 features se 100 features (classification ya clustering ke liye) |
+| 4 | **Feature extraction** | Important features seekhta hai | Facial features (edges, shapes) seekhna kisi dusre model ke liye |
+| 5 | **Anomaly detection** | Unusual data dhundta hai | Normal machines par train karo; **high reconstruction error matlab anomaly ya defect** (fraud detection, industrial defect detection) |
+| 6 | **Data restoration / missing data recovery** | Damaged ya missing data reconstruct karta hai | Damaged image restore karna |
+| 7 | **Image / data generation (VAE)** | Naya similar data generate karta hai | VAE naye fruit-like images generate karta hai (synthetic data creation) |
+| 8 | **Recommendation systems** | User aur item patterns seekhta hai | User ki preferences seekhkar doosri movie recommend karna |
+
+<Img id="class-autoencoders-apps-first" caption="Applications 1 se 4: compression, denoising, dimensionality reduction aur feature extraction." />
+
+<Img id="class-autoencoders-apps-second" caption="Applications 5 se 8: anomaly detection, data restoration, image generation (VAE) aur recommendation systems." />
+
+<Img id="class-autoencoders-apps-table" caption="Aathon applications ek table mein." />
+
+**Important note (teacher ka).** "Image transformation" ko general autoencoder application ki tarah list mat karo: image-to-image translation zyada commonly GANs se judi hai, halanki autoencoder-based models bhi kuch tasks ke liye use ho sakte hain. <Cite id="class-dl-chp3" loc="slide 34" />
+
+Textbook ki list add karti hai: anomaly detection, data denoising (images, audio), image **inpainting** (missing hissa bharna), information retrieval; **watermark removal** (aur video ya movie banate waqt kisi object ko hataana); **image colouring** (black-and-white picture ko coloured banana); **feature variation** (image ke sirf required features nikalna aur noise ya unnecessary interruption hataakar output banana). Ye ye bhi yaad dilata hai ki autoencoders jo data unhone dekha usi ke hisaab se compression seekhte hain, to wo typically sirf training mein dekhe gaye observations ki class jaisa data hi reconstruct kar paate hain. <Cite id="class-dl-m3" loc="pp. 25-27" />
+
+**Variational autoencoder ke applications** (textbook ki VAE sheet): image generation, image reconstruction, anomaly detection, drug / molecule generation, data compression, feature learning, signal processing aur recommendation systems. <Cite id="class-dl-m3" loc="p. 29" />
+
+<Img id="class-autoencoders-compression-128" caption="Compression example: 64×64×3 image (12,288 values) 128 numbers (face shape, expression, lighting, age) mein squeeze hoti hai aur rebuild hoti hai; reconstruction loss minimize hota hai." />
+
+**Class mein image compression.** Encoder chhota code banata hai jo store ya send hota hai, aur decoder use se approximate (lossy) image rebuild karta hai. 64 × 64 × 3 image mein $64 \times 64 \times 3 = 12{,}288$ values hain; 128-dimensional code $12{,}288 \div 128 = 96$ guna chhota hai. <Cite id="class-dl-m3" loc="p. 34" />
+
+## Ye kahan puchha gaya
+
+| Question | Kya likhna hai | Solution |
+|---|---|---|
+| "Explain denoising autoencoder" / "What are denoising autoencoders?" | Problem, definition, noisy input se clean output, training, noise types, table | <PYQ id="2023-12/q1d" /> <PYQ id="2024-12/q1d" /> |
+| "What are undercomplete autoencoders?" | Definition, code size < input size, kaise kaam karta hai, example, advantages | <PYQ id="2024-05/q1d" /> |
+| "Main components of an autoencoder and its architecture" | Encoder, bottleneck, decoder, loss, diagram ke saath | <PYQ id="2024-05/q3b" /> |
+| "Explain any three types of autoencoders" | Undercomplete, sparse, denoising (ya contractive, VAE): definition, diagram, working | <PYQ id="2024-05/q5b" /> <PYQ id="2024-12/q5b" /> |
+| "Working of autoencoders and the types in detail" | Training loop, loss, nau types ek table mein | <PYQ id="2025-05/q2b" /> |
+| "Applications of autoencoders and VAE" | Aath applications, VAE generation | <PYQ id="assignment-1/q3a" /> |
+| "Role of latent space visualization" | Latent attributes, clusters, smooth space | <PYQ id="assignment-1/q3b" /> |
+| "Effectiveness of sparse autoencoders against overfitting" | Sparsity penalty, kam active neurons, limits | <PYQ id="assignment-1/q3c" /> |
+| "Compare sparse, denoising and contractive" | Comparison table | <PYQ id="assignment-1/q3d" /> |
 
 ## Quick revision
 
-- Autoencoder = encoder (input se short code) + code + decoder (code se wapas input), output = input banane ke liye train hota hai. Labels nahi chahiye. Loss: $L(x, g(f(x)))$, usually squared error.
-- Undercomplete: code input se chhota; bottleneck seekhne pe majboor karta hai. Linear plus squared error PCA subspace span karta hai.
-- Overcomplete: code input se bada; copy kar sakta hai, isliye regularize karna zaroori (loss + penalty).
-- Denoising: noisy input, clean target. Robust features seekhta hai; images aur audio saaf karne mein use hota hai.
-- Sparse: sirf kuch code neurons active; activations pe penalty (L1 ya chhote target jaise 0.05 ke saath KL).
-- Contractive: chhote input changes pe code mushkil se badalta hai; penalty = squared sensitivities ka sum (Jacobian, Frobenius norm).
-- Image compression: encoder code banata hai, use store ya send karo, decoder rebuild karta hai. Lossy aur data-specific.
-
-**Conclusion.** Autoencoder unlabelled data ki ek short, useful summary seekhta hai, ek restriction ke andar apna hi input rebuild karne ki koshish karke; jo restriction chuni jaati hai (narrow code, noise, sparsity, steadiness) wahi type decide karti hai aur ye bhi ki woh kis kaam ke liye achha hai.
-
-Exam mein English mein likho: "An autoencoder learns a compact representation of unlabelled data by reconstructing its own input under a constraint; the constraint decides its type."
+- Autoencoder = Encoder + code (bottleneck) + decoder. Unsupervised (self-supervised). Goal: Input ≈ Output, MSE ya L1 reconstruction loss aur backpropagation se train.
+- Undercomplete: code input se chhota. Overcomplete: code input se bada, regularization chahiye. Linear: sirf linear activations (PCA jaisa).
+- Sparse: kam active neurons (L1 ya KL divergence penalty). Denoising: noisy input, clean target. Contractive: input mein chhota change, code mein chhota change.
+- Convolutional AE images ke liye conv layers use karta hai. VAE distribution (μ, σ²) seekhta hai, $z = \mu + \sigma \varepsilon$ sample karta hai, loss = reconstruction + KL, aur naya data generate kar sakta hai.
+- Applications: compression, denoising, dimensionality reduction, feature extraction, anomaly detection (high reconstruction error), data restoration, generation (VAE), recommendation.

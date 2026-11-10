@@ -1,62 +1,33 @@
 ---
-references: [gfdl-ch7, gfdl-ch8, ioffe2015, gfg-early-stopping, gfg-batchnorm, gfg-data-augmentation]
+references: [class-dl-chp2]
 ---
 
-**In simple words:** all three help a deep network train well and work on new data. Early stopping stops training at the right moment, batch normalization keeps each layer's inputs at a steady size, and data augmentation makes extra training examples.
+**In simple words:** early stopping stops training at the right time, batch normalization keeps each layer's values in a similar range, and data augmentation makes new training samples from old ones. All three help the network train better and generalize. <Cite id="class-dl-chp2" loc="slides 109, 113 and 115" />
 
-**1. Early stopping**
+**1. Early stopping.** If training runs for too many epochs, the model starts memorizing the training data: validation accuracy decreases. Early stopping automatically stops training when the model stops improving on the validation data, and the best model is saved. **Patience** is the number of epochs to wait (patience 3: stop after 3 epochs with no improvement). Example: validation loss 0.48 at epoch 4 and then 0.49, 0.50, 0.51 stops at epoch 7 and keeps epoch 4. <Cite id="class-dl-chp2" loc="slides 113 and 114" />
 
-*Definition.* Train only while the error on validation data keeps falling, and stop when it stops improving. <Cite id="gfdl-ch7" loc="§7.8" />
+<Img id="class-regularization-early-stopping-solves" caption="Training loss keeps falling, validation loss starts rising: stop at the best epoch." />
 
-*Why needed.* Training error keeps falling, but validation error falls, reaches a lowest point and then rises as the network starts to memorize.
-
-*How it works.*
-
-1. After every epoch, measure the validation loss.
-2. Whenever it hits a new lowest value, save the weights.
-3. If it does not improve for a fixed number of epochs (the *patience*), stop and reload the saved weights.
+**2. Batch normalization.** As weights change, the inputs to each layer keep changing (internal covariate shift) and training becomes slow. Batch normalization normalizes the outputs of a layer before the next layer: calculate the mean $\mu$ and variance $\sigma^2$ of the batch, normalize $\hat x = \dfrac{x - \mu}{\sqrt{\sigma^2 + \epsilon}}$, then scale and shift $y = \gamma \hat x + \beta$ ($\gamma$, $\beta$ are learned). It makes training faster and more stable and allows a higher learning rate. <Cite id="class-dl-chp2" loc="slides 109 and 110" />
 
 ```mermaid
-%% caption: Early stopping keeps the weights from the epoch with the lowest validation loss.
+%% caption: The steps of batch normalization for one batch.
 flowchart LR
-  A["Train one epoch"] --> B["Validation loss"]
-  B --> C{"New lowest?"}
-  C -- "Yes" --> D["Save weights"]
-  D --> A
-  C -- "No, patience used up" --> E["Stop, reload best weights"]
-  C -- "No, patience left" --> A
+  A["Input batch"] --> B["Mean"]
+  B --> C["Variance"]
+  C --> D["Normalize"]
+  D --> E["Multiply by gamma"]
+  E --> F["Add beta"]
+  F --> G["Output to next layer"]
 ```
 
-<Img id="img-dl-n2-reg-early-stopping" caption="Training error keeps falling, but validation error starts rising after its minimum; stop at that minimum." />
+**3. Data augmentation.** A small dataset causes overfitting and collecting more data is costly. Data augmentation creates new training samples by modifying the existing data (rotation, flipping, zooming, cropping, brightness, noise); the label does not change, so a flipped apple is still an Apple. <Cite id="class-dl-chp2" loc="slides 115 and 116" />
 
-*Advantages:* no change to the network or loss, saves time. *Limitation:* needs a validation set; a noisy curve can stop too early. *Use:* the Keras EarlyStopping callback. <Cite id="gfg-early-stopping" />
+<Img id="class-regularization-aug-techniques" caption="The six common data augmentation techniques and the flow." />
 
-**2. Batch normalization**
+| | Early stopping | Batch normalization | Data augmentation |
+|---|---|---|---|
+| Acts on | Training duration | Layer outputs | Training data |
+| Main benefit | Prevents overfitting | Faster, stable training | More data, less overfitting |
 
-*Definition.* A layer that rescales a unit's values over each mini-batch to average 0 and spread 1, then applies a learned scale $\gamma$ and shift $\beta$. <Cite id="ioffe2015" />
-
-*Why needed.* As earlier layers change, the values reaching later layers keep changing size, so training is slow and unstable.
-
-*How it works.* Find the batch average $\mu_B$ and variance $\sigma_B^2$, subtract the average, divide by the square root of the variance ($\epsilon$ is a tiny number to avoid dividing by zero), then scale and shift:
-
-$$
-\hat{x}_i = \frac{x_i-\mu_B}{\sqrt{\sigma_B^2+\epsilon}},
-\qquad
-y_i = \gamma\hat{x}_i + \beta
-$$
-
-At test time, running averages of $\mu$ and $\sigma^2$ saved during training are used.
-
-*Advantages:* faster, steadier training, higher learning rates, less sensitivity to starting weights, mild regularization from batch noise. *Limitation:* weak with very small batches. *Use:* after convolutions in ResNet. <Cite id="gfdl-ch8" loc="§8.7.1" /> <Cite id="gfg-batchnorm" />
-
-**3. Data augmentation**
-
-*Definition.* Create extra training examples by changing existing ones in ways that keep the label. <Cite id="gfdl-ch7" loc="§7.4" />
-
-*Why needed.* More data is one of the best cures for overfitting, but labelled data is costly.
-
-*Types.* Images: flip, crop, slight rotation, zoom, brightness change. Audio: added noise. Text: synonym replacement.
-
-*Advantages:* cheap extra data, robustness to position and lighting. *Limitation:* the change must not alter the label; rotating a 6 by 180° makes a 9. *Use:* image classification and medical imaging. <Cite id="gfg-data-augmentation" />
-
-**Conclusion:** early stopping controls *when* to stop, batch normalization controls *how* layers train, and augmentation controls *what* data the network sees; together they reduce overfitting.
+**Conclusion:** the three methods fix three different problems: too long training, unstable inputs to layers, and too little data.

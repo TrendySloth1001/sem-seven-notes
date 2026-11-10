@@ -1,459 +1,353 @@
 ---
 title: "Learning in a neural network: forward pass and backpropagation"
 module: 2
-summary: "Network actually seekhta kaise hai: pehle ek guess karta hai (forward pass), phir check karta hai kitna galat hai (loss), phir pata karta hai har weight kitna zimmedar hai (backpropagation), aur phir har weight ko thoda sa aise badalta hai ki galti kam ho (optimization)."
+summary: "Network kaise seekhta hai, jaise class mein padhaya gaya: forward propagation prediction banata hai, loss batata hai kitna galat hai, backpropagation gradient calculate karta hai, aur optimizer gradient se weights update karta hai. Loop tab tak repeat hota hai jab tak loss chhota na ho jaaye. Note ke ant mein do gradient problems (vanishing aur exploding) aur unke fixes hain."
 keyIdeas:
-  - "Learning chaar steps ka loop hai: forward pass, loss, backward pass, weight update."
-  - "Forward pass input ko layer by layer prediction mein badalta hai: pehle weighted sum, phir activation."
-  - "Backpropagation error ko output se peeche ki taraf bhejta hai aur chain rule se pata karta hai ki har weight kitna zimmedar hai (uska gradient)."
-  - "Phir har weight ko uske gradient ke ulte direction mein chhota step diya jaata hai: new w = w minus learning rate times gradient."
-  - "Backpropagation gradients nikaalta hai; optimizer (gradient descent, momentum, Adam) decide karta hai unka use kaise karna hai."
-  - "Deep sigmoid networks mein chhote slopes layer ke baad layer multiply hokar gradients ko vanish kar dete hain, aur agar shuru mein saare weights same hon to neurons kabhi alag features nahi seekhte."
+  - "Learning loop: Training data → Forward propagation → Prediction → Loss → Backpropagation → Optimizer → Update weights → Better prediction, repeat."
+  - "Forward propagation: information sirf aage jaati hai (input → hidden layers → output). Loss function sirf batata hai kitna error hai; ye nahi batata kaun sa weight badalna hai."
+  - "Backpropagation cost ki information ko network mein peeche ki taraf flow karne deta hai taaki gradient compute ho. Ye sirf gradient compute karta hai; SGD jaisa koi aur algorithm use karke seekhta hai."
+  - "Weight update: W_new = W_old − η · ∂L/∂W. Gradient positive ho ya negative, slope ki ulti direction mein move karo; zero ho to model minimum (ya saddle point) par ho sakta hai."
+  - "Vanishing gradient: gradient peeche jaate jaate bahut chhota ho jaata hai, to early layers mushkil se seekhti hain. Exploding gradient: gradient bahut bada ho jaata hai, to learning unstable hoti hai."
 references:
-  - gfdl-ch6
-  - gfdl-ch8
-  - gfdl-ch4
-  - rumelhart1986
-  - hinton-lec6
-  - kingma2014
-  - cs231n-backprop
-  - nptel-dl
-  - d2l-backprop
-  - d2l-gd
-  - gfg-backprop
-  - gfg-forward-prop
-  - gfg-gradient-descent
-  - tp-backprop
-  - mlm-backprop
-  - ibm-backprop
-  - w3s-ml-learning
-  - pytorch-autograd
-  - keras-sgd
-  - wiki-backprop
-  - wiki-chain-rule
-  - wiki-gradient-descent
+  - class-dl-chp2
+  - class-dl-m1
+  - class-dl-m2
 ---
 
-Naye ideas se pehle, ye purane ideas chahiye honge. Agar pehle se aate hain, to agle section pe jao.
+Naye ideas se pehle wo purani baatein jo chahiye. Agar pata hai to seedha agle section par jao.
 
-## Pehle basics
+## Basics pehle
 
-- Ek **neuron** kuch numbers leta hai, har number ko ek **weight** se multiply karta hai, sabko add karta hai, ek **bias** jodta hai, aur total ko ek **activation function** se pass karta hai (jaise sigmoid, jo kisi bhi number ko 0 se 1 ke range mein daba deta hai).
-- Ek **neural network** bahut saare neurons hain jo **layers** mein lage hain: ek input layer, ek ya zyada hidden layers, aur ek output layer.
-- **Weights aur biases** woh numbers hain jo adjust ho sakte hain; inko milaake **parameters** kehte hain. Learning ka matlab hai inki achhi values dhoondhna.
-- **Loss** ek number hai jo batata hai network ka answer kitna galat hai. Kam matlab better.
-- Kisi weight ke liye loss ka **gradient** (slope) batata hai ki us weight ko thoda sa badalne pe loss kitna badlega, aur kis direction mein.
-- **Learning rate**, likhte hain $\eta$ (eta), ye hai ki weight badalte waqt kitna bada step lena hai.
-- Ek **epoch** matlab saare training examples pe ek poora pass.
+- **Neuron** basic processing unit hai. Ye inputs leta hai, calculations karta hai aur result agli layer ko deta hai. **Weight** har input ki importance dikhata hai (zyada weight matlab zyada influence). **Bias** learning improve karne ke liye add ki gayi extra value hai. <Cite id="class-dl-chp2" loc="slide 4" />
+- **Activation function** neuron ka output decide karta hai aur network ko complex patterns seekhne mein help karta hai. <Cite id="class-dl-chp2" loc="slide 4" />
+- **Loss** prediction ka error hai. Teacher ke example mein fruit ka actual weight 180 g hai, predicted weight 220 g, to loss high hai. <Cite id="class-dl-chp2" loc="slide 57" />
+- Weights aur biases **parameters** hain: wo numbers jo network seekhta hai.
 
-## Big picture: network seekhta kaise hai
+## Big picture: network kaise seekhta hai
 
-**Ye kya hai.** Neural network ko train karna matlab ek simple loop baar baar chalana: guess karo, galti check karo, pata karo galti kisne ki, sudhaaro. Ye syllabus <Syl m="2" /> ka section 2.2, "Learning with backpropagation" hai.
+Network train karna chaar kaamon ka repeat hone wala loop hai. Teacher ise ek flow mein draw karte hain: <Cite id="class-dl-chp2" loc="slides 57 and 59" />
 
-**Ye kyun zaroori hai.** Naya network random weights se shuru hota hai, isliye uske answers bhi random hote hain. Laakhon weights koi haath se set nahi kar sakta. Humein ek automatic tareeka chahiye jo har weight ke liye bataye: "isko upar karna hai ya neeche, aur kitna?" Backpropagation wala learning loop exactly yahi batata hai.
+1. **Forward propagation:** input network se guzar kar prediction deta hai.
+2. **Loss calculation:** prediction ko actual value se compare karke error nikalte hain.
+3. **Backpropagation:** error ki information peeche flow karti hai aur gradient deti hai.
+4. **Optimization:** optimizer gradient se weights update karta hai.
 
-**Everyday analogy.** Socho tum basket mein ball daalna seekh rahe ho. Tum throw karte ho (guess). Dekhte ho kitna miss hua (error). Sochte ho kya badalna hai: "haath zyada zor se chala, angle theek tha" (kiski galti hai). Phir thoda adjust karke dobara throw karte ho.
-
-<Box kind="definition">
-
-**Learning process** chaar steps ka loop hai, jo bahut saare examples aur bahut saare epochs ke liye repeat hota hai:
-
-1. **Forward propagation:** input ko network se guzaaro aur prediction lo.
-2. **Loss calculation:** prediction ko sahi answer se compare karo aur error ke liye ek number nikaalo.
-3. **Backpropagation:** loss se peeche ki taraf chalo aur pata karo har weight kitna zimmedar hai (uska gradient).
-4. **Optimization (weight update):** har weight ko thoda sa us direction mein badlo jisse loss kam ho.
-
-</Box>
-
-Exam mein English mein likho: "The learning process is a loop of four steps: forward propagation, loss calculation, backpropagation and optimization (weight update), repeated over many examples and epochs."
+Training chalti rehne par loss ghatta hai aur predictions zyada accurate hoti hain. <Cite id="class-dl-chp2" loc="slide 59" />
 
 ```mermaid
-%% caption: Training loop. Step 1 aur 2 network mein aage jaate hain, step 3 peeche jaata hai, step 4 weights badalta hai, aur phir agle example ya batch ke saath loop repeat hota hai.
+%% caption: Neural network ka learning loop, jaise teacher draw karte hain. Har pass prediction ko thoda behtar banata hai.
 flowchart TD
-  A["Input x aur sahi answer y"] --> B["1. Forward pass: prediction ŷ nikaalo"]
-  B --> C["2. Loss: ŷ, y se kitna galat hai"]
-  C --> D["3. Backpropagation: har weight ka gradient"]
-  D --> E["4. Optimizer: w ← w − η × gradient"]
-  E --> F{"Loss kaafi kam hua ya epochs khatam?"}
-  F -- "Nahi" --> A
-  F -- "Haan" --> G["Stop: trained network"]
+  A["Training data"] --> B["Forward propagation"]
+  B --> C["Prediction"]
+  C --> D["Loss function"]
+  D --> E["Backpropagation"]
+  E --> F["Optimizer"]
+  F --> G["Update weights"]
+  G --> H["Better prediction"]
+  H -->|"repeat"| B
 ```
 
-Do ideas alag rakho: **backpropagation sirf gradients nikaalta hai**. Woh koi weight nahi badalta. **Optimizer** (plain gradient descent, momentum, Adam wagairah) woh hai jo un gradients ka use karke weights badalta hai. <Cite id="gfdl-ch6" loc="§6.5" />
+<Cite id="class-dl-chp2" loc="slide 59" />
+
+<Img id="class-backpropagation-simple-diagram" caption="Teacher ka simple diagram: prediction, loss, backpropagation, gradient (slope), optimizer, update weights, aur wapas shuru par." />
+
+**Rozmarra ka example.** Student practice test likhta hai (forward pass), teacher check karta hai (loss), student pata lagata hai kaun se topics se galtiyan hui (backpropagation), aur un topics ko zyada padhta hai (weight update). Agla test behtar hota hai.
+
+**Fruit example (teacher ka).** Actual weight 180 g hai aur pehli prediction 220 g (loss high). Har update ke baad prediction paas aati hai: 220 g, 205 g, 193 g, 182 g, 180 g, aur loss ghatta hai. <Cite id="class-dl-chp2" loc="slide 57" /> Ye syllabus <Syl m="2" /> hai.
 
 ## Step 1: forward propagation
 
-**Ye kya hai.** Input left se andar aata hai aur right ki taraf ek ek layer karke jaata hai, jab tak output layer ek prediction $\hat{y}$ (padho "y-hat") nahi deti.
+<Box kind="definition">
 
-**Kaise kaam karta hai.** Layer ka har neuron do chhote kaam karta hai:
-
-1. **Weighted sum:** har aane wali value ko uske weight se multiply karo, sabko add karo aur bias jodo.
-2. **Activation:** us sum ko activation function (sigmoid, tanh, ReLU wagairah) se pass karo. Result neuron ka output hai, jo agli layer ka input ban jaata hai.
-
-To ek layer pichhli layer ke outputs leti hai, har neuron ke liye ek weighted sum banati hai, aur har sum ko activation se daba deti hai. Aakhri layer ke outputs hi prediction hain.
-
-<Img id="img-dl-n2-bp-neuron" caption="Ek neuron: inputs ko weights se multiply karke jodte hain, phir activation function se nikalte hain. Backpropagation inhi har weight ka gradient nikalta hai." />
-
-<Img id="img-dl-n2-bp-network" caption="Kai neurons layer-by-layer jude hain: har neuron agli layer ke har neuron ko feed karta hai, isliye error ke wapas jaane ke kai raaste hote hain." />
-
-<Figure caption="Ek chhota fully connected network: 2 inputs, 3 hidden neurons, 1 output. Forward pass mein numbers har line pe left se right jaate hain; backpropagation mein blame unhi lines pe right se left jaata hai.">
-  <NetworkFigure layers="2,3,1" labels="Input,Hidden,Output" title="Forward: left to right. Backward: right to left." />
-</Figure>
-
-**Worked sum: ek neuron ka forward pass.**
-
-<Sum>
-
-<Given>
-
-inputs 1 aur 2, weights 0.5 aur −0.25, bias 0.1, sigmoid activation $\sigma(z) = \dfrac{1}{1 + e^{-z}}$.
-
-</Given>
-
-<Find>
-
-neuron ka output.
-
-</Find>
-
-<Steps>
-
-1. Pehla input times uska weight: $1 \times 0.5 = 0.5$. *(Har input ko uski importance ke hisaab se scale karte hain.)*
-2. Doosra input times uska weight: $2 \times (-0.25) = -0.5$. *(Negative weight sum ko neeche kheenchta hai.)*
-3. Weighted sum plus bias: $z = 0.5 + (-0.5) + 0.1 = 0.1$. *(Neuron sab kuch add karta hai.)*
-4. Activation: $e^{-0.1} \approx 0.9048$, to
-
-   $$
-   \begin{aligned}
-   \sigma(0.1) &= \frac{1}{1 + 0.9048} \\
-   &= \frac{1}{1.9048} \\
-   &\approx 0.525
-   \end{aligned}
-   $$
-
-   *(Sigmoid sum ko 0 se 1 ke beech daba deta hai.)*
-
-</Steps>
-
-<Answer>
-
-output lagbhag 0.525 hai.
-
-</Answer>
-
-<Box kind="verify">
-
-Sigmoid $z = 0$ pe exactly 0.5 deta hai, aur 0 ke paas $z$ ka lagbhag ek chauthai badhta hai (wahan uska slope 0.25 hai). To
-
-$$
-\sigma(0.1) \approx 0.5 + 0.1 / 4 = 0.525
-$$
-
-Doosre raaste se same answer, aur ye 0.5 se thoda upar hai, jaisa chhote positive sum ke liye hona chahiye.
+**Multilayer Feedforward Neural Network:** a neural network with one input layer, one or more hidden layers and one output layer, where data moves only forward (input to output). It processes the input through the hidden layers and gives the final output. <Cite id="class-dl-chp2" loc="slide 4" />
 
 </Box>
 
-</Sum>
+Textbook ke words mein: jab hum feedforward network se input $x$ lekar output $\hat y$ banate hain, "information flows forward through the network". Inputs initial information dete hain jo har layer ke hidden units tak jaati hai aur aakhir mein $\hat y$ banati hai. Isse **forward propagation** kehte hain. Training mein forward propagation scalar cost $J(\theta)$ banne tak chalta hai. <Cite id="class-dl-m1" loc="p. 26" />
 
-Poora network bas yahi hai, har neuron ke liye repeat. <Cite id="gfg-forward-prop" />
+<Img id="class-backpropagation-mlffnn-structure" caption="Multilayer feedforward network ka structure: input layer, do hidden layers, output layer, aur components (neuron, weight, bias, activation function)." />
 
-Forward pass ke time network har weighted sum aur output ko **yaad rakhta** hai, kyunki backpropagation ko inki zaroorat padegi.
+Kaise kaam karta hai, teacher ke paanch steps (fruit example): <Cite id="class-dl-chp2" loc="slide 4" />
+
+1. Input features diye jaate hain (colour = red, shape = round, weight = 180 g, texture = smooth).
+2. Input layer data Hidden Layer 1 ko bhejti hai.
+3. Hidden Layer 1 information process karke Hidden Layer 2 ko bhejti hai.
+4. Hidden Layer 2 zyada complex patterns seekhti hai.
+5. Output layer fruit predict karti hai (Apple).
+
+<Img id="class-backpropagation-forward-steps" caption="Fruit example ke liye forward propagation ke paanch steps." />
 
 ## Step 2: loss calculation
 
-**Ye kya hai.** Loss "kitna galat" ko ek number mein badal deta hai. Syllabus do naam leta hai:
+Loss function prediction ko actual value se compare karta hai. Ye sirf batata hai **kitna error hai**. Ye nahi batata ki kaun sa weight galat hai, weights kaise update karne hain ya minimum loss tak kaise pahunchna hai. <Cite id="class-dl-chp2" loc="slide 59" /> Module 1 add karta hai ki cost (loss) function "measures the difference, or error, between actual y and predicted y", aur loss function ek training example ka error hai jabki cost function poore training set ka average error. <Cite id="class-dl-m1" loc="p. 28" />
 
-- **Squared error** (numbers predict karne ke liye): prediction aur answer ke difference ke square ka aadha, $L = \dfrac{1}{2}(\hat{y} - y)^2$. Example: prediction 0.6, answer 1. Difference $0.6 - 1 = -0.4$; square $0.16$; uska aadha $0.08$. To **$L = 0.08$**. (Check: difference ka sign matter nahi karta, $(1 - 0.6)^2 / 2 = 0.16 / 2 = 0.08$ bhi.)
-- **Cross-entropy** (classification ke liye): $L = -\ln p$, jahan $p$ woh probability hai jo network ne sahi class ko di. Jab $p$ 1 ke paas ho to ye chhota hota hai, aur jab $p$ 0 ke paas ho to bahut bada. Example: $p = 0.9$ ho to $L = -\ln 0.9 \approx 0.105$; $p = 0.1$ ho to $L = -\ln 0.1 \approx 2.303$.
+To model ko "ek guide" chahiye: gradient. <Cite id="class-dl-chp2" loc="slide 57" />
 
-Bahut saare examples ke batch ke liye hum average loss lete hain. Loss backward pass ka starting point hai: ye woh "marks" hain jo network ko batate hain usne kitna bura kiya.
+<Img id="class-backpropagation-optimization-concept" caption="Sirf loss function kaafi kyun nahi, aur naya concept: optimizer." />
 
-## Backpropagation ka ek tool: chain rule
+## Gradient: wo guide jo model ko chahiye
 
-**Ye kya hai.** Agar A badalne se B badalta hai, aur B badalne se C badalta hai, to A ka C pe effect dono effects ka **multiplication** hai: $\dfrac{dC}{dA} = \dfrac{dC}{dB} \cdot \dfrac{dB}{dA}$.
+<Box kind="definition">
 
-**Everyday analogy.** Gears ki chain. Agar gear A ke ek round pe gear B 3 round ghoomta hai, aur gear B ke ek round pe gear C 2 round, to A ke ek round pe C $3 \times 2 = 6$ round ghoomta hai. <Cite id="wiki-chain-rule" /> <Cite id="gfdl-ch6" loc="§6.5.2" />
+**Gradient:** the slope of the loss function. It tells us which direction reduces the loss and how quickly the loss changes. The gradient acts like a guide for the optimizer. <Cite id="class-dl-chp2" loc="slide 57" />
 
-**Yahan kyun matter karta hai.** Loss output pe depend karta hai, output aakhri weights aur hidden outputs pe, hidden outputs pehle ke weights pe, aur aise hi. To kisi bhi weight ka gradient us weight se loss tak ke raaste ke **chhote local slopes ka product** hai.
+</Box>
+
+<Img id="class-backpropagation-gradient-concept" caption="Gradient loss ka slope hai: valley ke ek side positive slope, dusre side negative, minimum par zero." />
+
+Gradient optimizer ko kaise guide karta hai: <Cite id="class-dl-chp2" loc="slide 57" />
+
+- Gradient **positive** ho to ulti direction mein move karo.
+- Gradient **negative** ho to (slope ki) ulti direction mein move karo.
+- Gradient **zero** ho to model minimum (ya saddle point) par pahunch gaya ho sakta hai.
+
+<Img id="class-backpropagation-how-solves" caption="Gradient optimizer ko kya karna hai ye kaise batata hai, aur fruit example jahan prediction 220 g se 180 g tak girti hai." />
+
+**Don't confuse (teacher ki table).** <Cite id="class-dl-chp2" loc="slide 57" />
+
+| | Loss function | Gradient |
+|---|---|---|
+| Batata hai | Kitna error (kitna bura) | Kahan jaana hai aur kaise badalna hai |
+| Direction? | Direction nahi deta | Direction deta hai (increase ya decrease) |
+| Speed? | Speed nahi batata | Batata hai loss kitni tez badalta hai |
+| Weights? | Weights update nahi karta | Optimizer ko weights update karne mein help karta hai |
+
+<Img id="class-backpropagation-gradient-types" caption="Positive, negative aur zero gradient, aur har ek ka weight ke liye matlab." />
 
 ## Step 3: backpropagation
 
-**Definition.** Backpropagation ("backward propagation of errors") woh algorithm hai jo har weight ke respect mein loss ka gradient nikaalta hai, ek error signal ko output layer se input layer ki taraf peeche bhejkar, chain rule use karke. <Cite id="rumelhart1986" /> <Cite id="gfdl-ch6" loc="§6.5" />
+<Box kind="definition">
 
-Exam mein English mein likho: "Backpropagation is the algorithm that computes the gradient of the loss with respect to every weight by passing an error signal from the output layer back towards the input layer, using the chain rule."
+**Backpropagation (backprop):** the algorithm that allows the information from the cost to flow backwards through the network, in order to compute the gradient. <Cite id="class-dl-m1" loc="p. 26" />
 
-**Ye kyun zaroori hai.** Output layer apni galti seedha dekh sakti hai, par hidden neuron ka apna koi "sahi answer" nahi hota. Backpropagation har hidden neuron ko output ki galti mein uska fair share batata hai.
+</Box>
 
-**Everyday analogy.** Ek team project ko bure marks mile. Teacher final editor ko batata hai report kitni galat thi. Editor sochta hai usmein se kitna har section writer ki wajah se tha aur blame unko pass karta hai. Har writer apna share un logon ko pass karta hai jinhone material diya tha. Har koi apna blame jaan leta hai, bina teacher ke har insaan ko alag se check kiye.
+Textbook saaf kehta hai ki ye kya *nahi* karta: "back-propagation refers only to the method for computing the gradient, while another algorithm, such as stochastic gradient descent, is used to perform learning using this gradient". Ye kaam "a simple and inexpensive procedure" se karta hai, gradient ke lambe expression ko numerically evaluate karne ke bajaye. <Cite id="class-dl-m1" loc="p. 26" />
 
-**Kaise kaam karta hai, step by step.**
-
-1. **Output pe error.** Prediction ko answer se compare karo. "Kitna galat" ko "output neuron kitna sensitive hai" (uske activation ka slope) se multiply karo. Ye output neuron ka **error signal** hai, likhte hain $\delta$ (delta).
-2. **Aakhri layer ke gradients.** Output mein jaane wale har weight ke liye, gradient = (jis neuron ko woh feed karta hai uska error signal) × (us weight pe aaya input).
-3. **Blame peeche bhejo.** Har hidden neuron un neurons ke error signals ikattha karta hai jinko woh feed karta hai, har ek ko connecting weight se weight karke. Jis neuron ka bahut galat output tak bada weight tha, usko zyada blame milta hai.
-4. **Hidden error signal.** Us ikatthe blame ko hidden neuron ke apne activation slope se multiply karo.
-5. **Repeat** karo step 2 se 4 tak, layer by layer, jab tak pehli layer na aa jaaye.
-6. **Gradients optimizer ko do**, jo weights update karta hai.
-
-Main trick hai **reuse**: har layer apne baad wali layer ke pehle se nikale error signals ko reuse karti hai, to kuch bhi do baar calculate nahi hota.
+Teacher ke flow mein gradient backpropagation ke dauran calculate hota hai aur phir "used by optimizers to update weights and reduce the loss": <Cite id="class-dl-chp2" loc="slide 58" />
 
 ```mermaid
-%% caption: Ek raaste pe backpropagation. Forward pass (solid arrows) values nikaalta hai; backward pass (dotted arrows) error signal peeche le jaata hai aur har weight ke liye gradient banata hai.
+%% caption: Forward pass input se loss tak jaata hai; backpropagation gradient ko peeche bhejta hai; optimizer weights update karta hai. Ye teacher ke diagram ka redraw hai.
 flowchart LR
-  X["Input x"] --> H["Hidden neuron h (weight w1)"]
-  H --> Y["Output ŷ (weight w2)"]
-  Y --> L["Loss: ŷ ko y se compare karo"]
-  L -.->|"kitna galat × output slope"| D2["Output error signal δ2"]
-  D2 -.->|"δ2 × h"| G2["w2 ka gradient"]
-  D2 -.->|"× w2 × hidden slope"| D1["Hidden error signal δ1"]
-  D1 -.->|"δ1 × x"| G1["w1 ka gradient"]
+  X["Input x"] --> M["Model with weights W"]
+  M --> Y["Output y"]
+  Y --> L["Loss L"]
+  L -->|"backpropagation"| G["Compute gradient dL/dW"]
+  G --> O["Optimizer: GD, Adam, SGD"]
+  O --> U["Update weights: W new = W old - eta dL/dW"]
+  U -.-> M
 ```
 
-Symbols mein yaad rakhne layak ek rule: **weight ka gradient = uske output end pe error signal × uske start pe input**, $\dfrac{\partial L}{\partial w} = \delta \times \text{input}$. Sigmoid ke liye slope simply $a(1-a)$ hai, jo pehle se store kiye output se nikal jaata hai. <Cite id="gfdl-ch6" loc="§6.5.4" /> <Cite id="d2l-backprop" /> <Cite id="gfg-backprop" />
+<Cite id="class-dl-chp2" loc="slide 58" />
 
-<Img id="img-dl-n2-bp-graph" caption="Forward pass ka computational graph. Backpropagation is graph mein J se peeche weights W1 aur W2 tak chalta hai, har box par chain rule lagata hai." />
+<Img id="class-backpropagation-forward-backward" caption="Forward pass loss tak, backpropagation gradient compute karne ke liye, phir optimizer weights update karta hai." />
 
-**Worked sum: ek poora training step (forward, loss, backward, update).** Sirf tab chahiye jab question numbers de; theory questions ke liye upar wale steps words mein kaafi hain.
+## Step 4: optimization (weights update karna)
+
+Optimizer gradient leta hai aur weights badalta hai. Sabse simple optimizer gradient descent hai: <Cite id="class-dl-chp2" loc="slide 58" />
+
+<Box kind="definition">
+
+$W_{new} = W_{old} - \eta \dfrac{\partial L}{\partial W}$, jahan $W$ weight hai, $\eta$ learning rate, $L$ loss aur $\dfrac{\partial L}{\partial W}$ gradient. <Cite id="class-dl-chp2" loc="slide 63" />
+
+</Box>
+
+**Bada gradient** (steep slope) bade weight updates aur faster learning deta hai; **chhota gradient** (flat slope) chhote updates aur slower learning. <Cite id="class-dl-chp2" loc="slide 58" /> Alag-alag optimizers (SGD, momentum, AdaGrad, RMSProp, Adam) gradient descent ke note mein samjhaye gaye hain.
+
+<Img id="class-backpropagation-optimization-flow" caption="Quick flow: training data, forward propagation, prediction, loss, backpropagation, optimizer, update weights, better prediction." />
+
+**Sum 1: ek weight par poora learning cycle (class files mein nahi hai; numbers dikhane ke liye add kiya).** Class update rule deti hai par loss ka derivative nahi, isliye yahan loss simple squared error $L = (\hat y - y)^2$ hai, jiska weight ke respect mein gradient $2(\hat y - y)\,x$ hai.
 
 <Sum>
 
 <Given>
 
-input $x = 1$, sahi answer $y = 1$; ek hidden sigmoid neuron weight $w_1 = 0.5$ ke saath aur ek output sigmoid neuron weight $w_2 = 0.5$ ke saath (koi bias nahi); squared error loss; learning rate $\eta = 1$.
+Ek neuron bina activation ke: $\hat y = w \cdot x$. Input $x = 2$, actual output $y = 4$, weight $w = 3$, learning rate $\eta = 0.1$. Loss $L = (\hat y - y)^2$.
 
 </Given>
 
 <Find>
 
-loss, $w_1$ aur $w_2$ ke gradients, aur ek update ke baad naye weights.
+ek cycle: forward pass, loss, gradient, weight update, aur naya loss.
 
 </Find>
 
 <Steps>
 
-1. Hidden weighted sum: $0.5 \times 1 = 0.5$. Hidden output
-
-   $$
-   \begin{aligned}
-   h &= \sigma(0.5) \\
-   &= \frac{1}{1 + e^{-0.5}} \\
-   &= \frac{1}{1 + 0.6065} \\
-   &= 0.6225
-   \end{aligned}
-   $$
-
-   *(Forward pass, pehli layer.)*
-2. Output weighted sum: $0.5 \times 0.6225 = 0.3112$. Prediction
-
-   $$
-   \begin{aligned}
-   \hat{y} &= \sigma(0.3112) \\
-   &= \frac{1}{1 + 0.7326} \\
-   &= 0.5772
-   \end{aligned}
-   $$
-
-   *(Forward pass, doosri layer.)*
-3. Loss:
-
-   $$
-   \begin{aligned}
-   \frac{1}{2}(0.5772 - 1)^2 &= \frac{1}{2}(-0.4228)^2 \\
-   &= \frac{1}{2} \times 0.1788 \\
-   &= 0.0894
-   \end{aligned}
-   $$
-
-   *(Guess kitna galat hai.)*
-4. Output slope:
-
-   $$
-   \begin{aligned}
-   \hat{y}(1 - \hat{y}) &= 0.5772 \times 0.4228 \\
-   &= 0.2440
-   \end{aligned}
-   $$
-
-   *(Sigmoid ka slope seedha stored output se aata hai.)*
-5. Output error signal:
-
-   $$
-   \begin{aligned}
-   \delta_2 &= (\hat{y} - y) \times \text{slope} \\
-   &= -0.4228 \times 0.2440 \\
-   &= -0.1032
-   \end{aligned}
-   $$
-
-   *(Kitna galat × output neuron kitna sensitive hai.)*
-6. $w_2$ ka gradient:
-
-   $$
-   \begin{aligned}
-   \delta_2 \times h &= -0.1032 \times 0.6225 \\
-   &= -0.0642
-   \end{aligned}
-   $$
-
-   *(Weight ke end pe error signal × uske start pe input.)*
-7. Hidden slope: $h(1 - h) = 0.6225 \times 0.3775 = 0.2350$. *(Hidden neuron ke liye bhi same sigmoid rule.)*
-8. Hidden error signal:
-
-   $$
-   \begin{aligned}
-   \delta_1 &= \delta_2 \times w_2 \times \text{hidden slope} \\
-   &= -0.1032 \times 0.5 \times 0.2350 \\
-   &= -0.0516 \times 0.2350 \\
-   &= -0.0121
-   \end{aligned}
-   $$
-
-   *(Blame $w_2$ ke through peeche gaya, phir hidden slope se scale hua.)*
-9. $w_1$ ka gradient:
-
-   $$
-   \begin{aligned}
-   \delta_1 \times x &= -0.0121 \times 1 \\
-   &= -0.0121
-   \end{aligned}
-   $$
-
-   *(Step 6 wala hi rule.)*
-10. Update
-
-    $$
-    w \leftarrow w - \eta \times \text{gradient}
-    $$
-
-    se: $w_2 = 0.5 - 1 \times (-0.0642) = 0.5642$ aur $w_1 = 0.5 - 1 \times (-0.0121) = 0.5121$. *(Negative gradient matlab "loss kam karne ke liye ye weight badhao".)*
+1. **Forward propagation.** $\hat y = 3 \times 2 = 6$.
+2. **Loss.** $L = (6 - 4)^2 = 4$.
+3. **Backpropagation (gradient).** $\dfrac{\partial L}{\partial w} = 2(\hat y - y)\,x = 2 \times 2 \times 2 = 8$. Ye positive hai, to bada $w$ matlab bada loss.
+4. **Optimizer (update).** $w_{new} = 3 - 0.1 \times 8 = 2.2$.
+5. **Phir forward pass.** $\hat y = 2.2 \times 2 = 4.4$, to $L = (4.4 - 4)^2 = 0.16$.
 
 </Steps>
 
 <Answer>
 
-loss $= 0.0894$; gradients $w_2$ ke liye $-0.0642$ aur $w_1$ ke liye $-0.0121$; naye weights $w_2 = 0.5642$, $w_1 = 0.5121$.
+Ek cycle loss ko 4 se 0.16 tak aur prediction ko 6 se 4.4 tak le jaata hai (actual value 4 hai).
 
 </Answer>
 
 <Box kind="verify">
 
-**Check 1, weight ko thoda hilao.** Gradient matlab "loss mein change ÷ weight mein change". $w_2 = 0.51$ ke saath forward pass dobara chalao: loss $= 0.08875$. $w_2 = 0.49$ ke saath: loss $= 0.09003$. Slope
-
-$$
-\begin{aligned}
- &= (0.08875 - 0.09003) / 0.02 \\
-&= -0.00128 / 0.02 \\
-&= -0.064
-\end{aligned}
-$$
-
-jo backpropagation ke $-0.0642$ se match karta hai. $w_1$ ke liye yahi karne pe bhi $-0.0121$ aata hai.
-
-**Check 2, naye weights wapas daalo.** $h = \sigma(0.5121) = 0.6253$;
-
-$$
-\begin{aligned}
-\hat{y} &= \sigma(0.5642 \times 0.6253) \\
-&= \sigma(0.3528) \\
-&= 0.5873
-\end{aligned}
-$$
-
-naya loss $= \dfrac{1}{2}(0.5873 - 1)^2 = 0.0852$. Ye 0.0894 se kam hai, to step sach mein downhill gaya.
+Perfect weight $w = 2$ hai kyunki $2 \times 2 = 4$. Weight 3 se 2.2 par gaya, 2 ki taraf, aur loss gira, to update sahi direction mein gaya.
 
 </Box>
 
 </Sum>
 
-Dhyan do ki $w_1$, jo output se door hai, ko $w_2$ se kaafi chhota gradient mila (0.0121 vs 0.0642): ye chhote roop mein vanishing-gradient problem hai.
-
-## Step 4: optimization (weights update karna)
-
-**Ye kya hai.** Optimizer gradients ko actual weight changes mein badalta hai. Sabse simple hai **gradient descent**: har weight ko uske gradient ke ulte ek chhota step do.
-
-$$
-w \leftarrow w - \eta \, \frac{\partial L}{\partial w}
-$$
-
-Words mein: new weight = old weight − learning rate × gradient. Minus sign ka matlab hai "loss pe downhill jao". Practice mein gradient examples ke ek chhote **mini-batch** pe nikalta hai, aur aksar smarter optimizers jaise **momentum**, **RMSProp** ya **Adam** use hote hain. In sabko phir bhi backpropagation wale gradients chahiye; ye gradient descent note mein samjhaye gaye hain. <Cite id="gfdl-ch8" loc="§8.3.1" /> <Cite id="kingma2014" />
-
-Exam mein English mein likho: "New weight = old weight − learning rate × gradient; the minus sign moves the weight downhill on the loss."
-
 ## Forward propagation versus backpropagation
 
-| Point | Forward propagation | Backpropagation |
+| | Forward propagation | Backpropagation |
 |---|---|---|
-| Direction | Input → output | Output → input |
-| What flows | Values (activations) | Error signals (blame) |
-| Purpose | Prediction banana | Har weight ka gradient nikaalna |
-| Main operation | Weighted sum, phir activation | Chain rule: local slopes multiply karo |
-| Used when | Training aur prediction | Sirf training |
-| Changes weights? | Nahi | Nahi (optimizer badalta hai) |
+| Direction | Input se output | Loss se peeche layers ke through |
+| Kaam | Prediction (aur loss) banata hai | Gradient calculate karta hai |
+| Kya use karta hai | Weights, biases, activation functions | Loss aur har hisse ka slope |
+| Weights badalta hai? | Nahi | Nahi, sirf gradient compute karta hai; optimizer badalta hai |
 
-## Backpropagation ke types
+<Cite id="class-dl-m1" loc="p. 26" />
 
-- **Har update mein kitna data use hota hai, uske hisaab se:** *stochastic (online)* backpropagation har example ke baad update karta hai; *batch* backpropagation poore dataset ke baad; *mini-batch* ek chhote group ke baad. Mini-batch usual choice hai. <Cite id="gfdl-ch8" loc="§8.1.3" />
-- **Network type ke hisaab se:** *static* backpropagation feedforward networks ke liye, jahan ek input ka fixed output hota hai (image classification); *recurrent* backpropagation feedback loops wale networks ke liye. Recurrent networks (RNNs) usually **backpropagation through time (BPTT)** se train hote hain, jo RNN ko uske time steps pe unroll karta hai aur phir ordinary backpropagation lagata hai (module 5 mein). <Cite id="gfg-backprop" />
+## Do gradient problems
 
-## Advantages aur disadvantages
+Backpropagation gradient ko kai layers ke through peeche bhejta hai, aur ye do ulte tareeko se galat ja sakta hai.
 
-**Advantages**
+### Vanishing gradient
 
-- **Efficient:** saare gradients ek backward pass mein nikal jaate hain, jiska cost forward pass ke order ka hai (uska ek chhota constant multiple). Slow alternative (har weight ko hilao aur network dobara chalao) mein ek million weights ke liye ek million forward passes lagte. <Cite id="cs231n-backprop" />
-- **General:** differentiable pieces se bane kisi bhi network pe kaam karta hai (dense, convolutional, recurrent layers).
-- **Automatic:** libraries tumhare liye kar deti hain; PyTorch ka `autograd` ise chalata hai jab tum `loss.backward()` call karte ho. <Cite id="pytorch-autograd" />
-- **Iski apni koi settings nahi:** backpropagation gradients ka exact recipe hai; tune karne wali settings (learning rate, batch size) optimizer ki hain.
-- **Hidden features seekhta hai:** hidden layers bina bataye useful internal features khud dhoondh leti hain. <Cite id="rumelhart1986" />
+<Box kind="definition">
 
-**Disadvantages**
-
-- **Vanishing gradients:** 1 se chhote slopes layer ke baad layer multiply hokar early layers ko bahut slowly seekhne dete hain (neeche dekho).
-- **Exploding gradients:** 1 se bade slopes gradients ko huge aur training ko unstable bana sakte hain.
-- **Labelled data aur differentiable functions chahiye.**
-- **Phans sakta hai** kharab low points, flat regions ya saddle points mein, kyunki ye sirf local slope dekhta hai. <Cite id="gfdl-ch8" loc="§8.2.2" />
-- **Settings ke liye sensitive** jaise learning rate aur initial weights, aur bade networks ke liye bahut computation chahiye.
-
-## Applications
-
-Backpropagation lagbhag har modern neural network ko train karta hai: image classifiers (CNNs), speech recognition, machine translation aur chatbots (RNNs aur transformers), recommendation systems, medical image diagnosis aur self-driving perception. <Cite id="ibm-backprop" />
-
-**Ek line mein history.** Rumelhart, Hinton aur Williams (1986) ne dikhaya ki ye procedure hidden layers wale networks ko useful internal features seekhna sikhata hai, aur ise famous banaya. Milte julte ideas pehle bhi aaye the. <Cite id="rumelhart1986" /> <Cite id="wiki-backprop" />
-
-## Common problems jo pata hone chahiye
-
-<Box kind="pitfall">
-
-**Vanishing gradients.** Sigmoid ka slope maximum 0.25 hai aur bade inputs pe lagbhag 0. Backpropagation har layer pe aisa ek slope multiply karta hai, to bahut saari sigmoid layers ke baad early layers tak pahunchne wala blame bahut chhota hota hai aur woh mushkil se seekhti hain. Fixes: ReLU activation (positive inputs pe slope 1), achha weight initialization aur batch normalization.
+**Vanishing Gradient Problem:** it occurs when gradients become extremely small during backpropagation. Because of these tiny gradients, earlier layers receive almost no updates and stop learning. <Cite id="class-dl-chp2" loc="slide 64" />
 
 </Box>
 
-<Figure caption="Sigmoid (solid) aur uska derivative (dashed). Derivative kabhi 0.25 se upar nahi jaata, aur jab input 0 se door ho to 0 ke paas hota hai. Backpropagation har sigmoid layer pe is derivative se multiply karta hai, isliye gradients peeche jaate jaate chhote hote jaate hain.">
-  <CurvePlot curves="sigmoid,sigmoid-derivative" x="-6,6" y="0,1.05" xLabel="z (weighted sum)" yLabel="value" />
-</Figure>
+**Ye kyun hota hai.** Backpropagation mein gradients output layer se input layer ki taraf jaate hain. Kai layers guzarne ke baad gradient chhota aur chhota hota jaata hai. Teacher ki picture mein gradient output layer par 0.8, phir 0.3, 0.05 aur hidden layer 1 par 0.001 hai, to **pehli hidden layers ko lagbhag zero gradient milta hai**. <Cite id="class-dl-chp2" loc="slide 64" />
 
-<Box kind="pitfall">
+Gradient descent iska cause nahi hai: weight update = learning rate × gradient, to bahut chhota gradient matlab bahut chhota update. Weights mushkil se badalte hain, loss bahut slowly ghatta hai aur training best solution tak pahunchne se pehle ruk sakti hai. <Cite id="class-dl-chp2" loc="slide 64" />
 
-**Shuru mein saare weights same.** Agar do hidden neurons exactly same weights se shuru hon, to woh same output nikaalte hain aur exactly same gradient paate hain, to hamesha identical rehte hain aur kabhi alag features nahi seekh paate. Isliye hum **small random** weights se shuru karte hain. Ise breaking symmetry kehte hain. <Cite id="hinton-lec6" /> <Cite id="rumelhart1986" />
+<Img id="class-backpropagation-vanishing-concept" caption="Vanishing gradient problem: gradient layer dar layer chhota hota hai, to pehli hidden layers mushkil se seekhti hain." />
+
+```mermaid
+%% caption: Teacher ke example ka vanishing gradient flow. Gradient output layer se input layer ki taraf jaate hue chhota hota jaata hai.
+flowchart TD
+  A["Output layer: gradient 0.8"] --> B["Hidden layer 3: gradient 0.3"]
+  B --> C["Hidden layer 2: gradient 0.05"]
+  C --> D["Hidden layer 1: gradient 0.001"]
+  D --> E["Weights hardly update"]
+  E --> F["Learning slows down"]
+```
+
+<Cite id="class-dl-chp2" loc="slide 64" />
+
+**Kahan hota hai:** deep neural networks, recurrent neural networks aur bahut deep architectures, khaaskar jab sigmoid ya tanh activation functions baar-baar use hon. <Cite id="class-dl-chp2" loc="slide 64" /> **Effects:** slow training, early hidden layers seekhna band kar deti hain, accuracy low rehti hai, training mein kai epochs lagte hain, deep networks train karna mushkil ho jaata hai. <Cite id="class-dl-chp2" loc="slide 65" />
+
+Teacher sigmoid curve se wajah samjhate hain: uska derivative hamesha 1 se kam hai, $0 < f'(z) \le 0.25$, to backpropagation mein kai chhote derivatives multiply hote hain aur gradient dheere dheere lagbhag zero ho jaata hai. Tanh derivative $f'(z) = 1 - \tanh^2(z)$ bhi 1 se zyada nahi, to bahut deep networks mein gradient phir bhi vanish ho sakta hai. <Cite id="class-dl-chp2" loc="slide 65" />
+
+<Img id="class-backpropagation-vanishing-sigmoid" caption="Sigmoid aur tanh gradients ko kyun vanish karte hain: unke derivatives hamesha 1 se kam hain (sigmoid ka zyada se zyada 0.25)." />
+
+**Sum 2: gradient kitni tezi se chhota hota hai.** <Cite id="class-dl-chp2" loc="slide 65" />
+
+<Sum>
+
+<Given>
+
+Sigmoid layer ka best case: har layer par derivative $0.25$. Output par gradient 1.
+
+</Given>
+
+<Find>
+
+5 layers aur 10 layers ke baad gradient.
+
+</Find>
+
+<Steps>
+
+1. Har layer gradient ko 0.25 se multiply karti hai.
+2. 5 layers ke baad: $0.25^5 = 0.25 \times 0.25 \times 0.25 \times 0.25 \times 0.25 = 0.000977$.
+3. 10 layers ke baad: $0.25^{10} = (0.25^5)^2 = 0.000977^2 \approx 0.00000095$.
+
+</Steps>
+
+<Answer>
+
+5 layers ke baad lagbhag 0.001 aur 10 layers ke baad lagbhag 0.000001. Best case mein bhi early layers mein gradient lagbhag zero hai.
+
+</Answer>
+
+<Box kind="verify">
+
+$0.25^5 = 1/4^5 = 1/1024 = 0.000977$, aur $1/4^{10} = 1/1{,}048{,}576 = 0.00000095$. Dono match karte hain.
 
 </Box>
 
-- **Local minima aur flat regions.** Bade networks ke liye experts ab maante hain ki zyadatar local minima pehle se kaafi achhe hain, aur flat regions aur saddle points (flat jagah jo minimum nahi hain) aksar badi problem hain. <Cite id="gfdl-ch8" loc="§8.2.3" />
-- **Exploding gradients.** Gradient ko ek maximum size tak clip karna common fix hai.
+</Sum>
 
-## Ye kahan poocha gaya
+**Kaise solve karein** (teacher ki list): <Cite id="class-dl-chp2" loc="slide 65" />
 
-| If the question says | What to write | Seen as |
+- **ReLU activation:** positive inputs ke liye derivative 1, to gradients kaafi bade rehte hain.
+- **Leaky ReLU:** negative inputs par bhi chhota gradient allow karta hai.
+- **Proper weight initialization:** He initialization (ReLU ke liye), Xavier initialization (sigmoid/tanh ke liye).
+- **Batch normalization:** activations aur gradients ko healthy range mein rakhta hai aur training tez karta hai.
+- **LSTM / GRU:** recurrent networks mein use hote hain, sequence data mein vanishing gradient problem kam karne ke liye hi design kiye gaye hain.
+
+<Img id="class-backpropagation-vanishing-solutions" caption="Vanishing gradients ke paanch fixes: ReLU, Leaky ReLU, proper weight initialization, batch normalization, LSTM/GRU." />
+
+Module 1 yahi do problems batata hai: vanishing gradients mein earlier layers "learn more slowly than later layers", jab tak weights badalna band na kar dein; exploding gradients mein model weights bahut bade ho jaate hain aur aakhir mein "will eventually be represented as NaN". <Cite id="class-dl-m1" loc="p. 31" />
+
+### Exploding gradient
+
+<Box kind="definition">
+
+**Exploding Gradient Problem:** it occurs when gradients become extremely large during backpropagation. Large gradients produce huge weight updates, making the neural network unstable. <Cite id="class-dl-chp2" loc="slide 66" />
+
+</Box>
+
+**Ye kaise hota hai.** Gradients kai layers se guzarte hain aur kabhi chhote hone ke bajaye bade aur bade hote jaate hain. Teacher ki picture mein gradient output layer par 2, phir 8, 40 aur hidden layer 1 par 200 hai. **Bahut bade gradients se huge weight updates hote hain.** <Cite id="class-dl-chp2" loc="slide 66" />
+
+Fruit example mein predictions kudti rehti hain kyunki weight updates bahut bade hain: 220 g, 350 g, 80 g, 500 g, 120 g. Model sahi se seekh nahi paata. <Cite id="class-dl-chp2" loc="slide 66" />
+
+<Img id="class-backpropagation-exploding-concept" caption="Exploding gradient problem: gradient layer dar layer badhta hai (2, 8, 40, 200) aur huge weight updates karata hai." />
+
+**Causes:** bahut deep networks, poor weight initialization (bahut bade initial weights) aur bada learning rate (optimizer overshoot karta rehta hai). **Effects:** training unstable, loss ghatne ke bajaye badhta hai, model converge nahi hota aur weights bahut bade ho sakte hain. <Cite id="class-dl-chp2" loc="slide 67" />
+
+**Kaise solve karein:** <Cite id="class-dl-chp2" loc="slide 67" />
+
+- **Gradient clipping:** gradient ki maximum limit set karo; limit se upar jaaye to use chhoti value par clip kar do.
+- **Proper weight initialization** (He, Xavier).
+- **Chhota learning rate.**
+- **Batch normalization.**
+- **Better optimizers** jaise RMSProp aur Adam.
+
+Textbook add karta hai ki cliff structures recurrent networks mein sabse common hain, kyunki wo har time step ka ek factor multiply karte hain, aur gradient clipping "intervenes to reduce the step size". <Cite id="class-dl-m2" loc="p. 47" />
+
+<Img id="class-backpropagation-exploding-solutions" caption="Exploding gradients ke paanch fixes: gradient clipping, proper initialization, chhota learning rate, batch normalization, better optimizers." />
+
+### Vanishing versus exploding gradient
+
+<Img id="class-backpropagation-vanish-vs-explode" caption="Vanishing aur exploding gradient: gradient, weight updates, training behaviour, common causes aur solutions par comparison." />
+
+| | Vanishing gradient | Exploding gradient |
 |---|---|---|
-| "Explain the learning process in a neural network", "how does it update its weights", "role of forward propagation, loss, backpropagation and optimization" | Chaar step wala loop uske diagram ke saath, har step pe ek paragraph theory, update rule words aur symbols mein, forward vs backward table, advantages, limitations | <PYQ id="2025-05/q6b" /> |
+| Kya hota hai | Gradient bahut chhota (0 ke kareeb) | Gradient bahut bada |
+| Weight updates | Tiny | Huge |
+| Training | Slow, learning ruk sakti hai | Unstable, bahut kudti hai |
+| Loss | Bahut slowly ghatta hai | Badh sakta hai ya fluctuate |
+| Common with | Sigmoid / tanh, bahut deep networks | Poor initialization, bada learning rate, bahut deep networks |
+| Solve | ReLU, Leaky ReLU, batch normalization, proper initialization, LSTM/GRU | Gradient clipping, proper initialization, kam learning rate, Adam / RMSProp |
 
-Gradient descent wale questions (types of gradient descent, SGD, momentum, $y = xw$ ka update rule) gradient descent note mein covered hain; woh backpropagation ke nikale gradients use karte hain.
+<Cite id="class-dl-chp2" loc="slides 65 to 67" />
+
+**Easy trick (teacher ki):** tiny baby steps = vanishing gradient; huge jumps = exploding gradient. <Cite id="class-dl-chp2" loc="slide 67" />
+
+## Ye kahan puchha gaya
+
+| Question | Kya likhna hai | Solution |
+|---|---|---|
+| "Explain the learning process in a neural network. How does it update weights? Role of forward propagation, loss, backpropagation and optimization" | Diagram ke saath chaar-step loop, har step ka kaam, update rule, chhota example | <PYQ id="2025-05/q6b" /> |
 
 ## Quick revision
 
-- Learning loop: **forward pass → loss → backpropagation → weight update**, repeat.
-- Forward pass, har neuron: weighted sum plus bias, phir activation.
-- Loss: numbers ke liye squared error, classes ke liye cross-entropy.
-- Chain rule: raaste ke local slopes multiply karo (gears: 3 × 2 = 6).
-- Backprop: output pe error → weights ke through blame peeche → gradient = error signal × input.
-- Backprop gradients nikaalta hai; optimizer unka use karta hai: $w \leftarrow w - \eta\,\partial L/\partial w$.
-- Problems: vanishing/exploding gradients, symmetry (fix: small random weights).
+- Learning loop: forward propagation → prediction → loss → backpropagation → optimizer → update weights → better prediction, repeat.
+- Loss batata hai kitna error hai; gradient (loss ka slope) batata hai kis taraf aur kitni tez move karna hai.
+- Backpropagation sirf gradient compute karta hai (cost ki information peeche flow karti hai). Optimizer use karta hai: $W_{new} = W_{old} - \eta\, \partial L / \partial W$.
+- Vanishing gradient: tiny gradients, early layers seekhna band (sigmoid/tanh). Fixes: ReLU, Leaky ReLU, batch normalization, proper initialization, LSTM/GRU.
+- Exploding gradient: huge gradients, unstable training. Fixes: gradient clipping, proper initialization, chhota learning rate, batch normalization, RMSProp/Adam.
