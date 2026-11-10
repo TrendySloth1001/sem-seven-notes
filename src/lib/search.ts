@@ -19,7 +19,7 @@ export function getSearchItems(): SearchItem[] {
         group: s.name,
         label: `${m.number}. ${m.title}`,
         hint: "Syllabus",
-        keywords: m.topics.join(" "),
+        keywords: m.units.map((u) => `${u.heading ?? ""} ${u.text}`).join(" "),
       });
     }
     for (const t of getTopics(s.slug)) {
