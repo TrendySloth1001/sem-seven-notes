@@ -1,6 +1,7 @@
 // Usage: node scripts/mdx-braces.ts [--write] <files...>
 // In MDX, "{...}" in plain text runs as JavaScript, so set notation like {deposit, money} crashes the page.
-// This finds braces outside maths, code and component tags, and with --write escapes them as \{ \}.
+// A bare "<=" fails too, because "<" opens a tag. This finds both outside maths, code and component tags,
+// and with --write escapes braces as \{ \} and writes "<=" as "≤".
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -13,9 +14,9 @@ export function escapeBraces(src: string): { out: string; count: number } {
   let last = 0;
   let count = 0;
   const esc = (text: string) =>
-    text.replace(/[{}]/g, (b) => {
+    text.replace(/[{}]|<=/g, (b) => {
       count++;
-      return `\\${b}`;
+      return b === "<=" ? "≤" : `\\${b}`;
     });
   for (const m of src.matchAll(PROTECTED)) {
     out += esc(src.slice(last, m.index)) + m[0];

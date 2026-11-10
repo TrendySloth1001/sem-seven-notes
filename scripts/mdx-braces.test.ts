@@ -13,6 +13,12 @@ test("escapes set notation in text but not maths, code or tags", () => {
   );
 });
 
+test("writes a bare <= in text as ≤ but leaves code alone", () => {
+  const { out, count } = escapeBraces("i = 2, 4 <= 29 and `i * i <= n`");
+  assert.equal(count, 1);
+  assert.equal(out, "i = 2, 4 ≤ 29 and `i * i <= n`");
+});
+
 test("leaves frontmatter alone", () => {
   const src = '---\nkeyIdeas: ["{x}"]\n---\n\nText.';
   assert.equal(escapeBraces(src).count, 0);

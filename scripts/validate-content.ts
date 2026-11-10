@@ -4,10 +4,13 @@ import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 import { IMAGE_LICENSES, type ImageRef } from "../src/lib/content.ts";
+import { compileError } from "./compile-mdx.ts";
 import { escapeBraces } from "./mdx-braces.ts";
 
 const ROOT = path.join(process.cwd(), "content");
 let errors = 0;
+// Every MDX source (files and question texts), compiled at the end exactly as the site would.
+const toCompile: { file: string; label: string; source: string }[] = [];
 const fail = (file: string, msg: string) => {
   errors++;
   console.error(`✗ ${path.relative(process.cwd(), file)}: ${msg}`);
@@ -64,27 +67,24 @@ for (const subject of fs.readdirSync(ROOT)) {
       const id = im.id ?? "(no id)";
       if (images.has(id)) fail(f, `duplicate image id "${id}"`);
       images.add(id);
-      if (
-        !im.src?.startsWith(
+      const commons =
+        !!im.src?.startsWith(
           "https://upload.wikimedia.org/wikipedia/commons/",
-        ) ||
-        !/\.(png|jpe?g)$/i.test(im.src)
-      )
+        ) &&
+        /\.(png|jpe?g)$/i.test(im.src) &&
+        !!im.sourceUrl?.startsWith("https://commons.wikimedia.org/");
+      const d2l =
+        /^https:\/\/d2l\.ai\/_images\/[\w.-]+\.(svg|png)$/.test(im.src ?? "") &&
+        !!im.sourceUrl?.startsWith("https://d2l.ai/") &&
+        im.license === "CC BY-SA 4.0";
+      if (!commons && !d2l)
         fail(
           f,
-          `${id}: src must be a PNG/JPEG on upload.wikimedia.org/wikipedia/commons/`,
+          `${id}: src must be a Commons PNG/JPEG (sourceUrl on commons.wikimedia.org) or a d2l.ai/_images figure (CC BY-SA 4.0, sourceUrl on d2l.ai)`,
         );
       if (!LICENSES.has(im.license ?? ""))
         fail(f, `${id}: license "${im.license}" is not in IMAGE_LICENSES`);
-      if (
-        !im.author ||
-        !im.alt ||
-        !im.sourceUrl?.startsWith("https://commons.wikimedia.org/")
-      )
-        fail(
-          f,
-          `${id}: needs author, alt and a commons.wikimedia.org sourceUrl`,
-        );
+      if (!im.author || !im.alt) fail(f, `${id}: needs author and alt`);
       if (!(Number(im.width) > 0 && Number(im.height) > 0))
         fail(f, `${id}: needs width and height`);
     }
@@ -112,6 +112,7 @@ for (const subject of fs.readdirSync(ROOT)) {
     );
     papers.set(p, new Set(paper.questions.map((q) => q.id)));
     for (const q of paper.questions as { id: string; text?: string }[]) {
+      toCompile.push({ file, label: `${q.id}: `, source: q.text ?? "" });
       if (escapeBraces(q.text ?? "").count)
         fail(
           file,
@@ -144,10 +145,11 @@ for (const subject of fs.readdirSync(ROOT)) {
     )
       fail(file, "Hinglish file has no English counterpart");
     const raw = fs.readFileSync(file, "utf8");
+    toCompile.push({ file, label: "", source: raw });
     if (escapeBraces(raw).count)
       fail(
         file,
-        `"{" or "}" outside maths/code runs as code in MDX; run node scripts/mdx-braces.ts --write ${path.relative(process.cwd(), file)}`,
+        `"{", "}" or "<=" outside maths/code breaks MDX; run node scripts/mdx-braces.ts --write ${path.relative(process.cwd(), file)}`,
       );
     const { data, content } = matter(raw);
     const isSolution = file.includes(`${path.sep}pyq${path.sep}`);
@@ -188,6 +190,11 @@ for (const subject of fs.readdirSync(ROOT)) {
     `${subject}: ${files.length} MDX files, ${papers.size} papers checked`,
   );
 }
+for (const c of toCompile) {
+  const e = await compileError(c.source);
+  if (e) fail(c.file, `${c.label}MDX does not compile: ${e}`);
+}
+console.log(`${toCompile.length} MDX sources compiled`);
 if (errors > 0) {
   console.error(`\n${errors} problem(s)`);
   process.exit(1);
