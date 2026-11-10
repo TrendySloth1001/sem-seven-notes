@@ -5,9 +5,12 @@ import { Suspense } from "react";
 import { Bilingual } from "@/components/bilingual";
 import { CiteChip, TopicChip } from "@/components/chips";
 import { Doc } from "@/components/doc";
+import { DoneCheck } from "@/components/done";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { SubjectTabs } from "@/components/subject-tabs";
 import { Toc, type TocItem } from "@/components/toc";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   getImages,
   getPaper,
@@ -18,6 +21,7 @@ import {
   listPapers,
   metaStrings,
 } from "@/lib/content";
+import { doneId } from "@/lib/done";
 import { formatDate } from "@/lib/format";
 import { subjects } from "@/lib/syllabus";
 
@@ -56,6 +60,7 @@ async function PaperPageContent({
   return (
     <div className="mx-auto flex max-w-6xl gap-10 px-4 py-8 sm:px-6 sm:py-12">
       <article className="min-w-0 max-w-3xl flex-1">
+        <SubjectTabs subject={subject} active="pyq" />
         <header>
           <p className="font-mono-label text-primary">{s.name}</p>
           <h1 className="mt-2 text-4xl font-bold tracking-tight sm:text-5xl">
@@ -81,15 +86,16 @@ async function PaperPageContent({
                 QP {paper.qpCode}
               </Badge>
             ) : null}
-            <a
-              href={paper.sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-h-8 items-center gap-1 rounded-full bg-secondary px-3 text-xs font-medium text-secondary-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring [@media(pointer:coarse)]:min-h-11"
+            <Button
+              asChild
+              variant="outline"
+              className="min-h-11 gap-1.5 rounded-full px-4"
             >
-              <ExternalLink aria-hidden className="size-3" />
-              Original paper (PDF)
-            </a>
+              <a href={paper.sourceUrl} target="_blank" rel="noreferrer">
+                <ExternalLink aria-hidden />
+                Original paper (PDF)
+              </a>
+            </Button>
           </div>
           <ul className="mt-5 list-decimal space-y-1 pl-5 text-muted-foreground">
             {paper.instructions.map((i) => (
@@ -139,8 +145,20 @@ async function PaperPageContent({
                 {solution ? null : (
                   <Badge variant="outline">Solution pending</Badge>
                 )}
-                {q.note ? <Badge variant="outline">{q.note}</Badge> : null}
+                <span className="ml-auto">
+                  <DoneCheck
+                    id={doneId.question(subject, slug, q.id)}
+                    label={`Q${q.label}`}
+                    showLabel
+                  />
+                </span>
+                {q.note && q.note.length <= 40 ? (
+                  <Badge variant="outline">{q.note}</Badge>
+                ) : null}
               </div>
+              {q.note && q.note.length > 40 ? (
+                <p className="mt-2 text-sm text-muted-foreground">{q.note}</p>
+              ) : null}
               <div className="mt-3 rounded-lg border bg-card px-4 py-3">
                 <p className="font-mono-label mb-1 text-muted-foreground">
                   Question

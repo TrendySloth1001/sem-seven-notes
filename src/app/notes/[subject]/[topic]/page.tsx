@@ -4,7 +4,9 @@ import { Suspense } from "react";
 import { Bilingual } from "@/components/bilingual";
 import { CiteChip, PaperChip, SyllabusChip } from "@/components/chips";
 import { Doc } from "@/components/doc";
+import { DoneCheck } from "@/components/done";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { SubjectTabs } from "@/components/subject-tabs";
 import { Toc, type TocItem } from "@/components/toc";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +22,7 @@ import {
   type Doc as NoteDoc,
   type Reference,
 } from "@/lib/content";
+import { doneId } from "@/lib/done";
 import { subjects } from "@/lib/syllabus";
 
 const SOURCE_GROUPS: {
@@ -116,10 +119,18 @@ async function NotePageContent({
   return (
     <div className="mx-auto flex max-w-5xl gap-10 px-4 py-8 sm:px-6 sm:py-12">
       <article className="min-w-0 max-w-3xl flex-1">
+        <SubjectTabs subject={subject} active="notes" />
         <header>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">Module {t.module}</Badge>
             <SyllabusChip subject={subject} module={t.module} />
+            <span className="ml-auto">
+              <DoneCheck
+                id={doneId.note(subject, t.slug)}
+                label={t.title}
+                showLabel
+              />
+            </span>
           </div>
           <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
             {t.title}
@@ -202,7 +213,10 @@ async function NotePageContent({
             ) : null}
             <ul className="mt-4 flex flex-col gap-3">
               {g.items.map((r) => (
-                <li key={r.id} className="flex flex-col gap-1.5">
+                <li
+                  key={r.id}
+                  className="flex flex-col gap-1.5 [overflow-wrap:anywhere]"
+                >
                   <span>
                     {g.id === "references"
                       ? `${r.authors}${r.year ? ` (${r.year})` : ""}. ${r.title}. ${r.venue}.`

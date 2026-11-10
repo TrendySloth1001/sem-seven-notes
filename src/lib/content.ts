@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import GithubSlugger from "github-slugger";
 import matter from "gray-matter";
+import { doneId, type SubjectItems } from "./done.ts";
 
 const ROOT = path.join(process.cwd(), "content");
 
@@ -36,7 +37,7 @@ export const IMAGE_LICENSES = [
 
 export type ImageRef = {
   id: string;
-  /** A PNG render on upload.wikimedia.org (thumb URL for SVG originals). */
+  /** A PNG/JPEG render on upload.wikimedia.org, or a figure under d2l.ai/_images/. */
   src: string;
   width: number;
   height: number;
@@ -44,7 +45,7 @@ export type ImageRef = {
   author: string;
   license: (typeof IMAGE_LICENSES)[number];
   licenseUrl?: string;
-  /** The Commons file page. */
+  /** The Commons file page, or the d2l.ai page the figure appears on. */
   sourceUrl: string;
 };
 
@@ -171,6 +172,13 @@ export function getImages(subject: string): Record<string, ImageRef> {
   return out;
 }
 
+/** The site an image is credited to, from its source page. */
+export function imageSite(image: Pick<ImageRef, "sourceUrl">): string {
+  return image.sourceUrl.startsWith("https://d2l.ai/")
+    ? "Dive into Deep Learning (d2l.ai)"
+    : "Wikimedia Commons";
+}
+
 export function getTopics(subject: string): Topic[] {
   const file = path.join(ROOT, subject, "topics.json");
   return exists(file) ? readJson<Topic[]>(file) : [];
@@ -233,6 +241,20 @@ export function isSolved(
   questionId: string,
 ): boolean {
   return exists(path.join(ROOT, subject, "pyq", paper, `${questionId}.mdx`));
+}
+
+// Every tickable item in a subject, for the progress bars.
+export function subjectItems(
+  subject: string,
+  units: { no: string }[],
+): SubjectItems {
+  return {
+    units: units.map((u) => doneId.unit(subject, u.no)),
+    notes: getTopics(subject).map((t) => doneId.note(subject, t.slug)),
+    questions: listPapers(subject).flatMap((p) =>
+      p.questions.map((q) => doneId.question(subject, p.slug, q.id)),
+    ),
+  };
 }
 
 export type AskedIn = { paper: Paper; question: PaperQuestion };

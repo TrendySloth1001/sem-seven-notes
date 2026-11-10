@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { DoneCheck } from "@/components/done";
 import { PageSkeleton } from "@/components/page-skeleton";
-import { getTopics, listWrittenNotes } from "@/lib/content";
+import { SubjectTabs } from "@/components/subject-tabs";
+import { askedIn, getTopics, listWrittenNotes } from "@/lib/content";
+import { doneId } from "@/lib/done";
 import { subjects } from "@/lib/syllabus";
 
 export function generateStaticParams() {
@@ -29,11 +32,13 @@ async function NotesIndexContent({ params }: PageProps<"/notes/[subject]">) {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+      <SubjectTabs subject={subject} active="notes" progress />
       <p className="font-mono-label text-primary">{s.name}</p>
       <h1 className="mt-2 text-4xl font-bold tracking-tight">Notes</h1>
       <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
-        {written.size} of {topics.length} topics written. Each note shows the
-        past-paper questions it answers.
+        {written.size} of {topics.length} topics written. The count on the right
+        is how many past-paper questions each topic has had, so the highest
+        numbers are the safest to revise first.
       </p>
       <div className="mt-8 flex flex-col gap-8">
         {s.modules.map((m) => {
@@ -49,14 +54,24 @@ async function NotesIndexContent({ params }: PageProps<"/notes/[subject]">) {
               </h2>
               <ul className="mt-2 divide-y rounded-xl border">
                 {inModule.map((t) => (
-                  <li key={t.slug}>
+                  <li key={t.slug} className="flex items-center pl-2">
+                    <DoneCheck
+                      id={doneId.note(subject, t.slug)}
+                      label={t.title}
+                    />
                     <Link
                       href={`/notes/${subject}/${t.slug}`}
-                      className="flex min-h-12 items-center justify-between gap-3 px-4 py-2 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex min-h-12 flex-1 items-center justify-between gap-3 py-2 pr-4 pl-2 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <span>{t.title}</span>
-                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                        {written.has(t.slug) ? "written" : "not yet"}
+                      <span className="flex shrink-0 items-center gap-3 font-mono text-xs text-muted-foreground">
+                        {written.has(t.slug) ? null : <span>not yet</span>}
+                        <span
+                          className="rounded-full bg-secondary px-2 py-0.5 text-secondary-foreground"
+                          title="Questions asked on this topic in past papers"
+                        >
+                          asked {askedIn(subject, t.slug).length}×
+                        </span>
                       </span>
                     </Link>
                   </li>
