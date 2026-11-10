@@ -9,7 +9,7 @@ import { Toc, type TocItem } from "@/components/toc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { getTopics, listPapers, type Paper } from "@/lib/content";
+import { getTopics, listExamPapers, type Paper } from "@/lib/content";
 import {
   type Cluster,
   clusterQuestions,
@@ -22,7 +22,7 @@ import { subjects, totalHours } from "@/lib/syllabus";
 
 export function generateStaticParams() {
   return subjects
-    .filter((s) => listPapers(s.slug).length > 0)
+    .filter((s) => listExamPapers(s.slug).length > 0)
     .map((s) => ({ subject: s.slug }));
 }
 
@@ -130,7 +130,7 @@ function ClusterCard({
 async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
   const { subject } = await params;
   const s = subjects.find((x) => x.slug === subject);
-  const papers = listPapers(subject);
+  const papers = listExamPapers(subject);
   if (!s || papers.length === 0) notFound();
   const topics = getTopics(subject);
 

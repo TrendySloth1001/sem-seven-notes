@@ -68,7 +68,7 @@ async function PaperPageContent({
           </h1>
           <p className="mt-3 text-lg text-muted-foreground">
             {paper.date
-              ? formatDate(paper.date)
+              ? `${paper.assignment ? "Due " : ""}${formatDate(paper.date)}`
               : "Exam date not printed on the paper"}
             {paper.time ? `, ${paper.time}` : ""}
           </p>
@@ -76,26 +76,34 @@ async function PaperPageContent({
             {paper.branch ? (
               <Badge variant="secondary">{paper.branch} paper</Badge>
             ) : null}
-            <Badge variant="outline">{paper.duration}</Badge>
-            <Badge variant="outline">{paper.maxMarks} marks</Badge>
-            <Badge variant="outline" className="font-mono">
-              Paper {paper.paperCode}
-            </Badge>
+            {paper.assignment ? (
+              <Badge variant="secondary">Class assignment</Badge>
+            ) : (
+              <>
+                <Badge variant="outline">{paper.duration}</Badge>
+                <Badge variant="outline">{paper.maxMarks} marks</Badge>
+                <Badge variant="outline" className="font-mono">
+                  Paper {paper.paperCode}
+                </Badge>
+              </>
+            )}
             {paper.qpCode ? (
               <Badge variant="outline" className="font-mono">
                 QP {paper.qpCode}
               </Badge>
             ) : null}
-            <Button
-              asChild
-              variant="outline"
-              className="min-h-11 gap-1.5 rounded-full px-4"
-            >
-              <a href={paper.sourceUrl} target="_blank" rel="noreferrer">
-                <ExternalLink aria-hidden />
-                Original paper (PDF)
-              </a>
-            </Button>
+            {paper.sourceUrl ? (
+              <Button
+                asChild
+                variant="outline"
+                className="min-h-11 gap-1.5 rounded-full px-4"
+              >
+                <a href={paper.sourceUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden />
+                  Original paper (PDF)
+                </a>
+              </Button>
+            ) : null}
           </div>
           <ul className="mt-5 list-decimal space-y-1 pl-5 text-muted-foreground">
             {paper.instructions.map((i) => (

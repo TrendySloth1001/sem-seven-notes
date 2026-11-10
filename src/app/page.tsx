@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   getTopics,
   isSolved,
-  listPapers,
+  listExamPapers,
   listWrittenNotes,
   subjectItems,
 } from "@/lib/content";
@@ -17,7 +17,7 @@ const action = "min-h-11 gap-1.5 rounded-full px-4";
 export default function Home() {
   const cards = subjects.map((s) => {
     const topics = getTopics(s.slug);
-    const papers = listPapers(s.slug);
+    const papers = listExamPapers(s.slug);
     const questions = papers.flatMap((p) =>
       p.questions.map((q) => isSolved(s.slug, p.slug, q.id)),
     );

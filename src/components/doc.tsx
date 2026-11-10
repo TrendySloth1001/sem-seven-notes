@@ -22,7 +22,7 @@ export type DocContext = {
   images: Record<string, ImageRef>;
 };
 
-// A credited, openly licensed diagram (Wikimedia Commons or d2l.ai), on a white panel so it reads in dark mode.
+// A credited diagram (Wikimedia Commons, d2l.ai or a teacher's class figure), on a white panel so it reads in dark mode.
 function Img({ image, caption }: { image: ImageRef; caption: string }) {
   return (
     <figure className="my-8">
@@ -40,14 +40,18 @@ function Img({ image, caption }: { image: ImageRef; caption: string }) {
         {caption}{" "}
         <span className="text-xs">
           Image:{" "}
-          <a
-            href={image.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-2 hover:text-foreground"
-          >
-            {image.author}
-          </a>
+          {image.sourceUrl ? (
+            <a
+              href={image.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              {image.author}
+            </a>
+          ) : (
+            `${image.author}${image.source ? ` (${image.source})` : ""}`
+          )}
           ,{" "}
           {image.licenseUrl ? (
             <a

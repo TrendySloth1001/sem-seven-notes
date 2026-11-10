@@ -42,7 +42,14 @@ async function PapersIndexContent({ params }: PageProps<"/pyq/[subject]">) {
           id: "own",
           title: "Your branch: CSE (AI&ML)",
           blurb: "Papers set for your branch. Start here.",
-          list: papers.filter((p) => !p.branch),
+          list: papers.filter((p) => !p.branch && !p.assignment),
+        },
+        {
+          id: "assignments",
+          title: "Class assignments",
+          blurb:
+            "Question banks set by your teachers, solved from their class notes.",
+          list: papers.filter((p) => p.assignment),
         },
         {
           id: "practice",
@@ -78,7 +85,9 @@ async function PapersIndexContent({ params }: PageProps<"/pyq/[subject]">) {
                       ) : null}
                       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                         <CalendarDays aria-hidden className="size-4" />
-                        {p.date ? formatDate(p.date) : "Exam date not printed"}
+                        {p.date
+                          ? `${p.assignment ? "Due " : ""}${formatDate(p.date)}`
+                          : "Exam date not printed"}
                       </p>
                       <p className="mt-auto flex items-center gap-1.5 pt-2 text-sm">
                         <CheckCircle2

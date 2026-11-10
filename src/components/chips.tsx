@@ -4,6 +4,7 @@ import {
   Globe,
   GraduationCap,
   Newspaper,
+  School,
   Tag,
   Terminal,
 } from "lucide-react";
@@ -40,6 +41,7 @@ const KIND_ICON = {
   docs: Terminal,
   tutorial: Globe,
   wiki: Globe,
+  class: School,
 } as const;
 
 export function CiteChip({
@@ -52,17 +54,33 @@ export function CiteChip({
   list?: boolean;
 }) {
   const Icon = KIND_ICON[reference.kind];
+  const title = `${reference.authors}. ${reference.title}. ${reference.venue}${reference.year ? `, ${reference.year}` : ""}.`;
+  const body = (
+    <>
+      <Icon aria-hidden className="size-3 shrink-0" />
+      {reference.short}
+      {loc ? ` · ${loc}` : ""}
+    </>
+  );
+  // Class files are shared only inside the college, so their chip names the file without linking.
+  if (!reference.url)
+    return (
+      <span
+        title={title}
+        className={`${base} bg-secondary text-secondary-foreground`}
+      >
+        {body}
+      </span>
+    );
   return (
     <a
       href={reference.url}
       target="_blank"
       rel="noreferrer"
-      title={`${reference.authors}. ${reference.title}. ${reference.venue}${reference.year ? `, ${reference.year}` : ""}.`}
+      title={title}
       className={`${base} bg-secondary text-secondary-foreground hover:bg-accent ${list ? touch : ""}`}
     >
-      <Icon aria-hidden className="size-3 shrink-0" />
-      {reference.short}
-      {loc ? ` · ${loc}` : ""}
+      {body}
     </a>
   );
 }

@@ -136,3 +136,15 @@ Look at how the best sites draw the topic before you draw it: search GeeksforGee
 - No headings (`#`) inside a solution. Several solutions share one page, so repeated headings would create duplicate anchors. Use bold lead-ins.
 - Frontmatter is only `references: [id, ...]`.
 - A repeated question still gets its own full solution file.
+
+## Deep Learning: teacher material
+
+Deep Learning notes and solutions follow the teachers' class files, because the same teachers set and check the paper. The files sit in `classroom/DL/` (git-ignored, never committed): `Module 1-5.pdf` by Prof. Karishma Raut, `DL_CHP 1-6.pptx` slides and the two assignment question banks. These rules replace the Citations and "Diagrams from the internet" rules above for this subject only; the style, Hinglish and solution-file rules still apply.
+
+- **Content comes from the class files only.** Topics, order of points, definitions, keywords, examples, numbers and diagrams follow the teacher. Do not add web facts the class files do not have; if a question needs something they lack, keep it short and say so in your summary.
+- **Keep the teacher's wording for what a student must write:** definitions, key terms, list headings and one-line points ("Convolution is an operation that applies a small filter (kernel) to an input image to detect useful features"). Explain around them in our simple style. Do not paste whole paragraphs.
+- **Fix teacher errors quietly and tell me.** If a slide has a wrong number or claim, write the correct one and note it in your summary.
+- **References are class files only.** Cite with `<Cite id="class-dl-m4" loc="p. 23" />` or `<Cite id="class-dl-chp4" loc="slide 5" />`; ids are in `references/class.json`. Every note and solution lists only `class-dl-*` ids in `references`. Check every page or slide number you cite.
+- **Diagrams are the teacher's.** Use the teacher's figures as `<Img>` (at least 3 per note, one per 10-mark architecture or process answer), and redraw any other teacher diagram as mermaid. Crop one clear panel from a dense slide rather than showing the whole sheet, so it reads at phone width. Publish with the figure helper into `public/class/deep-learning/<name>.jpg` and add the record to `images/class-<topic>.json`:
+  `{ "id": "class-cnn-filter-steps", "src": "/class/deep-learning/cnn-filter-steps.jpg", "width": 590, "height": 380, "alt": "...", "author": "Deep Learning faculty", "source": "DL_CHP 4, slide 10", "license": "Used with permission" }`
+  Use `"author": "Prof. Karishma Raut"` for Module PDF figures. Remove the Wikimedia Commons and d2l.ai images from the topic you rewrite.

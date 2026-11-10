@@ -36,12 +36,13 @@ for (const subject of fs.readdirSync(ROOT)) {
     "tutorial",
     "docs",
     "wiki",
+    "class",
   ]);
   for (const rf of refFiles) {
     for (const r of readJson<
       {
         id: string;
-        url: string;
+        url?: string;
         kind: string;
         short?: string;
         title?: string;
@@ -49,7 +50,16 @@ for (const subject of fs.readdirSync(ROOT)) {
     >(rf)) {
       if (refs.has(r.id)) fail(rf, `duplicate reference id "${r.id}"`);
       refs.add(r.id);
-      if (!r.url.startsWith("https://")) fail(rf, `${r.id} url must be https`);
+      // Class files are private to the college, so only they may omit a link.
+      if (
+        r.kind === "class"
+          ? r.url !== undefined
+          : !r.url?.startsWith("https://")
+      )
+        fail(
+          rf,
+          `${r.id}: url must be https, and absent only for kind "class"`,
+        );
       if (!KINDS.has(r.kind)) fail(rf, `${r.id} has unknown kind "${r.kind}"`);
       if (!r.short || !r.title) fail(rf, `${r.id} needs "short" and "title"`);
     }
@@ -77,10 +87,17 @@ for (const subject of fs.readdirSync(ROOT)) {
         /^https:\/\/d2l\.ai\/_images\/[\w.-]+\.(svg|png)$/.test(im.src ?? "") &&
         !!im.sourceUrl?.startsWith("https://d2l.ai/") &&
         im.license === "CC BY-SA 4.0";
-      if (!commons && !d2l)
+      const cls =
+        new RegExp(`^/class/${subject}/[\\w.-]+\\.(png|jpe?g)$`).test(
+          im.src ?? "",
+        ) &&
+        fs.existsSync(path.join("public", im.src ?? "")) &&
+        im.license === "Used with permission" &&
+        !!im.source;
+      if (!commons && !d2l && !cls)
         fail(
           f,
-          `${id}: src must be a Commons PNG/JPEG (sourceUrl on commons.wikimedia.org) or a d2l.ai/_images figure (CC BY-SA 4.0, sourceUrl on d2l.ai)`,
+          `${id}: src must be a Commons PNG/JPEG (sourceUrl on commons.wikimedia.org), a d2l.ai/_images figure (CC BY-SA 4.0, sourceUrl on d2l.ai), or a class figure in public/class/<subject>/ ("Used with permission", with source)`,
         );
       if (!LICENSES.has(im.license ?? ""))
         fail(f, `${id}: license "${im.license}" is not in IMAGE_LICENSES`);

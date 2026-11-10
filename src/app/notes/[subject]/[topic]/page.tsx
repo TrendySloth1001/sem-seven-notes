@@ -31,6 +31,7 @@ const SOURCE_GROUPS: {
   kinds: Reference["kind"][];
   blurb?: string;
 }[] = [
+  { id: "class-notes", title: "Class notes", kinds: ["class"] },
   {
     id: "references",
     title: "References",

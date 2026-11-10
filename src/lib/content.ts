@@ -15,8 +15,17 @@ export type Reference = {
   title: string;
   venue: string;
   year?: number;
-  url: string;
-  kind: "book" | "paper" | "course" | "notes" | "tutorial" | "docs" | "wiki";
+  /** Absent only for kind "class": teachers' files are not public, so the chip does not link. */
+  url?: string;
+  kind:
+    | "book"
+    | "paper"
+    | "course"
+    | "notes"
+    | "tutorial"
+    | "docs"
+    | "wiki"
+    | "class";
 };
 
 export type Topic = { slug: string; title: string; module: number };
@@ -33,11 +42,13 @@ export const IMAGE_LICENSES = [
   "CC BY-SA 2.5",
   "CC BY-SA 3.0",
   "CC BY-SA 4.0",
+  // Teachers' class figures, published with the HOD's permission.
+  "Used with permission",
 ] as const;
 
 export type ImageRef = {
   id: string;
-  /** A PNG/JPEG render on upload.wikimedia.org, or a figure under d2l.ai/_images/. */
+  /** A PNG/JPEG render on upload.wikimedia.org, a figure under d2l.ai/_images/, or a class figure under /class/<subject>/. */
   src: string;
   width: number;
   height: number;
@@ -45,8 +56,10 @@ export type ImageRef = {
   author: string;
   license: (typeof IMAGE_LICENSES)[number];
   licenseUrl?: string;
-  /** The Commons file page, or the d2l.ai page the figure appears on. */
-  sourceUrl: string;
+  /** The Commons file page, or the d2l.ai page the figure appears on; absent for class figures. */
+  sourceUrl?: string;
+  /** Class figures only: which file and slide or page it comes from. */
+  source?: string;
 };
 
 export type PaperQuestion = {
@@ -68,7 +81,10 @@ export type Paper = {
   maxMarks: number;
   paperCode: string;
   qpCode: string | null;
-  sourceUrl: string;
+  /** Absent for class assignments, which are not public. */
+  sourceUrl?: string;
+  /** A class assignment set by the teachers, not an MU paper; `date` is its deadline. */
+  assignment?: boolean;
   instructions: string[];
   /** Legacy: note printed before question 1. */
   q1note?: string;
@@ -174,6 +190,7 @@ export function getImages(subject: string): Record<string, ImageRef> {
 
 /** The site an image is credited to, from its source page. */
 export function imageSite(image: Pick<ImageRef, "sourceUrl">): string {
+  if (!image.sourceUrl) return "class notes";
   return image.sourceUrl.startsWith("https://d2l.ai/")
     ? "Dive into Deep Learning (d2l.ai)"
     : "Wikimedia Commons";
@@ -202,6 +219,11 @@ export function listWrittenNotes(subject: string): Set<string> {
       .filter((f) => f.endsWith(".mdx") && !f.endsWith(".hi.mdx"))
       .map((f) => f.replace(/\.mdx$/, "")),
   );
+}
+
+/** MU exam papers only, without class assignments: for patterns and paper counts. */
+export function listExamPapers(subject: string): Paper[] {
+  return listPapers(subject).filter((p) => !p.assignment);
 }
 
 export function listPapers(subject: string): Paper[] {
