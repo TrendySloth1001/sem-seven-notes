@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { NavGroup } from "@/lib/nav";
+import { subjectOf } from "@/lib/subject-of";
 
 const item =
   "flex min-h-11 items-center gap-3 rounded-full px-4 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring";
@@ -17,9 +18,11 @@ export function SubjectNav({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const current = subjectOf(pathname);
+  const visible = groups.filter((g) => !g.subject || g.subject === current);
   return (
     <nav aria-label="Site" className="flex flex-col gap-1">
-      {groups.map((g, gi) => (
+      {visible.map((g, gi) => (
         <div key={g.heading} className="flex flex-col gap-0.5">
           <p
             className={`font-mono-label px-4 pb-1 text-muted-foreground ${gi === 0 ? "" : "mt-5"}`}
@@ -27,7 +30,8 @@ export function SubjectNav({
             {g.heading}
           </p>
           {g.links.map((l) => {
-            const active = pathname === l.href;
+            const active =
+              pathname === l.href || (!!l.subject && l.subject === current);
             return (
               <Link
                 key={l.href}
