@@ -5,7 +5,12 @@ import rehypeKatex from "rehype-katex";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import type { ImageRef, Paper, Reference } from "@/lib/content";
+import {
+  type ImageRef,
+  imageSite,
+  type Paper,
+  type Reference,
+} from "@/lib/content";
 import { CiteChip, PaperChip, SyllabusChip } from "./chips";
 import { CurvePlot, Figure, NetworkFigure, NormBalls } from "./figures";
 import { Mermaid } from "./mermaid";
@@ -17,7 +22,7 @@ export type DocContext = {
   images: Record<string, ImageRef>;
 };
 
-// A credited, openly licensed diagram from Wikimedia Commons, on a white panel so it reads in dark mode.
+// A credited, openly licensed diagram (Wikimedia Commons or d2l.ai), on a white panel so it reads in dark mode.
 function Img({ image, caption }: { image: ImageRef; caption: string }) {
   return (
     <figure className="my-8">
@@ -56,7 +61,7 @@ function Img({ image, caption }: { image: ImageRef; caption: string }) {
           ) : (
             image.license
           )}
-          , via Wikimedia Commons.
+          , via {imageSite(image)}.
         </span>
       </figcaption>
     </figure>

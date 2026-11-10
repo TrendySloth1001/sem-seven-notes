@@ -105,15 +105,18 @@ Every note needs **at least two diagrams**. A 10-mark solution about an architec
 
 ### Diagrams from the internet
 
+**Every note needs real images, not only mermaid:** at least 3 embedded images (`<Img>`) per note, and one in each 10-mark solution about an architecture, a process or a model where a good open image exists. Students learn these topics from pictures (a CNN, an LSTM cell, the Hadoop stack, a Merkle tree, the OSI model, a PageRank graph), so find the best ones.
+
 Look at how the best sites draw the topic before you draw it: search GeeksforGeeks, Javatpoint, TutorialsPoint, Medium, Analytics Vidhya, IBM, vendor docs and Wikipedia for the clearest diagram of the idea. Then use it in one of two ways:
 
 1. **Redraw it as our own diagram, and link the original.** Images on GfG, Medium, Javatpoint and most sites are copyrighted, so never copy or hotlink them. Redraw the same idea as a mermaid diagram (the idea and standard layout are free to use; the drawing is not), and put a chip to the page right under it: `<Cite id="gfg-sdlc" loc="diagram" />`. The student can click through to see the original.
-2. **Embed a real image only from Wikimedia Commons, with an accepted licence.** Use this for things mermaid cannot draw (photos, real screenshots, detailed architecture figures):
+2. **Embed a real image from an openly licensed source:** Wikimedia Commons (any accepted licence) or, for deep learning, the figures of Dive into Deep Learning (d2l.ai, CC BY-SA 4.0). Search Commons well: Wikipedia articles on the topic link their figures to Commons ("File:..."), and Commons categories (e.g. "Category:Artificial neural networks", "Category:Blockchain", "Category:Apache Hadoop") hold many more.
    - Find the file on commons.wikimedia.org. Get its metadata: `curl -s -A "sem-study-site/1.0" "https://commons.wikimedia.org/w/api.php?action=query&titles=File:<Name>&prop=imageinfo&iiprop=url|size|extmetadata&iiurlwidth=1200&format=json"`.
    - `license` must be one of: Public domain, CC0, CC BY 2.0/2.5/3.0/4.0, CC BY-SA 2.0/2.5/3.0/4.0 (exact spelling, e.g. `CC BY-SA 4.0`). Anything else (including "Fair use") is not allowed.
    - `src` is `thumburl` with the query string removed and the host set to `upload.wikimedia.org` (PNG or JPEG only; for SVG files use the PNG thumbnail). `width`/`height` are `thumbwidth`/`thumbheight`. `author` is the Artist field as plain text. `sourceUrl` is `descriptionurl`. `licenseUrl` is LicenseUrl if present. `alt` describes what the image shows.
    - Add the record to `content/<subject>/images/<your-key>.json` (ids start with your key), then place it: `<Img id="<id>" caption="What to notice." />`. The page shows the author and licence under it automatically. Use the same `<Img>` in the Hinglish copy, with a Hinglish caption.
-   - Check the image is relevant and readable at phone width (no tiny text); at most two embedded images per note.
+   - **d2l.ai figures:** open the d2l.ai chapter for the topic, take a figure's `src` (it is `../_images/<name>.svg`) and use `https://d2l.ai/_images/<name>.svg` as `src`, the chapter URL as `sourceUrl`, `license` `CC BY-SA 4.0`, `licenseUrl` `https://creativecommons.org/licenses/by-sa/4.0/`, `author` `Zhang, Lipton, Li & Smola (Dive into Deep Learning)`. For `width`/`height`, read the SVG's `width`/`height` or `viewBox` (`curl -s <src> | head -c 600`). Skip figures that are plots of code output (names starting `output_`).
+   - Check each image is relevant, correct for our syllabus and readable at phone width (no tiny text). Prefer clean diagrams over decorative pictures; never use an image just to fill space.
 
 ## Citations
 
