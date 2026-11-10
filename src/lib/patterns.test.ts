@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   clusterQuestions,
   dueTopics,
+  matchAssignments,
   type PPaper,
   recencyWeight,
   sessionOrder,
@@ -89,4 +90,44 @@ test("ranks topics and flags important ones the latest paper skipped", () => {
   const due = dueTopics(s, papers).map((x) => x.slug);
   assert.ok(!due.includes("cnn"));
   assert.ok(!due.includes("rnn"));
+});
+
+test("assignment questions link to the past question they repeat and raise its topic", () => {
+  const assignment: PPaper = {
+    slug: "assignment-1",
+    session: "Assignment 1",
+    questions: [
+      {
+        id: "q1",
+        label: "1",
+        marks: 10,
+        topics: ["cnn"],
+        text: "What is the use of pooling operation in CNN?",
+      },
+      {
+        id: "q2",
+        label: "2",
+        marks: 5,
+        topics: ["gan"],
+        text: "Explain the role of the generator.",
+      },
+      {
+        id: "q3",
+        label: "3",
+        marks: 5,
+        topics: ["rnn"],
+        text: "Explain pooling in CNN.",
+      },
+    ],
+  };
+  const [pool, gen, wrongTopic] = matchAssignments(clusterQuestions(papers), [
+    assignment,
+  ]);
+  assert.match(pool?.cluster?.head.q.text ?? "", /pooling/i);
+  assert.equal(gen?.cluster, undefined);
+  assert.equal(wrongTopic?.cluster, undefined);
+  const withTeacher = topicStats(papers, ["cnn", "gan", "rnn"], [assignment]);
+  const rnn = withTeacher.find((t) => t.slug === "rnn");
+  assert.equal(rnn?.teacherTimes, 1);
+  assert.notEqual(rnn?.level, "Not asked");
 });

@@ -9,12 +9,20 @@ import { Toc, type TocItem } from "@/components/toc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { getTopics, listExamPapers, type Paper } from "@/lib/content";
 import {
+  getTopics,
+  listExamPapers,
+  listPapers,
+  type Paper,
+} from "@/lib/content";
+import {
+  type Asked,
   type Cluster,
   clusterQuestions,
   dueTopics,
+  matchAssignments,
   OTHER_BRANCH_WEIGHT,
+  TEACHER_WEIGHT,
   type TopicStat,
   topicStats,
 } from "@/lib/patterns";
@@ -47,16 +55,27 @@ const LEVEL_STYLE: Record<
   "Not asked": "outline",
 };
 
+// Cards show the question as text, so tables become a short marker; the full table is on the paper page.
+function plain(text: string) {
+  return text
+    .replace(/(\n?\|[^\n]*)+/g, " [table] ")
+    .replace(/\\([{}])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function ClusterCard({
   c,
   subject,
   rank,
+  teacher = [],
   sessionName,
   topicTitle,
 }: {
   c: Cluster<Paper>;
   subject: string;
   rank: number;
+  teacher?: Asked<Paper>[];
   sessionName: (slug: string) => string;
   topicTitle: (slug: string) => string;
 }) {
@@ -69,10 +88,15 @@ function ClusterCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-medium leading-relaxed [overflow-wrap:anywhere]">
-            {c.head.q.text.replace(/\\([{}])/g, "$1")}
+            {plain(c.head.q.text)}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Badge>Asked {c.all.length}×</Badge>
+            {[...new Set(teacher.map((t) => t.paper.session))].map((n) => (
+              <Badge key={n}>In your {n}</Badge>
+            ))}
+            <Badge variant={teacher.length ? "secondary" : "default"}>
+              Asked {c.all.length}× by MU
+            </Badge>
             <Badge variant="secondary">
               in {c.sessions.length} session{c.sessions.length > 1 ? "s" : ""}
             </Badge>
@@ -86,7 +110,7 @@ function ClusterCard({
               How it was asked each time
             </summary>
             <ul className="mt-2 flex flex-col gap-2">
-              {c.all.map((a) => (
+              {[...teacher, ...c.all].map((a) => (
                 <li
                   key={`${a.paper.slug}-${a.q.id}`}
                   className="flex flex-col gap-1 text-sm sm:flex-row sm:items-start sm:gap-3"
@@ -99,7 +123,7 @@ function ClusterCard({
                     />
                   </span>
                   <span className="text-muted-foreground [overflow-wrap:anywhere]">
-                    {a.q.text.replace(/\\([{}])/g, "$1")}
+                    {plain(a.q.text)}
                   </span>
                 </li>
               ))}
@@ -141,10 +165,24 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
 
   const clusters = clusterQuestions(papers);
   const repeated = clusters.filter((c) => c.sessions.length >= 2);
-  const likely = repeated.slice(0, 10);
+  const assignments = listPapers(subject).filter((p) => p.assignment);
+  const matches = matchAssignments(clusters, assignments);
+  const teacherOf = new Map<Cluster<Paper>, Asked<Paper>[]>();
+  for (const m of matches)
+    if (m.cluster)
+      teacherOf.set(m.cluster, [...(teacherOf.get(m.cluster) ?? []), m.asked]);
+  const boosted = (c: Cluster<Paper>) =>
+    c.score + (teacherOf.has(c) ? TEACHER_WEIGHT : 0);
+  // MU repeats and teacher picks together, so a question both asked before and set in class ranks first.
+  const likely = clusters
+    .filter((c) => c.sessions.length >= 2 || teacherOf.has(c))
+    .sort((a, b) => boosted(b) - boosted(a))
+    .slice(0, 10);
+  const teacherOnly = matches.filter((m) => !m.cluster);
   const stats = topicStats(
     papers,
     topics.map((t) => t.slug),
+    assignments,
   );
   const due = dueTopics(stats, papers);
   const topScore = Math.max(...stats.map((x) => x.score), 1);
@@ -166,6 +204,9 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
 
   const toc: TocItem[] = [
     { id: "likely", text: "Most likely this time" },
+    ...(teacherOnly.length
+      ? [{ id: "teacher", text: "New from your teachers" }]
+      : []),
     ...(due.length ? [{ id: "due", text: "Due back" }] : []),
     { id: "importance", text: "Topic importance" },
     { id: "modules", text: "Module weightage" },
@@ -185,8 +226,12 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
           <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
             Worked out from {papers.length} past papers ({own} for your branch,{" "}
             {papers.length - own} Computer Engineering) and {questionCount}{" "}
-            questions. The counts are facts from the papers; “likely” is a
-            pattern, not a promise, so still cover the whole syllabus.
+            questions
+            {assignments.length
+              ? `, plus ${matches.length} questions from your teachers' ${assignments.length} class assignments`
+              : ""}
+            . The counts are facts from the papers; “likely” is a pattern, not a
+            promise, so still cover the whole syllabus.
           </p>
         </header>
 
@@ -196,7 +241,11 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
           </h2>
           <p className="mt-2 text-muted-foreground">
             Questions that keep coming back, ranked by how often and how
-            recently they were asked. Prepare these first.
+            recently they were asked.
+            {assignments.length
+              ? " Your teachers now set the paper, so a question that is also in their assignment ranks higher."
+              : ""}{" "}
+            Prepare these first.
           </p>
           <ol className="mt-4 grid items-start gap-3 2xl:grid-cols-2">
             {likely.map((c, i) => (
@@ -205,12 +254,60 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
                 c={c}
                 subject={subject}
                 rank={i + 1}
+                teacher={teacherOf.get(c) ?? []}
                 sessionName={sessionName}
                 topicTitle={topicTitle}
               />
             ))}
           </ol>
         </section>
+
+        {teacherOnly.length ? (
+          <section aria-labelledby="teacher" className="mt-12">
+            <h2 id="teacher" className={h2}>
+              New from your teachers
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              Assignment questions that MU has not asked. Your teachers set
+              them, so expect them in this paper too.
+            </p>
+            <ul className="mt-4 grid items-start gap-3 2xl:grid-cols-2">
+              {teacherOnly.map(({ asked: a }) => (
+                <li
+                  key={`${a.paper.slug}-${a.q.id}`}
+                  className="flex flex-col gap-3 rounded-2xl border bg-card p-4"
+                >
+                  <p className="font-medium leading-relaxed [overflow-wrap:anywhere]">
+                    {plain(a.q.text)}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      asChild
+                      size="sm"
+                      className="min-h-9 rounded-full px-4"
+                    >
+                      <Link href={`/pyq/${subject}/${a.paper.slug}#${a.q.id}`}>
+                        See the solution
+                      </Link>
+                    </Button>
+                    <PaperChip
+                      subject={subject}
+                      paper={a.paper}
+                      question={a.q}
+                    />
+                    {a.q.topics.map((t) => (
+                      <TopicChip
+                        key={t}
+                        subject={subject}
+                        topic={{ slug: t, title: topicTitle(t), module: 0 }}
+                      />
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {due.length ? (
           <section aria-labelledby="due" className="mt-12">
@@ -246,6 +343,9 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
             Marks asked on each topic. Recent papers count more, and Computer
             Engineering papers count {Math.round(OTHER_BRANCH_WEIGHT * 100)}% of
             yours.
+            {assignments.length
+              ? " Each assignment question counts as much as one in the newest paper."
+              : ""}
           </p>
           <ul className="mt-4 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
             {stats.map((t) => (
@@ -270,6 +370,9 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
                   {t.times === 0
                     ? "Not asked in these papers yet."
                     : `Asked ${t.times}× (${t.ownTimes} in your branch) · about ${Math.round(t.marks)} marks · last ${sessionName(t.lastSession)}`}
+                  {t.teacherTimes
+                    ? ` · ${t.teacherTimes} in your assignments`
+                    : ""}
                 </p>
               </li>
             ))}
@@ -330,6 +433,7 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
                 c={c}
                 subject={subject}
                 rank={i + 1}
+                teacher={teacherOf.get(c) ?? []}
                 sessionName={sessionName}
                 topicTitle={topicTitle}
               />
@@ -357,6 +461,12 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
               with the same weights; a question on two topics shares its marks.
               Levels are by rank: top 20% very high, next 30% high, next 30%
               medium.
+            </li>
+            <li>
+              A class assignment question is linked to a past-paper question
+              when they share a topic and some key words. It adds as much as an
+              appearance in the newest paper, because your teachers now set the
+              exam.
             </li>
             <li>
               Since your college became autonomous this semester, the paper may

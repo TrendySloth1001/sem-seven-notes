@@ -126,6 +126,8 @@ export type TopicStat = {
   marks: number;
   sessions: string[];
   lastSession: string;
+  /** Questions on it in the teachers' assignments. */
+  teacherTimes: number;
   score: number;
   level: "Very high" | "High" | "Medium" | "Low" | "Not asked";
 };
@@ -134,6 +136,7 @@ export type TopicStat = {
 export function topicStats(
   papers: PPaper[],
   topicSlugs: string[],
+  assignments: PPaper[] = [],
 ): TopicStat[] {
   const order = sessionOrder(papers);
   const stats = topicSlugs.map((slug) => {
@@ -145,6 +148,9 @@ export function topicStats(
     const sessions = [
       ...new Set(hits.map((h) => h.paper.slug.slice(0, 7))),
     ].sort();
+    const set = assignments.flatMap((a) =>
+      a.questions.filter((q) => q.topics.includes(slug)),
+    );
     return {
       slug,
       times: hits.length,
@@ -153,19 +159,25 @@ export function topicStats(
       marks: hits.reduce((s, h) => s + h.q.marks / h.q.topics.length, 0),
       sessions,
       lastSession: sessions[sessions.length - 1] ?? "",
-      score: hits.reduce(
-        (s, h) =>
-          s +
-          (h.q.marks / h.q.topics.length) *
-            recencyWeight(h.paper.slug, order) *
-            (h.paper.branch ? OTHER_BRANCH_WEIGHT : 1),
-        0,
-      ),
+      teacherTimes: set.length,
+      score:
+        set.reduce(
+          (s, q) => s + (q.marks / q.topics.length) * TEACHER_WEIGHT,
+          0,
+        ) +
+        hits.reduce(
+          (s, h) =>
+            s +
+            (h.q.marks / h.q.topics.length) *
+              recencyWeight(h.paper.slug, order) *
+              (h.paper.branch ? OTHER_BRANCH_WEIGHT : 1),
+          0,
+        ),
     };
   });
   // Levels by rank among asked topics, so a subject whose marks are spread evenly still shows what leads.
   const asked = stats
-    .filter((x) => x.times > 0)
+    .filter((x) => x.times > 0 || x.teacherTimes > 0)
     .sort((a, b) => b.score - a.score);
   const rank = new Map(asked.map((x, k) => [x.slug, k / asked.length]));
   return stats
@@ -193,5 +205,37 @@ export function dueTopics(stats: TopicStat[], papers: PPaper[]): TopicStat[] {
     (s) =>
       (s.level === "Very high" || s.level === "High") &&
       s.lastSession !== latest,
+  );
+}
+
+/** Teachers now set the paper, so a question in their assignment counts as much as one in the newest paper. */
+export const TEACHER_WEIGHT = 2;
+
+export type TeacherMatch<P extends PPaper, A extends PPaper> = {
+  asked: Asked<A>;
+  /** The past-paper question it repeats, if MU asked it too. */
+  cluster: Cluster<P> | undefined;
+};
+
+/** Links each assignment question to the past-paper question it asks again (shared topic, looser wording match). */
+export function matchAssignments<P extends PPaper, A extends PPaper>(
+  clusters: Cluster<P>[],
+  assignments: A[],
+  threshold = 0.18,
+): TeacherMatch<P, A>[] {
+  return assignments.flatMap((paper) =>
+    paper.questions.map((q) => {
+      const t = tokens(q.text);
+      let best: { cluster: Cluster<P>; sim: number } | undefined;
+      for (const c of clusters) {
+        if (!c.topics.some((x) => q.topics.includes(x))) continue;
+        const sim = Math.max(
+          ...c.all.map((a) => similarity(tokens(a.q.text), t)),
+        );
+        if (sim >= threshold && sim > (best?.sim ?? 0))
+          best = { cluster: c, sim };
+      }
+      return { asked: { paper, q }, cluster: best?.cluster };
+    }),
   );
 }
