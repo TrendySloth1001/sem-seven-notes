@@ -1,0 +1,82 @@
+---
+references: [stream-counting-mmds-home, stream-counting-wiki-dsm, stream-counting-cs246-slides, stream-counting-wiki-streaming]
+---
+
+**In simple words:** we have a stream of 0s and 1s and want to know how many 1s are in the last $N$ bits. Exact counting needs all $N$ bits in memory. The **DGIM algorithm** (Datar, Gionis, Indyk, Motwani, 2002) keeps only about $\log N$ **buckets**, each summarising a group of 1s, and answers within 50 percent of the truth using $O(\log^2 N)$ bits. <Cite id="stream-counting-mmds-home" loc="§4.6" /> <Cite id="stream-counting-wiki-dsm" />
+
+**Buckets.** A bucket stores its **size** (the number of 1s, always a power of 2) and the **timestamp** of its most recent 1. The rules:
+
+1. The right end of a bucket is a 1.
+2. Every 1 in the window is in exactly one bucket.
+3. There are one or two buckets of each size.
+4. Going back in time, sizes never decrease.
+5. A bucket whose timestamp leaves the window is dropped.
+
+**Update when a bit arrives at time $t$**
+
+1. Drop the oldest bucket if its timestamp is $\le t - N$.
+2. A 0 changes nothing more.
+3. A 1 creates a bucket of size 1 with timestamp $t$.
+4. If three buckets now have the same size, merge the **two oldest** into one of double size (timestamp of the newer of the two). Repeat for the next size.
+
+**Query for the last $N$ bits:** add the sizes of all buckets newer than the oldest bucket $B$ that overlaps the window, then add **half of the size of $B$**. The true answer is between "newer buckets + 1" and "newer buckets + size of $B$", so the error is at most half of $B$, and $B$ is never more than about half of the true count, so the error is below 50 percent. <Cite id="stream-counting-mmds-home" loc="§4.6" />
+
+<Sum>
+
+<Given>
+
+Stream (time 1 first): `1 0 1 1 1 0 1 1 0 1` (10 bits). Window $N = 8$. A bucket is written (size, timestamp).
+
+</Given>
+
+<Find>
+
+the buckets after each 1, and the estimate of the 1s in the last 8 bits.
+
+</Find>
+
+<Steps>
+
+1. Apply the update rules (zeros change nothing, so only the 1s are shown):
+
+   | $t$ | Buckets after (newest first) | Why |
+   |---|---|---|
+   | 1 | (1,1) | new bucket |
+   | 3 | (1,3) (1,1) | two of size 1 is allowed |
+   | 4 | (1,4) (2,3) | three of size 1, so (1,3) and (1,1) merge into (2,3) |
+   | 5 | (1,5) (1,4) (2,3) | |
+   | 7 | (1,7) (2,5) (2,3) | three of size 1, so (1,5) and (1,4) merge into (2,5) |
+   | 8 | (1,8) (1,7) (2,5) (2,3) | |
+   | 10 | (1,10) (2,8) (4,5) | (1,8) and (1,7) merge into (2,8); then three of size 2, so (2,5) and (2,3) merge into (4,5) |
+
+2. At $t = 10$ the window holds times 3 to 10 (timestamps above $10 - 8 = 2$).
+3. The oldest bucket overlapping the window is $B = (4,5)$. Buckets newer than it: $1 + 2 = 3$.
+4. Add half of $B$: $4 / 2 = 2$. Estimate $= 3 + 2 = 5$.
+
+</Steps>
+
+<Answer>
+
+Final buckets (1,10) (2,8) (4,5). Estimated number of 1s in the last 8 bits $= 5$.
+
+</Answer>
+
+<Box kind="verify">
+
+Count directly: times 3 to 10 are 1 1 1 0 1 1 0 1, which has six 1s, so the true answer is 6 and the estimate 5 is off by 1 (about 17 percent, within the 50 percent bound). The buckets hold $1 + 2 + 4 = 7$ ones, equal to all seven 1s in the stream (times 1, 3, 4, 5, 7, 8, 10). Bucket (4,5) covers the 1s at times 1, 3, 4, 5, of which only three are inside the window, and half of 4 guesses 2.
+
+</Box>
+
+</Sum>
+
+```mermaid
+%% caption: DGIM buckets after the sum, newest on the left. Each box shows size and the time of its right end. Sizes never decrease going back and there are at most two of each size. Only the oldest bucket is guessed (half counted).
+flowchart LR
+  B1["size 1, ends at 10"] --- B2["size 2, ends at 8"] --- B3["size 4, ends at 5 (oldest, count half)"]
+```
+
+<Cite id="stream-counting-cs246-slides" loc="diagram" />
+
+**Advantages:** tiny memory, fast update, guaranteed error bound. **Disadvantages:** the answer is only approximate, and plain DGIM is for 0/1 streams.
+
+**Conclusion:** DGIM replaces a window of $N$ bits by about $\log N$ buckets and still answers window counts within a known error. <Cite id="stream-counting-wiki-streaming" />

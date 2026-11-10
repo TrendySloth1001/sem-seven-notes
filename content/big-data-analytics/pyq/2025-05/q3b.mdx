@@ -1,0 +1,55 @@
+---
+references: [nosql-patterns-gfg-types, nosql-patterns-gfg-kv, nosql-patterns-gfg-doc, nosql-patterns-redis-kv, nosql-patterns-mongo-doc, big-data-intro-nosql]
+---
+
+**In simple words:** an architectural pattern is the basic way a NoSQL database organises its data. The key-value store is the simplest: a giant dictionary. The document store keeps whole JSON documents that the database can look inside. <Cite id="big-data-intro-nosql" /> <Cite id="nosql-patterns-gfg-types" />
+
+**1. Key-value store.** Every item has a unique **key** and a **value**. The database hashes the key to find the node and returns the value as one block; it never looks inside. Operations are only `put(key, value)`, `get(key)` and `delete(key)`. Analogy: a cloakroom token gives back your bag without anyone opening it. <Cite id="nosql-patterns-gfg-kv" /> <Cite id="nosql-patterns-redis-kv" />
+
+```mermaid
+%% caption: Key-value store. The key is hashed to choose a node and the value comes back as a whole block. The database never looks inside the value.
+flowchart LR
+  APP["Application: get user:102"] --> H["Hash the key"]
+  H --> N1["Node 1: user:101 = John"]
+  H --> N2["Node 2: user:102 = Alice"]
+  H --> N3["Node 3: cart:77 = item list"]
+  N2 --> V["Value returned: Alice"]
+```
+
+<Cite id="nosql-patterns-gfg-kv" loc="diagram" />
+
+| Key | Value |
+|---|---|
+| `session:8f3a` | `{user: 101, login: "10:42"}` |
+| `cart:77` | `[book-12, pen-3]` |
+
+Good for: sessions, shopping carts, caches, leaderboards. Examples: Redis, DynamoDB, Riak. Benefits: very fast, easy to scale out, no schema. Limits: search only by key, no joins, the whole value is read and written together.
+
+**2. Document store.** Each record is a **document**, usually JSON, with its own field names, nested fields and lists. Documents are grouped in a **collection**, but they need not have the same fields. The database can look inside, so you can query and update by any field. <Cite id="nosql-patterns-gfg-doc" /> <Cite id="nosql-patterns-mongo-doc" />
+
+```mermaid
+%% caption: Document store. One order is one document with nested customer data and a list of items; a relational database would spread it over three tables. The second document has an extra field, which is allowed.
+flowchart LR
+  subgraph COLL["Collection: orders"]
+    D1["Document _id 1: customer Asha, city Mumbai, items: Book x2, Pen x5"]
+    D2["Document _id 2: customer Ravi, city Pune, items: Pen x1, coupon DIWALI"]
+  end
+  Q["Query: city = Mumbai"] --> COLL
+```
+
+<Cite id="nosql-patterns-gfg-doc" loc="diagram" />
+
+```json
+{ "_id": 1, "customer": { "name": "Asha", "city": "Mumbai" },
+  "items": [ { "product": "Book", "qty": 2 }, { "product": "Pen", "qty": 5 } ] }
+```
+
+Good for: product catalogues, user profiles, content management. Examples: MongoDB, CouchDB. Benefits: matches objects in code, no joins for common reads, flexible schema. Limits: repeated data must be updated everywhere, and joins and multi-document transactions are weak.
+
+| Point | Key-value | Document |
+|---|---|---|
+| Value | Opaque blob | Structured JSON the database understands |
+| Query | Only by key | By key and by any field |
+| Update | Replace the whole value | Update one field |
+
+**Conclusion:** use key-value for the fastest simple lookup by key, and a document store when records are rich and must be searched by their fields.

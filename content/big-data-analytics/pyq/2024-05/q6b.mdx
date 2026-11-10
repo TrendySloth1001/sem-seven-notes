@@ -1,0 +1,73 @@
+---
+references: [cure-stream-clustering-guha1998, cure-stream-clustering-gfg-cure, cure-stream-clustering-tp-cure, cure-stream-clustering-wiki-cure, cure-stream-clustering-basile-slides]
+---
+
+**In simple words:** CURE (Clustering Using REpresentatives, Guha, Rastogi and Shim, 1998) is a clustering algorithm for large data in a Euclidean space. Instead of one centre per cluster (k-means) or every point (single link), it keeps a few **well-scattered points** per cluster and **shrinks them towards the centroid**. These **representative points** decide which clusters merge. <Cite id="cure-stream-clustering-guha1998" loc="§1.2" /> <Cite id="cure-stream-clustering-wiki-cure" />
+
+**Why it is needed:** k-means finds round, equal-sized clusters and splits long or large ones. Single link chains through bridges and is hurt by outliers. CURE finds clusters of any shape and size and resists outliers. <Cite id="cure-stream-clustering-gfg-cure" />
+
+**Steps**
+
+1. **Sample.** Take a random sample small enough for main memory.
+2. **Cluster the sample** hierarchically: start with every point as a cluster and repeatedly merge the closest pair until $k$ clusters remain.
+3. **Choose $c$ scattered points** in each cluster: the first is the point farthest from the centroid, each next one is the farthest from those already chosen.
+4. **Shrink** each of them a fraction $\alpha$ of the way to the centroid: $p_{new} = p + \alpha(\text{centroid} - p)$. Far points (outliers) move most.
+5. **Merge** clusters whose closest pair of representatives is nearest; choose new representatives for the merged cluster; repeat until $k$ clusters remain.
+6. **Label** every remaining point of the full data by the cluster of its nearest representative.
+
+```mermaid
+%% caption: The CURE pipeline. Only a sample is clustered in memory; the whole data set is read once at the end to label points by nearest representative.
+flowchart LR
+  D["All data (on disk)"] --> S["Random sample"]
+  S --> H["Hierarchical clustering into k clusters"]
+  H --> R["Pick c scattered points per cluster"]
+  R --> SH["Shrink them by alpha towards the centroid"]
+  SH --> M["Merge clusters with closest representatives"]
+  M --> L["Label all points by nearest representative"]
+```
+
+<Cite id="cure-stream-clustering-gfg-cure" loc="diagram" />
+
+<Sum>
+
+<Given>
+
+One cluster: $A(1,2)$, $B(3,2)$, $C(5,2)$, $D(9,2)$, $E(4,6)$, $F(2,-2)$. Take $c = 3$ representatives and $\alpha = 0.2$.
+
+</Given>
+
+<Find>
+
+the centroid, the 3 scattered points and the 3 representative points.
+
+</Find>
+
+<Steps>
+
+1. **Centroid.** $x$: $(1+3+5+9+4+2)/6 = 4$; $y$: $(2+2+2+2+6-2)/6 = 2$. Centroid $(4, 2)$.
+2. **First point: farthest from the centroid.** Squared distances: $A$ 9, $B$ 1, $C$ 1, $D$ 25, $E$ 16, $F$ 20. Largest: $D(9,2)$.
+3. **Second: farthest from $D$.** Squared distances to $D$: $A$ 64, $B$ 36, $C$ 16, $E$ 41, $F$ 65. Largest: $F(2,-2)$.
+4. **Third: farthest from its nearest chosen point.** $A$ $\min(64, 17) = 17$; $B$ $\min(36, 17) = 17$; $C$ $\min(16, 25) = 16$; $E$ $\min(41, 68) = 41$. Largest: $E(4,6)$.
+5. **Shrink 20 percent** with $p + 0.2(\text{centroid} - p)$: $D \to (9 - 1, 2) = (8, 2)$; $F \to (2 + 0.4, -2 + 0.8) = (2.4, -1.2)$; $E \to (4, 6 - 0.8) = (4, 5.2)$.
+
+</Steps>
+
+<Answer>
+
+centroid $(4, 2)$; scattered points $D(9,2)$, $F(2,-2)$, $E(4,6)$; representatives $(8, 2)$, $(2.4, -1.2)$, $(4, 5.2)$.
+
+</Answer>
+
+<Box kind="verify">
+
+The farthest point $D$ moved 1 unit (20 percent of its distance 5), and $F$ moved $0.2 \times \sqrt{20} \approx 0.89$, so far points moved more. Each representative lies on the line from its point to the centroid: $E$ and the centroid both have $x = 4$, and so does $(4, 5.2)$. The centroid itself, $24/6 = 4$ and $12/6 = 2$, is unchanged by shrinking.
+
+</Box>
+
+</Sum>
+
+**Role of $\alpha$:** $\alpha = 0$ keeps points where they are (all-points method, outlier-sensitive); $\alpha = 1$ collapses to the centroid (centroid method). The paper found 0.2 to 0.7 works well. <Cite id="cure-stream-clustering-guha1998" loc="§1.2" />
+
+**Advantages:** any shape and size, robust to outliers, scales by sampling. **Disadvantages:** Euclidean space only, depends on $c$, $\alpha$ and sample size, a small cluster may be missed. <Cite id="cure-stream-clustering-tp-cure" />
+
+**Conclusion:** CURE represents each cluster by a few shrunken scattered points, which gives good clusters of odd shapes and handles big data by sampling.

@@ -1,0 +1,88 @@
+---
+references: [mapreduce-algorithms-gfg-matmul, big-data-intro-mmds, mapreduce-gfg-mr, big-data-intro-mapreduce]
+---
+
+**In simple words:** the entry in row $i$, column $k$ of $C = A \times B$ is $c_{ik} = \sum_j a_{ij} b_{jk}$. In MapReduce, the **map** step sends every number to every output cell that needs it, labelled with its row/column position. The **reduce** step for one output cell then multiplies the matching pairs and adds them. This is the one-step method from Leskovec, Rajaraman and Ullman. <Cite id="big-data-intro-mmds" /> <Cite id="mapreduce-algorithms-gfg-matmul" />
+
+**Pseudo code** ($A$ is $m \times n$, $B$ is $n \times p$):
+
+```text
+map(key, value):
+    if value is a_ij from matrix A:
+        for k = 1 to p:
+            emit( (i, k), ("A", j, a_ij) )
+    if value is b_jk from matrix B:
+        for i = 1 to m:
+            emit( (i, k), ("B", j, b_jk) )
+
+reduce( (i, k), list of values ):
+    sum = 0
+    for each j from 1 to n:
+        a = the value ("A", j, x) in the list
+        b = the value ("B", j, y) in the list
+        sum = sum + x * y
+    emit( (i, k), sum )
+```
+
+<Sum>
+
+<Given>
+
+$A = \begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix}$, $B = \begin{bmatrix} 6 & 7 \\ 8 & 9 \end{bmatrix}$, so $m = n = p = 2$.
+
+</Given>
+
+<Find>
+
+$C = A \times B$ using map, shuffle and reduce.
+
+</Find>
+
+<Steps>
+
+1. **Map.** Each $a_{ij}$ is sent to cells $(i,1)$ and $(i,2)$. Each $b_{jk}$ is sent to cells $(1,k)$ and $(2,k)$. Output is $(\text{cell}, (\text{matrix}, j, \text{value}))$, 16 pairs in all. *Reason: every cell $(i,k)$ needs row $i$ of $A$ and column $k$ of $B$.*
+2. **Shuffle.** All pairs with the same cell key reach the same reducer. *Reason: one reducer must see both sides of the sum.*
+
+| Cell key | Values from A (j, value) | Values from B (j, value) |
+|---|---|---|
+| (1,1) | (1,1) (2,2) | (1,6) (2,8) |
+| (1,2) | (1,1) (2,2) | (1,7) (2,9) |
+| (2,1) | (1,3) (2,4) | (1,6) (2,8) |
+| (2,2) | (1,3) (2,4) | (1,7) (2,9) |
+
+3. **Reduce.** Match by $j$, multiply, add:
+   - (1,1): $1 \times 6 + 2 \times 8 = 6 + 16 = 22$
+   - (1,2): $1 \times 7 + 2 \times 9 = 7 + 18 = 25$
+   - (2,1): $3 \times 6 + 4 \times 8 = 18 + 32 = 50$
+   - (2,2): $3 \times 7 + 4 \times 9 = 21 + 36 = 57$
+
+</Steps>
+
+<Answer>
+
+$C = \begin{bmatrix} 22 & 25 \\ 50 & 57 \end{bmatrix}$
+
+</Answer>
+
+<Box kind="verify">
+
+Check 1: add up all entries. Sum of $C$ = $22 + 25 + 50 + 57 = 154$. Also (column sums of $A$) $\cdot$ (row sums of $B$) $= (1+3)(6+7) + (2+4)(8+9) = 4 \times 13 + 6 \times 17 = 52 + 102 = 154$. They match.
+
+Check 2: the determinant rule, $\det(A)\det(B) = (4 - 6)(54 - 56) = (-2)(-2) = 4$ and $\det(C) = 22 \times 57 - 25 \times 50 = 1254 - 1250 = 4$. They match.
+
+</Box>
+
+</Sum>
+
+```mermaid
+%% caption: Matrix multiplication in one MapReduce step. Map copies each number to every cell it affects; reduce does the multiply-and-add for one cell.
+flowchart LR
+  I["Entries of A and B"] --> M["Map: key = cell (i,k)"]
+  M --> S["Shuffle: group by cell"]
+  S --> R["Reduce: sum of a_ij x b_jk"]
+  R --> O["Entry c_ik of C"]
+```
+
+**Note:** each number is copied several times (here twice), which is the price of finishing in one step. For very large matrices a two-step method is used instead.
+
+**Conclusion:** $C = \begin{bmatrix} 22 & 25 \\ 50 & 57 \end{bmatrix}$.
