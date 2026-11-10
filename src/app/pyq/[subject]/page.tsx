@@ -87,7 +87,9 @@ async function PapersIndexContent({ params }: PageProps<"/pyq/[subject]">) {
                         <CalendarDays aria-hidden className="size-4" />
                         {p.date
                           ? `${p.assignment ? "Due " : ""}${formatDate(p.date)}`
-                          : "Exam date not printed"}
+                          : p.assignment
+                            ? "No due date given"
+                            : "Exam date not printed"}
                       </p>
                       <p className="mt-auto flex items-center gap-1.5 pt-2 text-sm">
                         <CheckCircle2

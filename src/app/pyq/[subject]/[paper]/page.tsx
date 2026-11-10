@@ -69,7 +69,9 @@ async function PaperPageContent({
           <p className="mt-3 text-lg text-muted-foreground">
             {paper.date
               ? `${paper.assignment ? "Due " : ""}${formatDate(paper.date)}`
-              : "Exam date not printed on the paper"}
+              : paper.assignment
+                ? "No due date given"
+                : "Exam date not printed on the paper"}
             {paper.time ? `, ${paper.time}` : ""}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
