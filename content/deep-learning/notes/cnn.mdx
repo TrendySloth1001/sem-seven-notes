@@ -1,150 +1,225 @@
 ---
 title: "Convolutional neural networks"
 module: 4
-summary: "How a network can look at an image the way we do, one small patch at a time, using small sliding filters (convolution), size reduction (pooling) and a normal classifier at the end. Theory first: what each layer does, why it is needed, its advantages and limits, plus the two formulas asked as numericals (output size and parameter count)."
+summary: "How a network looks at an image the way the class teaches it: small sliding filters (convolution) make feature maps, pooling shrinks them, and flatten plus fully connected layers decide the class. Theory first with the teacher's definitions, then the sums that are asked: output size, feature maps, pooling and parameter count."
 keyIdeas:
-  - "A filter is a small grid of weights that slides over the image and lights up wherever it finds its pattern, such as an edge."
-  - "Output size = (N − F + 2P) / S + 1, where N is the input size, F the filter size, P the padding and S the stride."
-  - "Parameters of a conv layer = (F × F × input channels + 1) × number of filters. The size of the image does not matter."
-  - "Pooling shrinks each feature map (for example the maximum of every 2×2 block) and has no weights to learn."
-  - "A CNN uses far fewer weights than a fully connected network because each neuron sees only a small patch and the same filter is reused everywhere (weight sharing)."
-  - "Typical order: input → (convolution → ReLU → pooling) repeated → flatten → fully connected → softmax."
+  - "Convolution is an operation that applies a small filter (kernel) to an input image to detect useful features such as edges, lines, textures, and patterns."
+  - "Output size = ⌊(N − F + 2P) / S⌋ + 1, where N is the input size, F the filter size, P the padding and S the stride. Output depth = number of filters."
+  - "Parameters of a conv layer = (F × F × D + 1) × K, where D is the input depth and K the number of filters. Stride and padding do not change the count."
+  - "CNN = local connectivity + weight sharing + pooling, so it needs far fewer parameters than a fully connected network."
+  - "A pooling layer is a layer in CNN used to reduce the size of feature maps while keeping the most important information. It changes height and width, not depth."
+  - "Order: input → (convolution + ReLU → pooling) repeated → flatten → fully connected → softmax → prediction."
 references:
-  - gfdl-ch9
-  - lecun1998
-  - dumoulin2016
-  - cs231n-cnn
-  - nptel-dl
-  - d2l-cnn-why
-  - d2l-cnn-conv
-  - d2l-cnn-padding
-  - d2l-cnn-channels
-  - d2l-cnn-pooling
-  - gfg-cnn
-  - gfg-cnn-pooling
-  - gfg-cnn-padding
-  - ibm-cnn
-  - mlm-cnn-conv
-  - mlm-cnn-padding
-  - mlm-cnn-pooling
-  - tp-cnn
-  - tpoint-cnn
-  - keras-conv2d
-  - keras-maxpool2d
-  - pytorch-conv2d
-  - pytorch-maxpool2d
-  - wiki-cnn
+  - class-dl-chp4
+  - class-dl-m4
+  - class-dl-qb2
 ---
 
 Before the new ideas, here are the old ones you need. If you already know them, skip to the next section.
 
 ## The basics first
 
-- A **neuron** takes some inputs, multiplies each by a **weight**, adds them up, adds a **bias**, and passes the result through an **activation function**.
-- **ReLU** (rectified linear unit) is the simplest activation: negative numbers become 0, positive numbers stay as they are.
-- In a **fully connected** (dense) layer, every neuron is connected to every input.
-- **Parameters** are the numbers the network learns: all the weights and biases. More parameters means more memory, more computation and more chance of overfitting (memorizing the training data instead of learning the general pattern).
-- A grayscale **image** is a grid of numbers, one per pixel (for example 0 = black, 255 = white). A colour image has three such grids, one each for red, green and blue. Each grid is called a **channel**. So a 32×32 colour image is a block of numbers of size 32×32×3 (height × width × channels).
-- **Softmax** turns a list of scores into probabilities that add up to 1, so the last layer can say "cat: 0.9, dog: 0.1".
+- A computer does not see an apple. It sees a **grid of numbers**, one number per **pixel** (the small square dots that make up a picture). <Cite id="class-dl-chp4" loc="slide 2" />
+- A colour image is stored as three such grids, one each for red, green and blue. Each grid is called a **channel**. So an RGB image of 32×32 pixels is a block of numbers of size 32×32×3 (height × width × channels). <Cite id="class-dl-m4" loc="p. 8" />
+- A **neuron** multiplies each input by a **weight**, adds a **bias** and passes the result through an activation function. The weights and biases are the **parameters**: the numbers the network learns.
+- **ReLU** is the activation used after convolution: negative values become 0 and positive values stay the same. Example: [−2, 3, −1] becomes [0, 3, 0]. <Cite id="class-dl-chp4" loc="slide 28" />
+- **Softmax** converts scores to probabilities between 0 and 1 that add up to 1. <Cite id="class-dl-chp4" loc="slide 28" />
 
-## The problem: a normal network is a bad fit for images
-
-A fully connected network has three problems with images:
-
-1. **Too many weights.** A small 32×32×3 image already has 3072 numbers, so **each** neuron of the first layer needs 3072 weights. A layer of 1000 neurons needs over 3 million weights, and real photos are far larger.
-2. **It ignores the layout.** It flattens the image into one long list, so it does not know that two pixels are neighbours.
-3. **It must relearn a pattern at every position.** "What an eye looks like" has to be learned separately for every place the eye can appear.
-
-**Everyday analogy.** Think of looking for your friend in a crowd photo. You do not stare at the whole photo at once. You move your eyes over it, one small area at a time, checking each area with the same idea of "what my friend's face looks like". A **convolutional neural network (CNN)** does exactly that: it checks small patches, one after another, using the same small detector everywhere. This is syllabus <Syl m="4" />. <Cite id="gfdl-ch9" loc="§9.2" />
+## What is a CNN?
 
 <Box kind="definition">
 
-**Convolutional neural network (CNN):** a neural network for grid-like data such as images, in which at least one layer uses **convolution** (a small filter slid over the input) instead of full connections. It is usually followed by **pooling** layers and ends with ordinary fully connected layers.
+**Convolutional neural network (CNN):** a type of deep neural network specially designed to work with images and other grid-like data. <Cite id="class-dl-chp4" loc="slide 5" />
+
+**Easy definition (write this in the exam):** CNN is a deep learning model that automatically learns spatial features from images using convolutional filters. <Cite id="class-dl-chp4" loc="slide 5" />
 
 </Box>
 
-## The convolution operation
+A CNN **automatically learns important features** such as edges, lines, corners, textures, shapes and objects. Instead of manually telling the model what features to look for, the CNN learns them during training. The pre-processing it needs is much lower than for other classification algorithms. <Cite id="class-dl-chp4" loc="slide 5" /> <Cite id="class-dl-m4" loc="p. 4" />
 
-**What it is.** A **filter** (also called a **kernel**) is a small grid of learned weights, for example 3×3. **Convolution** slides this filter over the image and, at every position, measures how well the patch under it matches the filter's pattern. The grid of all these match scores is called a **feature map** (or activation map).
+The design is inspired by the visual cortex of the brain. Each neuron responds only to a restricted region of what we see, called its **receptive field**, and many such fields overlap to cover the whole picture. <Cite id="class-dl-m4" loc="p. 4" />
 
-**Why it is needed.** It finds local patterns (edges, corners, textures) with a handful of weights, keeps the 2D layout of the image, and finds the same pattern wherever it appears.
+**Everyday analogy.** You look for your friend in a crowd photo by moving your eyes over it, one small area at a time, always asking the same question: "does this look like my friend's face?" A CNN looks at the image "small area by small area using a sliding window" and the mathematical operation used to do this is called **convolution**. <Cite id="class-dl-chp4" loc="slide 4" />
 
-**How it works, step by step.**
-
-1. Place the filter on the top-left corner of the image.
-2. Multiply each filter weight by the pixel under it and add all the products, plus one bias. This gives **one number** of the feature map.
-3. Slide the filter to the right by the **stride** (usually 1 pixel) and repeat.
-4. At the end of a row, move down and start again from the left.
-5. When every position is done, the feature map is complete. Pass it through ReLU.
+This is syllabus <Syl m="4" />.
 
 ```mermaid
-%% caption: One convolution step. The filter covers one small patch, multiplies and adds, and writes one number into the feature map. Then it slides to the next patch and does the same with the same weights.
+%% caption: The simple idea of a CNN, as the teacher draws it. The convolution and pooling steps find features; flatten and the fully connected layer make the decision.
 flowchart LR
-  A["Input image"] --> B["Take one 3×3 patch"]
-  B --> C["Multiply by 3×3 filter weights and add, plus bias"]
-  C --> D["One number in the feature map"]
-  D --> E["Slide filter by stride S"]
-  E --> B
-  D --> F["After all positions: full feature map"]
-  F --> G["Apply ReLU"]
+  A["Input image"] --> B["Convolution"]
+  B --> C["Feature maps"]
+  C --> D["Pooling"]
+  D --> E["More convolution"]
+  E --> F["More feature maps"]
+  F --> G["Flatten"]
+  G --> H["Fully connected layer"]
+  H --> I["Output / prediction"]
 ```
 
-<Img id="img-dl-n2-cnn-conv-example" caption="A 3 by 3 filter on a patch of the image: multiply cell by cell, add up, and the total (7) becomes one cell of the output." />
+<Cite id="class-dl-chp4" loc="slide 5" />
 
-**The formula (2D convolution).** In words: the output at a position is the sum of "pixel × filter weight" over the patch that the filter covers. For an image $I$ and kernel $K$:
+## Why do we need a CNN?
 
-$$
-S(i, j) = \sum_{m}\sum_{n} I(i+m,\; j+n)\, K(m, n)
-$$
+Images contain **spatial information**: nearby pixels are related to each other. In the teacher's example, the pixels around an eye matter, and the arrangement of the pixels matters. The five main reasons for a CNN are: <Cite id="class-dl-chp4" loc="slide 5" />
 
-$S(i,j)$ is the output at row $i$, column $j$; $m$ and $n$ walk over the rows and columns of the kernel. Strictly this is **cross-correlation**: true mathematical convolution flips the kernel first, but deep learning libraries skip the flip and still call it convolution. Because the filter weights are learned anyway, this makes no difference. <Cite id="gfdl-ch9" loc="§9.1" />
+1. Images contain a large number of pixels.
+2. Important features are found in small regions.
+3. The same feature can appear at different locations.
+4. A CNN automatically learns useful features.
+5. A CNN requires far fewer parameters than a fully connected network for images.
 
-<Img id="img-dl-n2-cnn-correlation" caption="The same idea on tiny numbers: the 2 by 2 kernel on the top-left patch gives 19." />
+### The problem with fully connected networks
 
-**Sum 1: convolve a small image by hand.** <Cite id="d2l-cnn-conv" />
+In a **fully connected** (dense) network, every input is connected to every neuron. <Cite id="class-dl-chp4" loc="slide 5" />
+
+<Img id="class-cnn-fc-problem" caption="The teacher's numbers: a tiny 28×28 image already needs 78,400 weights for just 100 neurons." />
+
+- A 28 × 28 image has 784 pixels. A fully connected layer with 100 neurons needs $784 \times 100 = 78{,}400$ weights.
+- A larger RGB image of 224 × 224 × 3 has $224 \times 224 \times 3 = 150{,}528$ values. Connecting all of them to thousands of neurons gives a huge number of parameters.
+
+The five problems that follow (write them as a list): <Cite id="class-dl-chp4" loc="slide 5" />
+
+1. Too many parameters.
+2. High computational cost.
+3. Spatial information is lost.
+4. No local feature detection.
+5. The same feature at different locations is not handled efficiently.
+
+### How a CNN solves these problems
+
+A CNN introduces **three important ideas**. <Cite id="class-dl-chp4" loc="slide 5" />
+
+| Idea | What it means | Example |
+|---|---|---|
+| **Local connectivity** | A CNN looks at a small region at a time (using a small filter). It detects local features such as edges, corners and textures. | A 3×3 filter sees one 3×3 region of the image |
+| **Weight sharing** | The same filter weights are reused at different locations. Same filter + different locations = weight sharing, so fewer parameters. | One 3×3 filter (9 weights) is used at every position |
+| **Pooling** | Pooling reduces the spatial size of feature maps. It reduces computation, memory and the number of values for the next layers, and it focuses on important features. | An 8×8 feature map becomes 4×4 (2×2 window, stride 2) |
+
+<Img id="class-cnn-weight-sharing" caption="Weight sharing: the same set of weights w11 to w33 is applied here, then moved and applied again, so the layer needs only these 9 weights however big the image is." />
+
+**Remember:** CNN = Local connectivity + Weight sharing + Pooling → Efficient feature learning from images. <Cite id="class-dl-chp4" loc="slide 5" />
+
+A CNN also has **the big advantage**: a feature (like an edge) can appear anywhere, and the CNN can detect it at different locations. In the teacher's words, the CNN learns "this is an edge, wherever I find it". <Cite id="class-dl-chp4" loc="slide 4" />
+
+### Fully connected network versus CNN
+
+<Img id="class-cnn-vs-fc" caption="The teacher's comparison table. This is the answer to the question 'Differentiate between a fully connected network and a CNN'." />
+
+| Aspect | Fully connected network | CNN |
+|---|---|---|
+| Connection | Every input connected to every neuron | Local connection (using small filters) |
+| Weights | Different weights for different connections | Same filter weights reused everywhere |
+| Parameters | Very large | Much smaller |
+| Spatial info | Does not naturally preserve spatial structure | Preserves and exploits spatial structure |
+| Computation | More computationally expensive | More efficient |
+| Feature detection | Location-specific | Same feature can be detected anywhere |
+
+The class also says a fully connected network is best for tabular data and a CNN is best for images. <Cite id="class-dl-chp4" loc="slide 67" />
+
+### What does a CNN learn?
+
+A CNN learns step by step, from simple to complex. <Cite id="class-dl-chp4" loc="slide 4" />
+
+<Img id="class-cnn-learns-hierarchy" caption="Early layers learn edges, middle layers learn curves, deeper layers learn parts, and the final layers recognize the complete object." />
+
+- **Early layers:** edges, lines, corners.
+- **Middle layers:** curves and shapes (edges combine into curves and shapes).
+- **Deeper layers:** object parts such as stem, leaf and body of an apple.
+- **Final layers:** recognize the complete object.
+
+The first convolution layer captures **low-level features** such as edges, colour and gradient direction. With added layers, the network also learns **high-level features**. <Cite id="class-dl-m4" loc="p. 14" />
+
+## The convolution operation
+
+<Box kind="definition">
+
+**Convolution** is an operation that applies a small filter (kernel) to an input image to detect useful features such as edges, lines, textures, and patterns. <Cite id="class-dl-chp4" loc="slide 6" />
+
+</Box>
+
+**What is the problem it solves?** Every pixel contains information. If we connect every pixel to every neuron, the number of parameters becomes very large, training becomes slow, memory use increases, the spatial relationship between nearby pixels may be lost and the model can overfit easily. <Cite id="class-dl-chp4" loc="slide 6" />
+
+### Filter (kernel)
+
+<Box kind="definition">
+
+**Filter / kernel:** a small matrix of learnable weights used to detect features in an image. It moves across the image during convolution. <Cite id="class-dl-chp4" loc="slide 10" />
+
+</Box>
+
+- It is also called the **convolution filter** or **kernel**. <Cite id="class-dl-chp4" loc="slide 6" />
+- A filter is a **pattern detector**. At each small region it asks: "Can I find my pattern here?" <Cite id="class-dl-chp4" loc="slide 8" />
+- **One filter detects ONE type of pattern** (edge, texture or another pattern). A CNN uses many filters, so each filter produces a different feature map. <Cite id="class-dl-chp4" loc="slide 8" />
+- A human does **not** choose the filter numbers. The CNN learns the weights during training: prediction → loss → backpropagation → weights updated. <Cite id="class-dl-chp4" loc="slide 8" />
+- The kernel is represented by a small matrix such as 3×3×1. <Cite id="class-dl-m4" loc="p. 9" />
+
+**Everyday analogy.** A filter is like a pair of special glasses. One pair shows only edges, another shows only texture. Each pair helps you notice something different. <Cite id="class-dl-chp4" loc="slide 8" />
+
+### How it works, step by step
+
+Place the filter on a small region of the image. At every position: <Cite id="class-dl-chp4" loc="slide 7" />
+
+1. Take a small region of the image.
+2. Multiply each image value by the corresponding kernel value.
+3. Add all the multiplied values.
+4. Store the result in the feature map.
+5. Move the kernel to the next position.
+
+The filter moves to the right by the **stride** until it passes the whole width. Then it hops down to the left edge and repeats, until the entire image is covered. <Cite id="class-dl-m4" loc="p. 11" />
+
+```mermaid
+%% caption: One convolution step. The kernel covers one small region, multiplies and adds, and writes one value into the feature map. Then it moves to the next position and repeats.
+flowchart LR
+  A["Input image"] --> B["Small region (kernel position)"]
+  B --> C["Multiply + add"]
+  C --> D["One value"]
+  D --> E["Feature map"]
+  D -->|"move kernel to next position"| B
+```
+
+<Img id="class-cnn-conv-example" caption="Step 1: 1×1 + 2×0 + 4×0 + 5×1 = 6 is the first value. The kernel then slides to the other three positions and the four results make the feature map." />
+
+**Sum 1: convolve a small image by hand.** <Cite id="class-dl-chp4" loc="slide 7" />
 
 <Sum>
 
 <Given>
 
-a 3×3 image $I$ and a 2×2 kernel $K$, stride 1, no padding, bias 0.
+a 3×3 input and a 2×2 kernel, stride 1, no padding.
 
 $$
-\begin{aligned}
-I &= \begin{bmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \\ 7 & 8 & 9 \end{bmatrix}
+\text{Input} = \begin{bmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \\ 7 & 8 & 9 \end{bmatrix}
 \qquad
-K \\
-&= \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
-\end{aligned}
+\text{Kernel} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
 $$
 
 </Given>
 
 <Find>
 
-the feature map $S$.
+the feature map.
 
 </Find>
 
 <Steps>
 
-1. **Size of the output.** The 2×2 filter fits in 2 positions across and 2 down (3 − 2 + 1 = 2), so $S$ is 2×2.
-2. **Top-left patch** 1, 2, 4, 5: multiply each pixel by the kernel number under it and add, because the kernel's 0s switch off two pixels:
+1. **Size of the output.** The 2×2 filter fits in 2 positions across and 2 down, because $3 - 2 + 1 = 2$. So the feature map is 2×2.
+2. **Top-left region** (1, 2, 4, 5): multiply each image value by the kernel value under it and add, because the kernel's 0s switch off two pixels:
 
    $$
    1\cdot1 + 2\cdot0 + 4\cdot0 + 5\cdot1 = 6
    $$
-3. **Slide one step right** (stride 1), patch 2, 3, 5, 6, and repeat the same sum, because every position gives its own output:
+3. **Move one step right**, region (2, 3, 5, 6), because the stride is 1:
 
    $$
    2\cdot1 + 3\cdot0 + 5\cdot0 + 6\cdot1 = 8
    $$
-4. **Move down one row**, because the window cannot go further right, patch 4, 5, 7, 8:
+4. **Move down one row**, region (4, 5, 7, 8), because the filter cannot go further right:
 
    $$
    4\cdot1 + 5\cdot0 + 7\cdot0 + 8\cdot1 = 12
    $$
-5. **Slide one step right**, patch 5, 6, 8, 9, to fill the last position:
+5. **Move one step right**, region (5, 6, 8, 9):
 
    $$
    5\cdot1 + 6\cdot0 + 8\cdot0 + 9\cdot1 = 14
@@ -154,300 +229,294 @@ the feature map $S$.
 
 <Answer>
 
-$S = \begin{bmatrix} 6 & 8 \\ 12 & 14 \end{bmatrix}$ **(a 2×2 feature map).**
+feature map $= \begin{bmatrix} 6 & 8 \\ 12 & 14 \end{bmatrix}$ (2×2).
 
 </Answer>
 
 <Box kind="verify">
 
-Check it with the pattern instead of re-multiplying. This kernel has 1s only on its diagonal, so each output is "top-left pixel + bottom-right pixel" of its patch. In the image, every pixel is 1 more than the pixel on its left, so one step right should add 1 + 1 = 2 to the output: 6 → 8 and 12 → 14. Every pixel is 3 more than the pixel above it, so one step down should add 3 + 3 = 6: 6 → 12 and 8 → 14. All four numbers agree.
+This kernel has 1s only on its diagonal, so each output is "top-left value + bottom-right value" of its region. In the image, every number is 1 more than the one on its left, so one step right should add $1 + 1 = 2$ to the output: 6 → 8 and 12 → 14. Every number is 3 more than the one above it, so one step down should add $3 + 3 = 6$: 6 → 12 and 8 → 14. All four values agree.
 
 </Box>
 
 </Sum>
 
-**What does a filter "find"?** A filter with positive weights on the left and negative weights on the right gives zero on flat areas and a large value where the left side is brighter than the right side: it is a vertical **edge detector**. In a CNN nobody designs filters by hand; the network **learns** the filter weights by backpropagation. Early layers end up detecting edges and colours, middle layers detect shapes such as corners and circles, and deep layers detect object parts such as eyes or wheels. <Cite id="mlm-cnn-conv" /> <Cite id="ibm-cnn" />
+**An edge-detecting example from the class.** The edge filter with rows [1, 0, −1] applied to the region [1 2 3; 4 5 6; 7 8 9] gives $(1 - 3) + (4 - 6) + (7 - 9) = -6$. The sum of all the products is one value of the output feature map. <Cite id="class-dl-chp4" loc="slide 6" />
 
-## Padding
+**A bigger worked example (4×4 image, stride 1).** <Cite id="class-dl-chp4" loc="slide 9" />
 
-**What it is.** **Padding** means adding a border of extra pixels (usually zeros) around the input before convolving.
+<Sum>
 
-**Why it is needed.** Without padding, (1) the output shrinks after every layer, so a deep network would quickly shrink the image to nothing, and (2) corner and edge pixels are covered by the filter far fewer times than centre pixels, so information at the border is under-used.
+<Given>
 
-<Img id="img-dl-n2-cnn-padding" caption="Zeros added around the input (dashed cells) so that the output is 4 by 4 instead of 2 by 2." />
+a 4×4 image with the numbers 1 to 16 written row by row, a 2×2 filter $\begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$, stride 1.
 
-**Types.** Goodfellow names three cases. <Cite id="gfdl-ch9" loc="§9.5" />
+</Given>
 
-| Type | What is added | Output size (stride 1) | When used |
-|---|---|---|---|
-| **Valid** | No padding | Shrinks: $N - F + 1$ | When shrinking is fine |
-| **Same** | Just enough zeros to keep the size ($P = (F-1)/2$, so 1 for a 3×3 filter) | Same as input: $N$ | Most modern CNNs, to stack many layers |
-| **Full** | Enough zeros that even a corner pixel is covered by the filter at least once | Grows: $N + F - 1$ | Rare |
+<Find>
 
-**Advantages:** keeps the spatial size, so many layers can be stacked; uses edge pixels fairly. **Disadvantages:** the added zeros are not real image data and can create weak artificial edges at the border; slightly more computation. <Cite id="gfg-cnn-padding" /> <Cite id="mlm-cnn-padding" />
+the feature map.
+
+</Find>
+
+<Steps>
+
+1. **Size.** $(4 - 2)/1 + 1 = 3$, so the feature map is 3×3 (9 positions).
+2. **Row 1 of the image.** Region (1, 2, 5, 6) gives $1 + 6 = 7$. Move right: (2, 3, 6, 7) gives $2 + 7 = 9$. Move right: (3, 4, 7, 8) gives $3 + 8 = 11$.
+3. **Move down one pixel.** Region (5, 6, 9, 10) gives 15, then 17, then 19.
+4. **Move down again.** Region (9, 10, 13, 14) gives 23, then 25, then 27.
+
+</Steps>
+
+<Answer>
+
+$\begin{bmatrix} 7 & 9 & 11 \\ 15 & 17 & 19 \\ 23 & 25 & 27 \end{bmatrix}$
+
+</Answer>
+
+<Box kind="verify">
+
+With this filter each output is (top-left number) + (bottom-right number) $= a + (a + 5) = 2a + 5$, where $a$ is the top-left number. For $a = 1, 2, 3$ this gives 7, 9, 11 and for $a = 5$ it gives 15. All match, and one step right adds 2 while one step down adds 8 ($2 \times 4$).
+
+</Box>
+
+</Sum>
+
+### Why is convolution important?
+
+It detects local features, preserves spatial information, uses fewer parameters, learns features automatically, and detects the same feature at different locations. <Cite id="class-dl-chp4" loc="slide 6" />
+
+## Feature map
+
+<Box kind="definition">
+
+**Feature map:** the output produced after applying a filter to an image. It shows **where** a specific feature (like an edge or a texture) is detected and how strongly it is present at different locations. <Cite id="class-dl-chp4" loc="slide 16" />
+
+</Box>
+
+<Img id="class-cnn-feature-map" caption="High value (for example 8) means the feature is strongly present. Low value (for example 0) means it is weak or not detected." />
+
+- **Memory trick:** Filter = what to look for. Feature map = where it was found. A filter is a small matrix of learnable weights (a detector). A feature map is the output of convolution (the detection result). <Cite id="class-dl-chp4" loc="slide 17" />
+- **One filter → one feature map.** If we use K filters, we get K feature maps. <Cite id="class-dl-chp4" loc="slide 23" />
+- The filter is learned during training. The feature map is generated during convolution. <Cite id="class-dl-chp4" loc="slide 17" />
+- **Feature maps in different layers:** the first layers give edges, lines and corners; the middle layers combine edges into curves and shapes; the deeper layers combine shapes into object parts and the complete object. <Cite id="class-dl-chp4" loc="slide 17" />
+- The feature map size depends on the input size N, the filter size F, the padding P and the stride S. <Cite id="class-dl-chp4" loc="slide 17" />
 
 ## Stride
 
-**What it is.** The **stride** is how many pixels the filter jumps at each slide. Stride 1 visits every position. Stride 2 skips every other position, so the output is about half as wide and half as tall.
+<Box kind="definition">
 
-**Why it is used.** A bigger stride shrinks the output and reduces computation, a bit like pooling but inside the convolution itself.
+**Stride** is the number of pixels by which the filter moves across the image at each step. <Cite id="class-dl-chp4" loc="slide 12" />
 
-<Img id="img-dl-n2-cnn-stride" caption="Stride 2: the kernel jumps two cells at a time, so the output shrinks to 2 by 2." />
+</Box>
 
-**Everyday analogy.** Stride is like reading a page by moving your finger one word at a time (stride 1) or two words at a time (stride 2): the bigger the jump, the fewer stops you make.
+- **Stride = 1:** the filter moves one pixel at a time. It checks more positions, so the output is larger.
+- **Stride = 2:** the filter jumps two pixels at a time. It checks fewer positions, so the output is smaller.
+- The kernel shifts 9 times on a 5×5 image with a 3×3 kernel and stride 1. <Cite id="class-dl-m4" loc="p. 11" />
+- Stride is distance, not direction: it says how far the filter jumps. Stride is "HOW FAR", the filter is "WHAT". <Cite id="class-dl-chp4" loc="slide 12" />
 
-**Advantages:** less computation and memory, faster down-sizing. **Disadvantages:** a large stride can skip over small details, so information is lost.
+<Img id="class-cnn-stride2" caption="A 3×3 filter on a 5×5 image with stride 2: it starts at the top-left, jumps 2 pixels right, then 2 down, then 2 right again. Only 4 positions fit." />
+
+**Why use stride = 2?** Stride helps reduce the spatial size of the feature map. <Cite id="class-dl-chp4" loc="slide 12" />
+
+**Exam answer (stride).** Stride determines how far the filter moves at each step. Increasing the stride reduces the number of positions where the filter is applied, thereby reducing the output size. <Cite id="class-dl-chp4" loc="slide 19" />
+
+| Stride | Filter movement | Output size |
+|---|---|---|
+| 1 | Moves 1 pixel | Larger |
+| 2 | Moves 2 pixels | Smaller |
+| 3 | Moves 3 pixels | Even smaller |
+
+<Cite id="class-dl-chp4" loc="slide 13" />
+
+## Padding
+
+<Box kind="definition">
+
+**Padding** adds extra pixels (usually zeros) around the image. It allows the filter to be applied at the boundary and helps control the output size, preventing the image from shrinking too much. <Cite id="class-dl-chp4" loc="slide 14" />
+
+</Box>
+
+<Img id="class-cnn-padding" caption="Padding = 1 adds one layer of zeros around the border, so a 3×3 image becomes 5×5." />
+
+**Why we need padding.** <Cite id="class-dl-chp4" loc="slide 14" /> <Cite id="class-dl-chp4" loc="slide 15" />
+
+1. **Without padding the image shrinks quickly.** A 5×5 image with a 3×3 filter becomes 3×3, and after another convolution it becomes 1×1.
+2. **Border pixels get less chance to take part.** Corner and border pixels are used fewer times than middle pixels. Padding gives the border pixels more chance to participate.
+3. **It preserves the image size** (spatial size) when we want it to stay the same.
+
+The zeros are added one row at the top, one row at the bottom, one column on the left and one column on the right, so a 3×3 image becomes 5×5. This is also called **zero padding**. <Cite id="class-dl-chp4" loc="slide 15" />
+
+### Valid, same and full padding
+
+| Type | Padding | What happens | Output size |
+|---|---|---|---|
+| **Valid** ("no padding") | P = 0 | The operation is done only where the filter completely overlaps the input. The output becomes smaller. | $N - F + 1$ |
+| **Same** | For stride 1: $P = (F - 1)/2$ | Zeros are added so that the output keeps the same height and width as the input. | Same as input |
+| **Full** | $P = F - 1$ | The filter can go completely outside the original image. The output becomes larger. | Larger than input |
+
+<Cite id="class-dl-m4" loc="p. 18" /> <Cite id="class-dl-m4" loc="p. 19" /> <Cite id="class-dl-chp4" loc="slide 37" />
+
+- Valid is used when a reduction in size is wanted or computation matters most. Same is used when the spatial size must stay the same through the network. <Cite id="class-dl-m4" loc="p. 18" /> <Cite id="class-dl-m4" loc="p. 19" />
+- Example of same padding: a 5×5 image, a 3×3 filter and stride 1 need $P = (3 - 1)/2 = 1$, and the output is 5×5. <Cite id="class-dl-chp4" loc="slide 37" />
+- Example of valid padding: a 5×5 input with a 3×3 filter gives a 3×3 output. <Cite id="class-dl-chp4" loc="slide 37" />
+- Example of full convolution: a 5×5 input, a 3×3 filter and $P = F - 1 = 2$ give $(5 - 3 + 2 \cdot 2)/1 + 1 = 7$, so the output is 7×7. <Cite id="class-dl-chp4" loc="slide 37" />
+
+**Memory trick.** Valid: no padding, output becomes smaller. Same: padding added, output remains the same size. <Cite id="class-dl-chp4" loc="slide 15" />
+
+**Exam answer (padding).** Padding is the process of adding extra pixels, usually zeros, around the boundary of an input image before convolution to preserve spatial dimensions and allow better processing of border features. <Cite id="class-dl-chp4" loc="slide 15" />
+
+<Box kind="pitfall">
+
+**Padding is not stride.** Padding adds pixels around the image. Stride controls how far the filter moves. <Cite id="class-dl-chp4" loc="slide 17" />
+
+</Box>
 
 ## Relation between input, output and filter size
 
-The syllabus asks for this relation, and numericals use it every year.
+The size of the output depends on four numbers. <Cite id="class-dl-chp4" loc="slide 7" />
 
 <Box kind="key">
 
-In words: start with the input size, add the padding on both sides, subtract the filter size, count how many jumps of size $S$ fit, and add 1 for the starting position. For a square input of size $N \times N$, filter $F \times F$, padding $P$ (zeros added on each side) and stride $S$:
-
 $$
-\text{Output size } O = \frac{N - F + 2P}{S} + 1
+\text{Output} = \left\lfloor \frac{N - F + 2P}{S} \right\rfloor + 1
 $$
 
-If the division is not exact, libraries round down. The **depth** of the output equals the **number of filters**.
+N = input size, F = filter size, P = padding, S = stride. The symbol $\lfloor\ \rfloor$ means round down (the floor operation). Use it for the general case. <Cite id="class-dl-chp4" loc="slide 19" />
 
 </Box>
 
-**Worked examples (check each by hand).**
+- **Without padding** (P = 0) the formula is $(N - F)/S + 1$. For $N = 7$, $F = 3$: stride 1 gives 5, stride 2 gives 3, and stride 3 gives 2.33, which is not a whole number, so that stride does not fit neatly. <Cite id="class-dl-m4" loc="p. 20" />
+- **Why round down?** The filter can only be placed where it fits completely inside the (padded) image. A partial position is not used. <Cite id="class-dl-chp4" loc="slide 21" />
+- **Output depth** = number of filters (K). <Cite id="class-dl-chp4" loc="slide 26" />
+- **Larger stride → smaller output. More padding → larger output.** <Cite id="class-dl-chp4" loc="slide 21" />
 
-| Input $N$ | Filter $F$ | Padding $P$ | Stride $S$ | Output $O$ |
-|---|---|---|---|---|
-| 7 | 3 | 0 | 1 | $(7-3)/1+1 = 5$ |
-| 7 | 3 | 0 | 2 | $(7-3)/2+1 = 3$ |
-| 32 | 5 | 2 | 1 | $(32-5+4)/1+1 = 32$ (same size) |
-| 227 | 11 | 0 | 4 | $(227-11)/4+1 = 55$ (AlexNet's first layer) |
-
-<Cite id="cs231n-cnn" /> <Cite id="d2l-cnn-padding" /> <Cite id="dumoulin2016" />
-
-**Sum 2: output size of AlexNet's first layer, step by step.**
+**Sum 2: the five practice questions from class.** A 3×3 input and a 2×2 filter. Find the size of the output in each case. <Cite id="class-dl-chp4" loc="slide 22" /> <Cite id="class-dl-chp4" loc="slide 21" />
 
 <Sum>
 
 <Given>
 
-input $N = 227$, filter $F = 11$, padding $P = 0$, stride $S = 4$.
+$N = 3$, $F = 2$. The cases are: (1) no padding and stride 1 (the usual default when nothing is said), (2) $P = 0$, $S = 1$, (3) $P = 0$, $S = 2$, (4) $P = 1$, $S = 1$, (5) $P = 1$, $S = 2$.
 
 </Given>
 
 <Find>
 
-the output size $O$.
+the output size in every case.
 
 </Find>
 
 <Steps>
 
-1. **Add the padding:** $N + 2P = 227 + 0 = 227$, because there is no border to add.
-2. **Subtract the filter size:** $227 - 11 = 216$. This is how far the filter's left edge can travel.
-3. **Count the jumps:** $216 / 4 = 54$, because each jump moves 4 pixels.
-4. **Add the starting position:** $54 + 1 = 55$, because the first position is not a jump.
+1. **Cases 1 and 2** are the same: $(3 - 2 + 0)/1 + 1 = 2$, so **2×2**.
+2. **Case 3:** $(3 - 2 + 0)/2 + 1 = 0.5 + 1 = 1.5$. Round down to 1, because only one position fits completely, so **1×1**.
+3. **Case 4:** $(3 - 2 + 2)/1 + 1 = 3 + 1 = 4$, so **4×4**.
+4. **Case 5:** $(3 - 2 + 2)/2 + 1 = 1.5 + 1 = 2.5$. Round down to 2, so **2×2**.
 
 </Steps>
 
 <Answer>
 
-$O = 55$, **so the output is 55×55** (its depth is the number of filters).
+(1) 2×2, (2) 2×2, (3) 1×1, (4) 4×4, (5) 2×2.
 
 </Answer>
 
 <Box kind="verify">
 
-Work backwards. Counting pixels from 0, the 55th (last) filter position starts at pixel $(55 - 1) \times 4 = 216$ and covers pixels 216 to $216 + 11 - 1 = 226$. The image's last pixel is $227 - 1 = 226$, so the filter ends exactly at the border: nothing is left over and nothing sticks out. The answer 55 is right.
+Count the positions instead of using the formula. In case 3 the filter starts at column 1 and the next start (column 3) would need column 4, which does not exist, so there is 1 position per side. In case 5 the padded image is 5 wide, the starts are columns 1 and 3 (a start at column 5 would need column 6), so 2 per side. Cases 4 and 5 agree with the teacher's table 4×4 and 2×2.
 
 </Box>
 
 </Sum>
 
-## Multichannel convolution
+<Img id="class-cnn-stride-floor" caption="Case 3 from the sheet: stride 2, padding 0. The formula gives 1.5, so the output is 1×1. The next positions are not complete, so only the valid position is used." />
 
-**What it is.** When the input has several channels (3 for a colour image, or many feature maps from an earlier layer), each filter has the **same depth as the input**. A 5×5 filter on an RGB image is really $5 \times 5 \times 3$.
-
-**How it works.**
-
-1. The filter has one 5×5 slice for each input channel.
-2. At each position, every slice multiplies-and-adds with its own channel.
-3. The results of all slices are **added together**, plus one bias, giving **one** number.
-4. So one filter always gives **one** feature map, however many input channels there are.
-5. Using $K$ filters gives $K$ feature maps, stacked into an output of depth $K$.
-
-<Img id="img-dl-n2-cnn-multichannel" caption="Two input channels: each has its own kernel, and the two results are added into one output cell." />
-
-```mermaid
-%% caption: Multichannel convolution. One filter has a slice for each input channel; the three slice results are added into one feature map. K filters give an output with K channels.
-flowchart LR
-  R["Red channel"] --> SR["Filter slice 1"]
-  G["Green channel"] --> SG["Filter slice 2"]
-  B["Blue channel"] --> SB["Filter slice 3"]
-  SR --> ADD["Add all three, plus bias"]
-  SG --> ADD
-  SB --> ADD
-  ADD --> FM["One feature map"]
-  FM --> OUT["K filters: K feature maps stacked"]
-```
-
-**Rules to remember.** Filter depth = number of input channels. Number of filters = number of output channels.
-
-**Everyday analogy.** Each filter is one "expert" who looks at all colour layers at once and writes one report (one feature map). Ten experts write ten reports, stacked into an output of depth 10. <Cite id="d2l-cnn-channels" />
-
-## 1D, 2D and 3D convolution
-
-The syllabus names **2D convolution**, the kind used on images. The same idea works in other dimensions; the name says in how many directions the filter slides.
-
-| | 1D convolution | 2D convolution | 3D convolution |
-|---|---|---|---|
-| Filter slides along | One axis (time) | Two axes (height and width) | Three axes (height, width, time or depth) |
-| Typical data | Audio, sensor signals, text | Images | Video, CT and MRI scans |
-| Filter shape example | 3 | 3×3 (× channels) | 3×3×3 (× channels) |
-
-<Cite id="gfdl-ch9" loc="§9.7" />
-
-## Variants of the basic convolution function
-
-The plain convolution can be changed in a few standard ways. Goodfellow describes these in §9.5. <Cite id="gfdl-ch9" loc="§9.5" />
-
-| Variant | What changes | Why use it |
-|---|---|---|
-| **Multichannel convolution** | Filter spans all input channels, many filters give many output channels | Real images and feature maps have many channels |
-| **Strided convolution** | Filter jumps $S > 1$ pixels | Shrinks the output and saves computation |
-| **Zero-padded convolution** (valid, same, full) | Zeros added around the border | Controls the output size, uses edge pixels |
-| **Locally connected layer (unshared convolution)** | Each position has its **own** filter, no weight sharing | When a feature should appear only in one place, for example the mouth only in the lower half of a centred face |
-| **Tiled convolution** | A small set of filters is cycled through positions | A middle path between full sharing and no sharing |
-
-Most exam answers need only the first three; the last two show what weight sharing buys by taking it away.
-
-## Weight sharing and why convolution works so well
-
-**What weight sharing is.** In a convolutional layer the **same filter weights are used at every position** of the image. A 3×3 filter has only 9 weights (per channel), whether the image is 32×32 or 1000×1000.
-
-**Why it makes sense.** A pattern such as a vertical edge looks the same wherever it appears. A detector that is useful in the top-left corner is just as useful in the bottom-right, so it should be learned once.
-
-Goodfellow explains the success of convolution by three ideas. <Cite id="gfdl-ch9" loc="§9.2" />
-
-1. **Sparse interactions (local connectivity).** Each output looks at only a small patch (for example 5×5), not the whole image. Fewer connections means less computation and memory.
-2. **Parameter sharing (weight sharing).** The same filter is used at every position. Far fewer weights to learn, and it also acts as regularization, because fewer free weights leave less room to memorize.
-3. **Equivariance to translation.** If the object in the input moves a few pixels, its response in the feature map moves by the same amount. The network does not need to relearn the object for every position.
-
-**Advantages of weight sharing:** very few parameters, less overfitting, works on any image size, a feature is detected anywhere. **Disadvantages:** it assumes the same pattern matters equally everywhere, which is not always true (then a locally connected layer is better); convolution alone does not handle rotation or a big change of scale.
-
-## Fully connected network versus CNN
-
-| Point | Fully connected layer | Convolutional layer |
-|---|---|---|
-| Connections | Every output sees every input | Each output sees one small patch |
-| Weight sharing | No, every connection has its own weight | Yes, one filter reused at every position |
-| Number of weights | Huge, grows with image size | Small, independent of image size |
-| Keeps the 2D layout of the image | No, the image is flattened first | Yes |
-| Shift of the object | Must be relearned at each place | Same filter finds it anywhere |
-| Overfitting risk | High | Lower |
-| Good for | Final decision on a short feature vector | Finding local patterns anywhere in an image |
-
-**One number to quote.** For a 32×32×3 input and an output of 32×32×10, a convolutional layer with ten 5×5 filters needs 750 weights, while a fully connected layer with the same output needs about 31.5 million: roughly 42,000 times more. (Fully connected: $3072$ inputs $\times$ $10{,}240$ outputs $= 31{,}457{,}280$ weights; convolution: $5 \times 5 \times 3 \times 10 = 750$; and $31{,}457{,}280 / 750 \approx 41{,}943$.) <Cite id="d2l-cnn-why" />
-
-<Figure caption="A fully connected layer: every input neuron has a line to every output neuron, and each line is a separate weight. A convolutional layer would instead connect each output to only a few nearby inputs, using the same few weights each time.">
-  <NetworkFigure layers="6,4" title="Fully connected: 6 × 4 = 24 separate weights" labels="Inputs,Outputs" />
-</Figure>
-
-## Counting parameters in a convolutional layer
-
-This is the numerical that keeps coming in the papers. A convolutional layer learns **only its filters**: each filter has $F \times F \times C_{in}$ weights (it covers all input channels) and one bias.
-
-<Box kind="key">
-
-$$
-\text{Total parameters} = (F \times F \times C_{in} + 1) \times K
-$$
-
-$F$ = filter height and width, $C_{in}$ = number of input channels, $+1$ = the one bias of each filter, $K$ = number of filters. The height and width of the image, the stride and the padding do **not** change the number of parameters. They only change the output size.
-
-</Box>
-
-**Sum 3: parameters of a layer (asked in <PYQ id="2023-12/q3a" />).** <Cite id="cs231n-cnn" />
+**Three more numerical questions from class.** <Cite id="class-dl-chp4" loc="slide 59" /> <Cite id="class-dl-chp4" loc="slide 60" /> <Cite id="class-dl-chp4" loc="slide 61" />
 
 <Sum>
 
 <Given>
 
-input $32 \times 32 \times 3$ (so $C_{in} = 3$), $K = 10$ filters of size $F = 5$, stride $S = 1$, padding $P = 2$.
+(a) a 28×28 input and a 7×7 filter, stride 1. (b) A 224×224×3 input, five 7×7 kernels, stride 1, zero padding (P = 0). (c) A 32×32×3 input, five 3×3 kernels, no padding, stride 1.
 
 </Given>
 
 <Find>
 
-the number of parameters in the layer (and, as a bonus, its output size).
+the size of the data the next layer receives.
 
 </Find>
 
 <Steps>
 
-1. **Filter shape:** each filter covers all 3 input channels, so it is $5 \times 5 \times 3$.
-2. **Weights per filter:** $5 \times 5 = 25$, and $25 \times 3 = 75$, because each of the 25 grid cells has one weight in each of the 3 channels.
-3. **Add the bias:** each filter has one bias, so $75 + 1 = 76$ parameters per filter.
-4. **All filters:** $76 \times 10 = 760$, because each of the 10 filters has its own 76 parameters.
-5. **Output size (bonus):**
-
-   $$
-   (32 - 5 + 2 \times 2)/1 + 1 = 31 + 1 = 32
-   $$
-
-   the depth is the number of filters, 10.
+1. **(a)** $(28 - 7 + 0)/1 + 1 = 21 + 1 = 22$, so the output is **22×22**.
+2. **(b)** Height and width: $(224 - 7 + 0)/1 + 1 = 217 + 1 = 218$. Depth = number of kernels = 5. So **218×218×5**. The input's 3 channels do not appear in the output depth.
+3. **(c)** Height and width: $(32 - 3 + 0)/1 + 1 = 29 + 1 = 30$. Depth = 5. So **30×30×5**.
+4. **If the parameters of (b) are asked** (assignment version), each kernel is 7×7×3 with one bias: $(7 \cdot 7 \cdot 3 + 1) \times 5 = 148 \times 5 = 740$.
 
 </Steps>
 
 <Answer>
 
-760 parameters (750 weights + 10 biases); the output is 32×32×10.
+(a) 22×22, (b) 218×218×5 (740 parameters), (c) 30×30×5.
 
 </Answer>
 
 <Box kind="verify">
 
-Count weights and biases separately. Weights: $5 \times 5 \times 3 \times 10 = 750$. Biases: one per filter, 10. Total $750 + 10 = 760$, the same. For the output size, notice $P = 2 = (5 - 1)/2$, which is exactly "same" padding; with stride 1 same padding keeps the size, so 32 is expected.
+Check with the positions rule: a filter of size F fits in $N - F + 1$ places when the stride is 1. (a) $28 - 7 + 1 = 22$. (b) $224 - 7 + 1 = 218$. (c) $32 - 3 + 1 = 30$. All three agree.
 
 </Box>
 
 </Sum>
 
-**Sum 4: weights of a layer (asked in <PYQ id="2024-12/q4b" />).**
+## Multichannel (RGB) convolution
+
+A colour image has three channels (R, G, B), so its shape is H × W × 3. Convolution on it differs in one way: **the filter also has 3 channels.** <Cite id="class-dl-chp4" loc="slide 23" />
+
+- For an RGB input the filter depth must match the input channels. A 3×3 filter on an RGB image is really 3×3×3. <Cite id="class-dl-chp4" loc="slide 24" />
+- At each position the filter does a multiply-and-add on R, G and B separately, then adds the three results and the bias: $\text{Output} = R_{conv} + G_{conv} + B_{conv} + b$. This gives **one value**. <Cite id="class-dl-chp4" loc="slide 24" />
+- The filter moves according to the stride. All the values together form **one feature map**. K filters give K feature maps. <Cite id="class-dl-chp4" loc="slide 23" />
+
+<Img id="class-cnn-rgb-add" caption="At one position the R, G and B parts give 10, 20 and 15. Adding the bias 2 gives 47, one value of the feature map." />
+
+**Exam answer (RGB convolution).** For an RGB image, the filter has three channel parts. At each position, convolution is performed on R, G and B separately, their results are added together along with bias, and this gives one output value. As the filter moves across the image, these values form one feature map. <Cite id="class-dl-chp4" loc="slide 23" />
+
+**Sum 3: output volume of a convolution layer.** <Cite id="class-dl-chp4" loc="slide 26" />
 
 <Sum>
 
 <Given>
 
-input $64 \times 64$ with $C_{in} = 32$ channels, $K = 64$ filters of size $F = 3$, stride 1, no padding.
+an input volume of 32×32×3, 10 filters of size 5×5, stride 1, padding 2.
 
 </Given>
 
 <Find>
 
-the total number of parameters (weights) in the layer.
+the output volume.
 
 </Find>
 
 <Steps>
 
-1. **Filter shape:** each filter is applied to every input channel, so it is $3 \times 3 \times 32$.
-2. **Weights per filter:** $3 \times 3 = 9$, and $9 \times 32 = 288$, because each of the 9 cells has one weight for each of the 32 input channels.
-3. **All filters:** $288 \times 64$. Split it to multiply easily: $288 \times 60 = 17{,}280$ and $288 \times 4 = 1{,}152$, so $17{,}280 + 1{,}152 = 18{,}432$ weights.
-4. **Biases:** one per filter, 64, so with biases $18{,}432 + 64 = 18{,}496$.
-5. **Output size (bonus):** $(64 - 3 + 0)/1 + 1 = 62$, so the output is $62 \times 62 \times 64$.
+1. **Each filter is 5×5×3**, because the filter depth must equal the input depth (3).
+2. **Height:** $(32 + 2 \cdot 2 - 5)/1 + 1 = 31 + 1 = 32$.
+3. **Width:** the input is square, so the width is also 32.
+4. **Depth** = number of filters = 10, because each filter gives one 32×32 feature map and the 10 maps are stacked.
 
 </Steps>
 
 <Answer>
 
-18,432 weights; 18,496 parameters if the 64 biases are counted.
+output volume = 32 × 32 × 10.
 
 </Answer>
 
 <Box kind="verify">
 
-Multiply in another order. First count the weights that touch one input channel: each of the 64 filters has a 3×3 slice for it, so $3 \times 3 \times 64 = 576$. There are 32 input channels, so $576 \times 32 = 18{,}432$ (check: $576 \times 30 = 17{,}280$, $576 \times 2 = 1{,}152$, sum $18{,}432$). Same answer. Also note the image size 64×64 was never used, as it should be.
+Padding 2 with a 5×5 filter is "same" padding: $P = (F - 1)/2 = (5 - 1)/2 = 2$. Same padding keeps height and width unchanged, so 32×32 is expected.
 
 </Box>
 
@@ -455,211 +524,464 @@ Multiply in another order. First count the weights that touch one input channel:
 
 <Box kind="pitfall">
 
-Do not multiply by the image size (32×32 or 64×64). The same filter is reused at every position, so the image size never enters the parameter count. Also do not forget that each filter spans **all** input channels. If the question says "weights", give the weight count, and also state the total with biases to be safe.
+**Input depth is not output depth.** Input depth = 3 (the RGB channels). Output depth = number of filters = 10. <Cite id="class-dl-chp4" loc="slide 26" />
 
 </Box>
 
-## The pooling layer
+## One convolution layer: bias, ReLU and stacking
 
-**What it is.** A **pooling** layer makes each feature map smaller by replacing every small block (for example 2×2) with one summary number.
+<Box kind="definition">
 
-**Why it is needed.** After convolution the feature maps are large. Pooling cuts the size, so later layers need less computation, and it makes the network less sensitive to the exact position of a feature.
+A convolution layer applies multiple learnable filters to the input, adds a bias to each filter's output, applies an activation function (ReLU), and produces multiple feature maps that are stacked to form the output volume. <Cite id="class-dl-chp4" loc="slide 27" />
 
-**How it works.**
+</Box>
 
-1. Choose a window size (usually 2×2) and a stride (usually 2).
-2. Slide the window over **each feature map separately**.
-3. Write one number per window: the largest (max pooling) or the mean (average pooling).
-4. The channels stay the same; only height and width shrink. A $28 \times 28 \times 6$ input becomes $14 \times 14 \times 6$.
+The simple flow is: input → convolution → add bias → activation (ReLU) → feature maps (output). <Cite id="class-dl-chp4" loc="slide 29" />
 
-**Types.**
+**Take 6×6×3 input and 2 filters of size 3×3×3, stride 1, padding 0.** <Cite id="class-dl-chp4" loc="slide 29" />
 
-- **Max pooling:** keeps the largest value of each block, that is, "was the pattern found strongly anywhere here?" The most common choice.
-- **Average pooling:** keeps the average of each block; smoother, keeps background information.
-- **Global average pooling:** averages a whole feature map into one number per channel. Modern networks such as ResNet use it at the end instead of large fully connected layers.
+1. Filter 1 gives a feature map of $(6 - 3)/1 + 1 = 4$, so 4×4. Filter 2 gives another 4×4 map using different weights.
+2. Add one bias to each filter's output.
+3. Apply ReLU to every value: negative → 0, positive → same. A value −5 becomes 0 and a value 2 stays 2.
+4. Stack the two 4×4 maps along the depth. The output volume is **4×4×2**. The output depth equals the number of filters.
 
-<Img id="img-dl-n2-cnn-maxpool" caption="Max pooling on a 6 by 6 map: each 2 by 2 block keeps only its largest value (red), giving 3 by 3." />
+```mermaid
+%% caption: One convolution layer with 2 filters on a 6×6×3 input. Each filter gives one 4×4 map; the maps are stacked.
+flowchart LR
+  A["Input 6×6×3"] --> B["Convolution: 2 filters of 3×3×3"]
+  B --> C["Add bias"]
+  C --> D["ReLU"]
+  D --> E["Output 4×4×2"]
+```
 
-**Sum 5: max and average pooling by hand.**
+**Quick rules to remember.** <Cite id="class-dl-chp4" loc="slide 27" />
+
+1. Filter depth = input depth.
+2. One filter produces one feature map.
+3. Number of filters = output depth.
+4. Bias is one per filter.
+5. ReLU is applied after convolution + bias.
+
+### Counting the parameters of a convolution layer
+
+<Img id="class-cnn-conv-params" caption="One 3×3×3 filter has 27 weights plus 1 bias, so 28 parameters. Two filters give 56." />
+
+<Box kind="key">
+
+$$
+\text{Parameters} = (F \times F \times D + 1) \times K
+$$
+
+F = filter size, D = input depth (channels), K = number of filters, +1 = bias per filter. <Cite id="class-dl-chp4" loc="slide 27" />
+
+</Box>
+
+Stride and padding are **not** used for the parameter count. They change the output size, not the number of weights. <Cite id="class-dl-chp4" loc="slide 66" /> A filter has the same weights at every position (weight sharing), so the image size does not matter.
+
+**Sum 4: AlexNet first layer.** Input 227×227×3, 96 kernels of size 11×11, stride 4, padding 0. Find the number of parameters. <Cite id="class-dl-chp4" loc="slide 66" /> <Cite id="class-dl-m4" loc="p. 32" />
 
 <Sum>
 
 <Given>
 
-a 4×4 feature map, window 2×2, stride 2.
+input channels $C = 3$, kernel size $K = 11$, number of kernels $N = 96$.
+
+</Given>
+
+<Find>
+
+the number of parameters of the first conv layer.
+
+</Find>
+
+<Steps>
+
+1. **Weights per kernel:** $11 \times 11 \times 3 = 363$, because each kernel covers all 3 channels.
+2. **Weights of all kernels:** $363 \times 96 = 34{,}848$.
+3. **Biases:** one per kernel, so 96.
+4. **Total:** $34{,}848 + 96 = 34{,}944$. Stride 4 and padding 0 are not used.
+
+</Steps>
+
+<Answer>
+
+34,944 parameters.
+
+</Answer>
+
+<Box kind="verify">
+
+Use the other form of the formula, $(F \times F \times D + 1) \times K = (363 + 1) \times 96 = 364 \times 96 = 34{,}944$. Same answer.
+
+</Box>
+
+</Sum>
+
+**Sum 5: the exercise asked in class.** 32 input channels of size 64×64, 64 filters of 3×3, stride 1, no padding, each filter applied to every channel. Find the total number of weights. <Cite id="class-dl-m4" loc="p. 30" />
+
+<Sum>
+
+<Given>
+
+input 64×64×32, 64 filters of 3×3, stride 1, padding 0.
+
+</Given>
+
+<Find>
+
+the weights (and the biases and the output size).
+
+</Find>
+
+<Steps>
+
+1. **Weights per filter:** $3 \times 3 \times 32 = 288$, because the filter covers all 32 channels.
+2. **Weights of 64 filters:** $288 \times 64 = 18{,}432$.
+3. **Biases:** one per filter, so 64. With biases the total is $18{,}432 + 64 = 18{,}496$.
+4. **Output size** (for the diagram): $(64 - 3)/1 + 1 = 62$, so 62×62×64.
+
+</Steps>
+
+<Answer>
+
+18,432 weights (18,496 parameters with the 64 biases), output 62×62×64.
+
+</Answer>
+
+<Box kind="verify">
+
+Recompute with the formula: $(3 \cdot 3 \cdot 32 + 1) \times 64 = 289 \times 64 = 18{,}496$, which equals $18{,}432 + 64$.
+
+</Box>
+
+</Sum>
+
+**Sum 6: two layers on an RGB image (assignment question).** <PYQ id="assignment-2/q4d" /> A 100×100×3 image goes through layer 1 (8 filters, 3×3, stride 1, padding 0) and then layer 2 (1 filter, 3×3, stride 1, padding 0). <Cite id="class-dl-qb2" loc="Q4" />
+
+<Sum>
+
+<Given>
+
+input 100×100×3. Layer 1: 8 filters of 3×3. Layer 2: 1 filter of 3×3. Stride 1, padding 0.
+
+</Given>
+
+<Find>
+
+the output volume and the trainable parameters (with bias) of each layer, and the total.
+
+</Find>
+
+<Steps>
+
+1. **Layer 1 output:** $(100 - 3)/1 + 1 = 98$, depth 8, so **98×98×8**.
+2. **Layer 1 parameters:** $(3 \times 3 \times 3 + 1) \times 8 = 28 \times 8 = 224$.
+3. **Layer 2 output:** the input is now 98×98×8, so $(98 - 3)/1 + 1 = 96$ and the depth is 1, giving **96×96×1**.
+4. **Layer 2 parameters:** the filter depth must equal the new input depth 8, so $(3 \times 3 \times 8 + 1) \times 1 = 73$.
+5. **Total:** $224 + 73 = 297$.
+
+</Steps>
+
+<Answer>
+
+layer 1: 98×98×8 with 224 parameters. Layer 2: 96×96×1 with 73 parameters. Total 297.
+
+</Answer>
+
+<Box kind="verify">
+
+Each 3×3 convolution without padding removes 2 from the height and width: $100 \to 98 \to 96$. Output depth equals the number of filters (8, then 1). The second layer's filter depth (8) equals the first layer's output depth, so the weights per filter are $3 \cdot 3 \cdot 8 = 72$, plus 1 bias = 73.
+
+</Box>
+
+</Sum>
+
+**Interpretation to write.** The height and width shrink because there is no padding (each 3×3 filter loses 1 pixel on each side). The output depth equals the number of filters, since each filter makes one feature map. The number of parameters depends on the filter size, input depth and number of filters, not on the image size.
+
+## The pooling layer
+
+<Box kind="definition">
+
+A **pooling layer** is a layer in CNN used to reduce the size of feature maps while keeping the most important information. <Cite id="class-dl-chp4" loc="slide 31" />
+
+</Box>
+
+**Why do we use pooling?** <Cite id="class-dl-chp4" loc="slide 31" />
+
+- Reduce the height and width of feature maps.
+- Reduce computation.
+- Reduce the number of parameters in later layers.
+- Make the model less sensitive to small changes in position.
+- Keep important features.
+
+The pooling layer also extracts dominant features that are rotation and position invariant, which helps effective training. It helps in retaining the most useful information and throwing away useless information, and it reduces resolution and dimension, hence the computational complexity. <Cite id="class-dl-m4" loc="p. 34" />
+
+**How does pooling work?** A small window (for example 2×2) moves over the feature map. At every position it performs an operation, and the window moves according to the stride. <Cite id="class-dl-chp4" loc="slide 31" />
+
+- **Maximum** → max pooling.
+- **Minimum** → min pooling.
+- **Average** → average pooling.
+
+(The Module 4 notes also mention sum pooling.) <Cite id="class-dl-m4" loc="p. 34" />
+
+<Box kind="key">
+
+Pooling usually changes **height × width** but does **not** change **depth (channels)**. <Cite id="class-dl-chp4" loc="slide 31" />
+
+</Box>
+
+### Max pooling
+
+<Box kind="definition">
+
+**Max pooling** selects the largest value from each pooling region. <Cite id="class-dl-chp4" loc="slide 32" />
+
+</Box>
+
+<Img id="class-cnn-maxpool" caption="A 4×4 map is split into four 2×2 regions. The largest value of each region is kept, so 4×4 becomes 2×2." />
+
+### Average pooling and min pooling
+
+- **Average pooling** calculates the average of all values inside the pooling region. <Cite id="class-dl-chp4" loc="slide 33" />
+- **Min pooling** selects the smallest value from each pooling region. It keeps the weakest feature and is less commonly used than max pooling. <Cite id="class-dl-chp4" loc="slide 34" />
+
+<Img id="class-cnn-avgpool" caption="The same 4×4 map with average pooling: each 2×2 region is replaced by its average." />
+
+**Sum 7: max, average and min pooling on the same map.** <Cite id="class-dl-chp4" loc="slide 32" /> <Cite id="class-dl-chp4" loc="slide 33" /> <Cite id="class-dl-chp4" loc="slide 34" />
+
+<Sum>
+
+<Given>
+
+a 4×4 feature map, a 2×2 pooling window, stride 2.
 
 $$
-\begin{bmatrix} 1 & 3 & 2 & 4 \\ 5 & 6 & 1 & 2 \\ 7 & 2 & 9 & 0 \\ 1 & 4 & 3 & 8 \end{bmatrix}
+\begin{bmatrix} 4 & 3 & 1 & 5 \\ 1 & 3 & 4 & 8 \\ 4 & 5 & 4 & 3 \\ 6 & 5 & 9 & 4 \end{bmatrix}
 $$
 
 </Given>
 
 <Find>
 
-the max-pooled and the average-pooled outputs.
+the output of max, average and min pooling.
 
 </Find>
 
 <Steps>
 
-1. **Output size:** $(4 - 2)/2 + 1 = 2$, so each output is 2×2.
-2. **Split into four 2×2 blocks** (stride 2 means the blocks do not overlap): top-left 1, 3, 5, 6; top-right 2, 4, 1, 2; bottom-left 7, 2, 1, 4; bottom-right 9, 0, 3, 8.
-3. **Max pooling:** take the largest number of each block, because max pooling keeps the strongest value: 6, 4, 7, 9.
-4. **Average pooling:** add each block (15, 9, 14, 20) and divide by 4, because an average is the sum divided by how many numbers there are: 3.75, 2.25, 3.5, 5.
+1. **Size:** $(4 - 2)/2 + 1 = 2$, so each output is 2×2.
+2. **Split into four regions,** top-left (4, 3, 1, 3), top-right (1, 5, 4, 8), bottom-left (4, 5, 6, 5), bottom-right (4, 3, 9, 4).
+3. **Max** (the largest of each region): 4, 8, 6, 9.
+4. **Average** (the sum divided by 4): $11/4 = 2.75$, $18/4 = 4.5$, $20/4 = 5$, $20/4 = 5$.
+5. **Min** (the smallest of each region): 1, 1, 4, 3.
 
 </Steps>
 
 <Answer>
 
-max pooling gives $\begin{bmatrix} 6 & 4 \\ 7 & 9 \end{bmatrix}$ **and average pooling gives** $\begin{bmatrix} 3.75 & 2.25 \\ 3.5 & 5 \end{bmatrix}$.
+max $= \begin{bmatrix} 4 & 8 \\ 6 & 9 \end{bmatrix}$, average $= \begin{bmatrix} 2.75 & 4.5 \\ 5 & 5 \end{bmatrix}$, min $= \begin{bmatrix} 1 & 1 \\ 4 & 3 \end{bmatrix}$.
 
 </Answer>
 
 <Box kind="verify">
 
-Check the averages through the grand total. Adding by rows: $10 + 14 + 18 + 16 = 58$, so the average of all 16 numbers is $58/16 = 3.625$. Because the four blocks are equal and do not overlap, the average of the four block averages must be the same:
-
-$$
-(3.75 + 2.25 + 3.5 + 5)/4 = 14.5/4 = 3.625
-$$
-
-It matches. A range check also holds: every max (6, 4, 7, 9) is at least its block's average.
+For every region, min ≤ average ≤ max: $1 \le 2.75 \le 4$, $1 \le 4.5 \le 8$, $4 \le 5 \le 6$, $3 \le 5 \le 9$. Also the four region sums $11 + 18 + 20 + 20 = 69$ equal the sum of all 16 numbers ($13 + 16 + 16 + 24 = 69$).
 
 </Box>
 
 </Sum>
 
-```mermaid
-%% caption: Max pooling on one channel. Each 2×2 block of the feature map is replaced by its largest value, so a 4×4 map becomes 2×2.
-flowchart LR
-  A["4×4 feature map"] --> B["Split into four 2×2 blocks"]
-  B --> C["Keep the max of each block"]
-  C --> D["2×2 pooled map, same number of channels"]
-```
+**Which one is used?** Max pooling is the most commonly used. It also acts as a noise suppressant: it discards the noisy (weak) activations and reduces dimension. Average pooling only reduces the dimension. So max pooling usually works better than average pooling. <Cite id="class-dl-chp4" loc="slide 31" /> <Cite id="class-dl-m4" loc="p. 35" />
 
-**Advantages.**
+If a filter detects an edge strongly at one location, max pooling keeps that strong value. <Cite id="class-dl-chp4" loc="slide 32" />
 
-- Reduces size and computation (about 4 times for 2×2, stride 2).
-- Gives **invariance to small shifts**: if the 6 in the top-left block moved one pixel inside that block, the max would still be 6. <Cite id="gfdl-ch9" loc="§9.3" />
-- **Has no parameters to learn**: it is a fixed rule.
-- Helps against overfitting, because later layers see a compact summary.
+### Output size of pooling
 
-**Disadvantages.** It throws away information (3 of every 4 values for 2×2 max pooling), including exact positions, which matters for tasks such as segmentation. Many modern networks use strided convolution instead of some pooling layers.
+With padding 0: $\text{Output} = (N - F)/S + 1$, where N is the input size (height or width), F the pooling window size and S the stride. Example: $N = 8$, $F = 2$, $S = 2$ gives $(8 - 2)/2 + 1 = 4$, so 8×8 becomes 4×4 and the depth stays the same. <Cite id="class-dl-chp4" loc="slide 31" />
 
-**Everyday analogy.** Max pooling is like a class teacher who reports only the top score of each bench of four students. The report is four times shorter, and it still says whether a bench has a strong student. <Cite id="d2l-cnn-pooling" /> <Cite id="gfg-cnn-pooling" /> <Cite id="mlm-cnn-pooling" />
+**Key points.** Pooling makes the feature map smaller. Max pooling is most commonly used. The window size and stride control the output size. Depth does not change. <Cite id="class-dl-chp4" loc="slide 31" />
 
-## The full CNN architecture
+**A complete tiny example: convolution → ReLU → max pooling.** <Cite id="class-dl-chp4" loc="slide 35" />
 
-A typical CNN has two parts: a **feature extractor** (convolution, ReLU, pooling, repeated) and a **classifier** (fully connected layers and softmax).
+<Img id="class-cnn-conv-relu-pool" caption="A 3×3 'loopy pattern' filter makes a feature map. ReLU changes every negative value to 0. Max pooling then keeps the largest value in each 2×2 window (here the window moves 1 step, so the 5×3 map becomes 4×2)." />
 
-1. **Input layer:** the image, for example $32 \times 32 \times 3$.
-2. **Convolutional layer:** several learned filters produce several feature maps.
-3. **ReLU:** keeps positive responses and sets negative ones to 0. It adds non-linearity so the network can learn complex shapes.
-4. **Pooling layer:** shrinks each feature map.
-5. Steps 2 to 4 are **repeated** a few times. The maps get smaller in height and width but deeper (more channels), and the features get more abstract: edges, then shapes, then object parts.
-6. **Flatten:** the final block of numbers is laid out as one long vector.
-7. **Fully connected layers:** combine all the features to make the decision.
-8. **Output layer with softmax:** one probability per class.
+**Sum 8: convolution → ReLU → max pooling on a 6×6 image (assignment question).** <Cite id="class-dl-qb2" loc="Q4" /> <PYQ id="assignment-2/q4e" />
 
-CS231n writes this pattern as INPUT → [[CONV → RELU] × N → POOL?] × M → [FC → RELU] × K → FC. <Cite id="cs231n-cnn" />
+<Sum>
 
-<Img id="img-dl-n2-cnn-overview" caption="The whole pipeline: convolution and pooling layers find features, then flatten and fully connected layers turn them into class scores." />
+<Given>
 
-```mermaid
-%% caption: The usual layout of a CNN. The left part (convolution, ReLU, pooling, repeated) extracts features. The right part (flatten, fully connected, softmax) classifies them.
-flowchart LR
-  A["Input image 32×32×3"] --> B["Conv + ReLU"]
-  B --> C["Pooling"]
-  C --> D["Conv + ReLU"]
-  D --> E["Pooling"]
-  E --> F["Flatten to a vector"]
-  F --> G["Fully connected + ReLU"]
-  G --> H["Output with softmax: class probabilities"]
-```
+a 6×6×1 image, a 3×3 filter with rows [1, 0, −1], stride 1, padding 0, then ReLU, then 2×2 max pooling with stride 2.
 
-<Img id="img-dl-n2-cnn-typical" caption="A typical CNN: each convolution makes a stack of feature maps, each subsampling (pooling) makes them smaller, and a fully connected layer ends it." />
+$$
+\text{Image} = \begin{bmatrix} 3 & 0 & 1 & 2 & 1 & 0 \\ 1 & 2 & 4 & 3 & 1 & 2 \\ 0 & 1 & 3 & 5 & 3 & 1 \\ 2 & 3 & 6 & 4 & 2 & 1 \\ 1 & 2 & 4 & 3 & 1 & 0 \\ 0 & 1 & 2 & 2 & 1 & 1 \end{bmatrix}
+$$
 
-**Shape trace through a small CNN** (useful to label the diagram). Input $32 \times 32 \times 3$.
+</Given>
 
-| Layer | Setting | Output shape | Parameters |
-|---|---|---|---|
-| Conv1 | 6 filters, 5×5, S=1, P=0 | $28 \times 28 \times 6$ | 456 |
-| Max pool | 2×2, S=2 | $14 \times 14 \times 6$ | 0 |
-| Conv2 | 16 filters, 5×5, S=1, P=0 | $10 \times 10 \times 16$ | 2,416 |
-| Max pool | 2×2, S=2 | $5 \times 5 \times 16$ | 0 |
-| Flatten | | 400 | 0 |
-| FC | 10 outputs | 10 | 4,010 |
+<Find>
 
-Notice that the single FC layer has more parameters than both conv layers together. This is common: the fully connected part is usually the heaviest. <Cite id="gfg-cnn" />
+(a) the output size, (b) the 4×4 feature map, (c) after ReLU, (d) after max pooling, (e) the trainable parameters.
+
+</Find>
+
+<Steps>
+
+1. **Output size.** $W_1 = H_1 = 6$, $D_1 = 1$, $F = 3$, $S = 1$, $P = 0$, $K = 1$. So $W_2 = (6 - 3 + 0)/1 + 1 = 4$, $H_2 = 4$, $D_2 = 1$. The output is 4×4×1.
+2. **Shortcut for this filter.** Each filter row is [1, 0, −1], so for each image row take (first number − third number) of the 3 numbers under the filter, then add the three rows. For the first output: row 1 gives $3 - 1 = 2$, row 2 gives $1 - 4 = -3$, row 3 gives $0 - 3 = -3$, so $2 - 3 - 3 = -4$.
+3. **Do the same at every position.** The feature map is
+
+   $$
+   \begin{bmatrix} -4 & -7 & 3 & 7 \\ -10 & -6 & 7 & 8 \\ -10 & -6 & 7 & 10 \\ -9 & -3 & 8 & 7 \end{bmatrix}
+   $$
+4. **ReLU** (negative → 0):
+
+   $$
+   \begin{bmatrix} 0 & 0 & 3 & 7 \\ 0 & 0 & 7 & 8 \\ 0 & 0 & 7 & 10 \\ 0 & 0 & 8 & 7 \end{bmatrix}
+   $$
+5. **Max pooling, 2×2, stride 2.** The four blocks give $\max(0,0,0,0) = 0$, $\max(3,7,7,8) = 8$, $\max(0,0,0,0) = 0$ and $\max(7,10,8,7) = 10$.
+6. **Parameters:** $(3 \cdot 3 \cdot 1 + 1) \times 1 = 10$.
+
+</Steps>
+
+<Answer>
+
+(a) 4×4×1. (b) the feature map in step 3. (c) the ReLU map in step 4. (d) $\begin{bmatrix} 0 & 8 \\ 0 & 10 \end{bmatrix}$. (e) 10 parameters.
+
+</Answer>
 
 <Box kind="verify">
 
-Recheck each row. Conv1:
-
-$$
-(5 \cdot 5 \cdot 3 + 1) \times 6 = 76 \times 6 = 456
-$$
-
-size $(32 - 5)/1 + 1 = 28$. Pool: $28/2 = 14$. Conv2: its input has 6 channels, so
-
-$$
-(5 \cdot 5 \cdot 6 + 1) \times 16 = 151 \times 16 = 2{,}416
-$$
-
-size $(14 - 5)/1 + 1 = 10$. Pool: $10/2 = 5$. Flatten: $5 \times 5 \times 16 = 400$. FC: $400 \times 10$ weights $+ 10$ biases $= 4{,}010$.
+The sum of all 16 feature-map values must equal the sum over image rows of (row total of "first − third" numbers) times how many outputs use that row (1, 2, 3, 3, 2, 1 for rows 1 to 6). Those row totals are 2, 0, −3, 2, 2, −1, so the weighted sum is $2 + 0 - 9 + 6 + 4 - 1 = 2$. The feature map adds up to $-1 - 1 + 1 + 3 = 2$ (row by row). They match.
 
 </Box>
 
-<Figure caption="ReLU, applied after every convolution. Negative filter responses (pattern not found) become 0; positive responses (pattern found) pass through unchanged.">
-  <CurvePlot curves="relu" x="-4,4" y="-1,4" xLabel="filter response z" yLabel="ReLU(z)" />
-</Figure>
+</Sum>
 
-**How does it learn?** Exactly like any other network: forward pass, loss (usually cross-entropy), backpropagation, and gradient descent. The only difference is that a shared filter weight collects (adds up) the gradient from every position where it was used. <Cite id="gfdl-ch9" />
+**Interpretation to write.** The 6×6 image became 4×4 (no padding), then 2×2 (pooling). The filter [1, 0, −1] reacts to a vertical edge (left side bigger than right side): the large positive values on the right show where such edges are strong. ReLU removed the negative responses and pooling kept the strongest one in each block.
 
-<Box kind="intuition">
+## The full CNN architecture
 
-Read a CNN from left to right as a factory line. The first workers spot edges. The next ones combine edges into corners and curves. Later ones combine those into eyes, wheels or letters. At the end a manager (the fully connected layer) looks at the list of parts found and says "this is a cat".
+The convolution layer and the pooling layer together form the i-th layer of a CNN. Depending on how complex the images are, the number of such layers can be increased to capture low-level details further, but at the cost of more computational power. <Cite id="class-dl-m4" loc="p. 36" />
+
+The basic CNN, step by step. <Cite id="class-dl-chp4" loc="slide 28" />
+
+| Step | Layer | What it does |
+|---|---|---|
+| 1 | **Input** | The image is given to the CNN as pixel values. |
+| 2 | **Convolution + ReLU** | Filters slide over the input and detect features like edges, lines, corners. One filter gives one feature map. |
+| 3 | **Pooling** (max pooling) | Keeps the maximum value in each region and reduces size. |
+| 4 | **More convolution + ReLU** | Learns more complex features (curves, textures, parts of objects). |
+| 5 | **Pooling** | Reduces size again. |
+| 6 | **Flatten** | Converts the 3D feature maps into a 1D vector. |
+| 7 | **Fully connected (dense)** | All neurons in the previous layer are connected to the neurons in this layer. It combines the learned features. |
+| 8 | **Softmax** (output layer) | Converts scores to probabilities between 0 and 1 (the sum is 1). |
+| 9 | **Classification** | Choose the class with the highest probability. |
+
+<Img id="class-cnn-arch-features" caption="First half (feature extraction): the image goes through convolution + ReLU and pooling twice. The height and width shrink (32 → 28 → 14 → 10 → 5) while the depth grows (3 → 32 → 64)." />
+
+<Img id="class-cnn-arch-classifier" caption="Second half (classification): flatten gives a vector of 1600 values, the fully connected layer combines them, softmax gives probabilities, and the class with the highest probability (Dog, 0.80) is the prediction." />
+
+```mermaid
+%% caption: The basic CNN of the class with the shape of the data after each step. The left part extracts features; the right part classifies.
+flowchart LR
+  A["Input 32×32×3"] --> B["Conv + ReLU: 28×28×32"]
+  B --> C["Max pool: 14×14×32"]
+  C --> D["Conv + ReLU: 10×10×64"]
+  D --> E["Max pool: 5×5×64"]
+  E --> F["Flatten: 1600"]
+  F --> G["Fully connected: 128 neurons"]
+  G --> H["Softmax: Cat 0.10, Dog 0.80, Horse 0.10"]
+  H --> I["Prediction: Dog"]
+```
+
+**Flatten and the fully connected layer.** After the convolution and pooling layers the image is in a form suitable for a multi-level perceptron. We **flatten** it into a column vector and feed it to a feed-forward neural network. Backpropagation is applied in every iteration of training. Over a series of epochs the model learns to tell dominating and low-level features apart and classify them using **softmax**. The fully connected layer learns a possibly non-linear combination of the high-level features given by the convolution layers. <Cite id="class-dl-m4" loc="p. 38" /> <Cite id="class-dl-chp4" loc="slide 28" />
+
+<Img id="class-cnn-arch-digits" caption="Module 4 version: 32×32×1 input → convolution + ReLU (28×28×3) → max pool stride 2 (14×14×3) → flatten (588 values) → fully connected with ReLU (20) → softmax with 5 classes." />
+
+**Shape trace of the class example** (the filter size 5×5 is what turns 32 into 28 and 14 into 10).
+
+| Layer | Output shape | Parameters |
+|---|---|---|
+| Input | 32×32×3 | 0 |
+| Conv 1: 32 filters 5×5 | 28×28×32 | $(5 \cdot 5 \cdot 3 + 1) \times 32 = 2{,}432$ |
+| Max pool 2×2, stride 2 | 14×14×32 | 0 |
+| Conv 2: 64 filters 5×5 | 10×10×64 | $(5 \cdot 5 \cdot 32 + 1) \times 64 = 51{,}264$ |
+| Max pool 2×2, stride 2 | 5×5×64 | 0 |
+| Flatten | 1600 | 0 |
+| Fully connected, 128 neurons | 128 | $1600 \times 128 + 128 = 204{,}928$ |
+
+Pooling and flatten only reshape or pick values, so they have no weights to learn. The fully connected layer holds most of the parameters. <Cite id="class-dl-chp4" loc="slide 28" />
+
+<Box kind="verify">
+
+Recheck the sizes with $(N - F + 2P)/S + 1$: $(32 - 5)/1 + 1 = 28$, pool $28/2 = 14$, $(14 - 5)/1 + 1 = 10$, pool $10/2 = 5$. Flatten: $5 \times 5 \times 64 = 1600$. Conv 2 sees 32 channels, so its filters have $5 \cdot 5 \cdot 32 = 800$ weights plus 1 bias $= 801$, and $801 \times 64 = 51{,}264$.
 
 </Box>
 
-## Advantages and disadvantages of CNNs
+**Hierarchical learning.** Input image → early layers (simple features) → middle layers (complex features) → deep layers (higher-level features) → final layer (recognition). From simple to complex to complete understanding. <Cite id="class-dl-chp4" loc="slide 5" />
 
-| Advantages | Disadvantages |
+**Advantages (from the class).** A CNN uses far fewer parameters than a fully connected network (local connectivity and weight sharing), it preserves spatial information, it detects the same feature anywhere in the image, it learns features automatically, and it is more efficient. <Cite id="class-dl-chp4" loc="slide 5" /> A CNN performs a better fit to the image data because of fewer parameters and reusable weights. <Cite id="class-dl-m4" loc="p. 7" />
+
+**Limits mentioned in class.** Adding more convolution and pooling layers costs more computational power. <Cite id="class-dl-m4" loc="p. 36" /> Shrinking the volume too fast (for example 32 → 28 → 24 → ...) "doesn't work well", which is one reason for padding. <Cite id="class-dl-m4" loc="p. 29" /> Pooling throws away resolution. <Cite id="class-dl-m4" loc="p. 34" />
+
+## Variants of the basic convolution function
+
+Teacher's list of convolution types. <Cite id="class-dl-chp4" loc="slide 36" />
+
+| Type | What it does |
 |---|---|
-| Far fewer parameters than a fully connected network (local connectivity and weight sharing) | Needs a lot of labelled data to train well |
-| Learns its own features; no hand-designed edge or shape detectors | Training is heavy and usually needs a GPU |
-| Finds a pattern wherever it appears (translation equivariance, pooling invariance) | Not naturally invariant to rotation or large changes of scale |
-| Keeps the 2D structure of the image | Hard to explain why it made a decision (a "black box") |
-| Works on 1D, 2D and 3D data | Pooling loses exact position information |
+| **Standard** | A filter moves across the input and does multiplication and addition. Extracts features such as edges, textures and shapes. |
+| **1×1** | A 1×1 filter combines information across channels. It reduces or changes the number of channels. |
+| **Dilated** | Inserts gaps between the filter elements. Captures a larger area without greatly increasing parameters. |
+| **Transposed** | Increases the spatial size of the feature map. Used for upsampling and image generation. |
+| **Depthwise** | Applies a separate filter to each input channel. Reduces computation and parameters. |
+| **Separable** | Splits convolution into depthwise + 1×1 convolution. Makes CNNs faster and more lightweight. |
+| **Strided** | Uses a stride greater than 1. Reduces the spatial dimensions of the feature map. |
+| **Grouped** | Divides channels into groups and convolves each group separately. Reduces computation and parameters. |
+
+**Normal, unshared and tiled convolution** (the weight-sharing view). <Cite id="class-dl-chp4" loc="slide 39" />
+
+| Feature | Normal convolution | Tiled convolution | Unshared convolution |
+|---|---|---|---|
+| Weight sharing | Complete | Partial (repeating) | None |
+| Filters | One set | Small set | Different at each location |
+| Parameters | Low | Medium | Very high |
+| Location information | Low | Some | High |
+| Computational cost | Low | Medium | High |
+| Common in CNNs? | Yes (most common) | Less common | Rare |
+
+**Exam answer (tiled convolution).** Tiled convolution uses a small set of different filters that are repeatedly applied according to a spatial pattern, providing partial weight sharing between standard (shared) and unshared convolution. <Cite id="class-dl-chp4" loc="slide 39" />
+
+The padding and stride variants (full, valid, valid with stride S, same) are in the padding section above. <Cite id="class-dl-chp4" loc="slide 38" />
 
 ## Where CNNs are used
 
-Image classification, object detection, face recognition, medical image analysis (X-rays, MRI), handwriting and number-plate reading, and self-driving cars. The same idea also works on 1D data such as audio and on 3D data such as video. <Cite id="gfdl-ch9" loc="§9.7" /> <Cite id="wiki-cnn" /> <Cite id="tp-cnn" /> <Cite id="tpoint-cnn" />
-
-## In code (for reference)
-
-In Keras a convolutional layer is `Conv2D(filters, kernel_size, strides, padding)` and a pooling layer is `MaxPooling2D(pool_size, strides)`. Keras uses `padding="valid"` for no padding and `padding="same"` to keep the size. PyTorch's `nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)` asks for the input channels explicitly, which is exactly the $C_{in}$ in the parameter formula. <Cite id="keras-conv2d" /> <Cite id="keras-maxpool2d" /> <Cite id="pytorch-conv2d" /> <Cite id="pytorch-maxpool2d" />
+Image classification, face recognition, object detection, medical image analysis, handwritten digit recognition, OCR, image segmentation, autonomous vehicles, and deepfake or image analysis. <Cite id="class-dl-chp4" loc="slide 67" />
 
 ## Where this was asked
 
 | If the question says | What to write | Seen as |
 |---|---|---|
-| "Explain CNN architecture in detail" plus a parameter count (32×32×3, ten 5×5 filters, stride 1, pad 2) | Layer-by-layer architecture with diagram, then $(5\cdot5\cdot3+1)\times10 = 760$ and output $32\times32\times10$ | <PYQ id="2023-12/q3a" /> |
-| "Explain the architecture of CNN with the help of a diagram" | The pipeline diagram, each layer's job, why CNN beats FC, advantages and applications | <PYQ id="2024-05/q2b" /> |
-| "Explain pooling operation in CNN" | What and why, steps, max and average pooling, small example, advantages and limits | <PYQ id="2024-05/q1e" /> <PYQ id="2024-12/q1e" /> |
-| "Basic working of CNN" | Filter sliding, feature maps, ReLU, pooling, FC + softmax in one short flow | <PYQ id="2025-05/q1e" /> |
-| Parameter count: 32 input channels, 64 filters of 3×3, stride 1, no padding | $3\cdot3\cdot32\cdot64 = 18{,}432$ weights, plus 64 biases = 18,496; output $62\times62\times64$ | <PYQ id="2024-12/q4b" /> |
+| "Explain CNN architecture in detail" plus a parameter count (32×32×3, ten 5×5 filters, stride 1, padding 2) | The 9-step architecture with a diagram, then $(5 \cdot 5 \cdot 3 + 1) \times 10 = 760$ and output 32×32×10 | <PYQ id="2023-12/q3a" /> |
+| "Explain the architecture of CNN with the help of a diagram" | The pipeline diagram, each layer's job, why CNN beats a fully connected network | <PYQ id="2024-05/q2b" /> |
+| "Explain pooling operation in CNN" | Definition, why, how it works, max and average pooling, small example, depth unchanged | <PYQ id="2024-05/q1e" /> <PYQ id="2024-12/q1e" /> |
+| "Basic working of CNN" | Filter sliding, feature maps, ReLU, pooling, flatten, fully connected, softmax in one short flow | <PYQ id="2025-05/q1e" /> |
+| Two conv layers on 100×100×3 (8 filters, then 1 filter, both 3×3): output volumes and parameters | Sum 6: 98×98×8 with 224 parameters, then 96×96×1 with 73 parameters, total 297 | <PYQ id="assignment-2/q4d" /> |
+| 6×6 image, 3×3 filter, then ReLU and 2×2 max pooling | Sum 8: size 4×4, feature map, ReLU, pooled 2×2 map, 10 parameters | <PYQ id="assignment-2/q4e" /> |
+| 224×224×3 image, five 7×7 filters: output and parameters | 218×218×5 and $(7 \cdot 7 \cdot 3 + 1) \times 5 = 740$ | <PYQ id="assignment-2/q4f" /> |
+| Parameter count: 32 input channels, 64 filters of 3×3, stride 1, no padding | $3 \cdot 3 \cdot 32 \cdot 64 = 18{,}432$ weights, plus 64 biases = 18,496; output 62×62×64 | <PYQ id="2024-12/q4b" /> |
 
 ## Quick revision
 
-- A filter is a small learned grid of weights that slides over the input; one filter gives one feature map.
-- Padding: valid (shrinks), same (keeps size), full (grows). Stride: size of the jump.
-- Output size: $O = (N - F + 2P)/S + 1$. Same padding for stride 1: $P = (F-1)/2$.
-- Conv parameters: $(F \cdot F \cdot C_{in} + 1) \times K$. Image size, stride and padding do not matter.
-- Filter depth = input channels; number of filters = output channels.
-- Three reasons CNNs work: sparse interactions, parameter sharing, translation equivariance.
-- Variants: multichannel, strided, padded, locally connected (unshared), tiled.
-- Pooling (max or average, usually 2×2 with stride 2) halves height and width, keeps channels, has no parameters.
-- Order: input → [conv → ReLU → pool] × M → flatten → FC → softmax.
+- Convolution is an operation that applies a small filter (kernel) to an input image to detect useful features such as edges, lines, textures, and patterns.
+- Filter = what to look for. Feature map = where it was found. One filter gives one feature map.
+- Stride = how far the filter moves. Padding = extra border (usually zeros). Valid: P = 0, smaller output. Same: $P = (F - 1)/2$ for stride 1, same size.
+- Output size $= \lfloor (N - F + 2P)/S \rfloor + 1$. Output depth = number of filters.
+- Parameters $= (F \times F \times D + 1) \times K$. Stride and padding do not matter.
+- RGB: the filter depth equals the input depth; the R, G, B results and the bias are added to give one value.
+- Pooling reduces height and width, not depth. Max pooling (largest), average pooling (mean), min pooling (smallest). Output $= (N - F)/S + 1$.
+- Order: input → [convolution + ReLU → pooling] repeated → flatten → fully connected → softmax → class with the highest probability.
+- CNN = local connectivity + weight sharing + pooling.
 
-**Conclusion.** A CNN looks at an image one small patch at a time with shared, learned filters, shrinks the result with pooling, and decides with a small classifier, which makes it accurate on images with far fewer weights than a fully connected network.
+**Conclusion.** A CNN looks at an image one small region at a time with shared, learned filters, shrinks the result with pooling, and decides with fully connected layers and softmax. This needs far fewer parameters than a fully connected network. <Cite id="class-dl-chp4" loc="slide 5" />
