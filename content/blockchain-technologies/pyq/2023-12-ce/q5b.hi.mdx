@@ -1,0 +1,82 @@
+---
+references: [solidity-docs-types, solidity-mastering-ethereum-ch7, solidity-tp-tutorial, solidity-gfg-intro]
+---
+
+**In simple words:** `address` 20-byte ki value hai jo ek account (user wallet ya contract) ko pehchanti hai. `address payable` wahi cheez hai par extra power ke saath: wo **Ether receive** kar sakta hai. Solidity do types isliye rakhta hai ki programmer saaf bataye ki kin addresses ko payment mil sakti hai, taaki Ether galti se aisi jagah na jaye jo use le nahi sakti. <Cite id="solidity-docs-types" loc="Address" />
+
+| | `address` | `address payable` |
+|---|---|---|
+| Holds | A 20-byte account address | The same |
+| Read `.balance` | Yes | Yes |
+| Send Ether (`transfer`, `send`, `call{value:}`) | No | Yes |
+| Use for | Owners, approvers, ids | Receivers of money |
+| Convert | A `payable` address becomes `address` automatically | `payable(a)` makes an `address` payable |
+
+**Ether bhejne ke tareeke:** `transfer` fail hone par revert karta hai, `send` fail hone par false deta hai, aur dono sirf 2300 gas aage dete hain, jo receiving contract ke liye kam ho sakta hai. Mastering Ethereum `call` ki salah deti hai, jiska result hamesha check karna chahiye. <Cite id="solidity-mastering-ethereum-ch7" />
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract AddressDemo {
+    address public owner;             // plain address: identity only
+    address payable public charity;   // payable address: can receive Ether
+
+    constructor(address payable _charity) {
+        owner = msg.sender;
+        charity = _charity;
+    }
+
+    // payable function: accepts Ether sent with the call
+    function deposit() public payable {}
+
+    function contractBalance() public view returns (uint) {
+        return address(this).balance;
+    }
+
+    function balanceOf(address a) public view returns (uint) {
+        return a.balance;             // reading a balance works for any address
+    }
+
+    function donate(uint amount) public {
+        require(msg.sender == owner, "Only owner");
+        require(amount <= address(this).balance, "Not enough balance");
+        (bool ok, ) = charity.call{value: amount}("");
+        require(ok, "Transfer failed");
+    }
+
+    function refund(address user, uint amount) public {
+        require(msg.sender == owner, "Only owner");
+        address payable receiver = payable(user);   // convert before sending
+        (bool ok, ) = receiver.call{value: amount}("");
+        require(ok, "Refund failed");
+    }
+}
+```
+
+**Line by line, simple words mein:**
+
+- `owner` plain `address` hai. Hum sirf use compare karte hain, pay nahi karte.
+- `charity` `address payable` hai kyunki contract use paise bhejega.
+- `constructor` deploy hote waqt ek baar chalta hai. `msg.sender` (deploy karne wala) owner ban jaata hai.
+- `deposit()` `payable` hai aur body khali hai, to call ke saath bheja gaya Ether contract mein hi rehta hai.
+- `address(this).balance` contract ke paas jo Ether hai wo hai.
+- `balanceOf` kisi bhi address ka balance padhta hai. Padhne ke liye `payable` nahi chahiye.
+- `donate` mein do `require` lines bahari logon aur zyada kharch ko rokti hain. `charity.call{value: amount}("")` paise bhejta hai aur success flag `ok` deta hai, jise hum check karte hain.
+- `refund` mein `user` plain `address` hai, isliye pehle `payable(user)` se convert karte hain. Iske bina compiler bhejne se mana kar deta hai.
+
+<Box kind="verify">
+
+Account A `_charity` = B ke saath deploy karta hai. Tab `owner` A hai.
+
+1. A 3 ether ke saath `deposit()` call karta hai, aur `contractBalance()` 3 ether deta hai.
+2. A `donate(1 ether)` call karta hai: B ko 1 ether milta hai aur `contractBalance()` 2 ether deta hai.
+3. Account C `donate(1)` call karta hai: "Only owner" ke saath fail.
+4. A `donate(5 ether)` call karta hai: "Not enough balance" ke saath fail.
+5. A `refund(C, 1 ether)` call karta hai: C ko 1 ether milta hai aur contract ke paas 1 ether bachta hai.
+
+Maine ye code solc 0.8.26 se compile kiya aur koi error nahi aayi. Call ke results haath se nikale hain.
+
+</Box>
+
+**Conclusion:** `address` pehchaanta hai, `address payable` payment bhi le sakta hai. `payable(a)` se convert karo aur `call` ka result check karo. <Cite id="solidity-gfg-intro" />

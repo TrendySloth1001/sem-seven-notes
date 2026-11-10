@@ -1,0 +1,57 @@
+---
+references: [solidity-docs-fallback, solidity-gfg-fallback, solidity-docs-functions, solidity-by-example]
+---
+
+**In simple words:** fallback function contract ka "catch-all" function hai. Iska koi naam nahi hota aur yeh tab chalta hai jab koi contract ko aise function se call kare jo exist nahi karta, ya ether bheje jiske liye koi matching function na ho. <Cite id="solidity-docs-fallback" />
+
+**Rules (Solidity 0.8):**
+
+- Ise `fallback() external payable { ... }` likhte hain, bina `function` keyword aur bina naam ke.
+- Yeh `external` hona chahiye. Ether lena ho to `payable` hota hai.
+- Jab koi aur function call data se match nahi karta tab yeh chalta hai.
+- Alag `receive() external payable` function empty call data wale plain ether transfers handle karta hai. `receive` na ho to empty-data ether payable `fallback` mein jaata hai.
+- `send` ya `transfer` se call hone par gas limited (2300) hoti hai, isliye ise simple rakho. <Cite id="solidity-docs-functions" />
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract FallbackDemo {
+    event Received(address from, uint amount);
+    event FallbackCalled(address from, uint amount, bytes data);
+
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+    }
+
+    fallback() external payable {
+        emit FallbackCalled(msg.sender, msg.value, msg.data);
+    }
+
+    function balance() public view returns (uint) {
+        return address(this).balance;
+    }
+}
+```
+
+**Line by line:**
+
+- `event` lines logs declare karti hain jo baad mein dekh sakte hain; `emit` ek log likhta hai.
+- `receive()` tab chalta hai jab empty data ke saath ether aata hai.
+- `fallback()` tab chalta hai jab data kisi function se match nahi karta, jaise contract mein na hone wale function ka naam call karna.
+- `msg.sender`, `msg.value` aur `msg.data` caller, bheja gaya ether aur raw call data hain.
+- `balance()` contract ke paas ether return karta hai. <Cite id="solidity-gfg-fallback" />
+
+<Box kind="verify">
+
+**Empty data ke saath 1 wei bhejo:** `receive()` chalta hai aur `Received` event log hota hai. `balance()` returns **1**.
+
+**Missing function jaise `foo()` call karo (bina ether ke):** koi function match nahi karta, to `fallback()` chalta hai aur `foo()` ke call data ke saath `FallbackCalled` log karta hai. Fallback na ho to yeh call revert hota.
+
+Compiled without errors with solc 0.8.38.
+
+</Box>
+
+**Uses:** ether lena, calls forward karna (proxy contracts), aur unexpected calls log karna. **Caution:** payable fallback galti se ether le sakta hai, aur usme complex code security risk ho sakta hai. <Cite id="solidity-by-example" />
+
+Exam mein English mein likho: "A fallback function is an unnamed external function that runs when a call matches no other function or when ether is sent without matching data."

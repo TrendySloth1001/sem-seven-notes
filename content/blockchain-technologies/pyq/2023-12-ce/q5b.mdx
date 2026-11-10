@@ -1,0 +1,82 @@
+---
+references: [solidity-docs-types, solidity-mastering-ethereum-ch7, solidity-tp-tutorial, solidity-gfg-intro]
+---
+
+**In simple words:** an `address` is a 20-byte value that identifies an account (a user wallet or a contract). An `address payable` is the same thing with extra powers: it can **receive Ether**. Solidity keeps two types so that the programmer must say clearly which addresses may be paid, and Ether is not sent by mistake to a place that cannot take it. <Cite id="solidity-docs-types" loc="Address" />
+
+| | `address` | `address payable` |
+|---|---|---|
+| Holds | A 20-byte account address | The same |
+| Read `.balance` | Yes | Yes |
+| Send Ether (`transfer`, `send`, `call{value:}`) | No | Yes |
+| Use for | Owners, approvers, ids | Receivers of money |
+| Convert | A `payable` address becomes `address` automatically | `payable(a)` makes an `address` payable |
+
+**Ways to send Ether:** `transfer` reverts on failure, `send` returns false on failure, and both forward only 2300 gas, which may be too little for a receiving contract. Mastering Ethereum advises `call`, whose result must always be checked. <Cite id="solidity-mastering-ethereum-ch7" />
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract AddressDemo {
+    address public owner;             // plain address: identity only
+    address payable public charity;   // payable address: can receive Ether
+
+    constructor(address payable _charity) {
+        owner = msg.sender;
+        charity = _charity;
+    }
+
+    // payable function: accepts Ether sent with the call
+    function deposit() public payable {}
+
+    function contractBalance() public view returns (uint) {
+        return address(this).balance;
+    }
+
+    function balanceOf(address a) public view returns (uint) {
+        return a.balance;             // reading a balance works for any address
+    }
+
+    function donate(uint amount) public {
+        require(msg.sender == owner, "Only owner");
+        require(amount <= address(this).balance, "Not enough balance");
+        (bool ok, ) = charity.call{value: amount}("");
+        require(ok, "Transfer failed");
+    }
+
+    function refund(address user, uint amount) public {
+        require(msg.sender == owner, "Only owner");
+        address payable receiver = payable(user);   // convert before sending
+        (bool ok, ) = receiver.call{value: amount}("");
+        require(ok, "Refund failed");
+    }
+}
+```
+
+**Line by line, in simple words:**
+
+- `owner` is a plain `address`. We only compare it, never pay it.
+- `charity` is `address payable` because the contract will send money to it.
+- The `constructor` runs once at deployment. `msg.sender` (the deployer) becomes the owner.
+- `deposit()` is `payable` with an empty body, so any Ether sent with the call stays in the contract.
+- `address(this).balance` is the Ether held by the contract itself.
+- `balanceOf` reads the balance of any address. Reading needs no `payable`.
+- In `donate`, the two `require` lines stop strangers and over-spending. `charity.call{value: amount}("")` sends the money and returns a success flag `ok`, which we check.
+- In `refund`, `user` is a plain `address`, so `payable(user)` converts it first. Without that, the compiler refuses to send.
+
+<Box kind="verify">
+
+Account A deploys with `_charity` = B. Then `owner` is A.
+
+1. A calls `deposit()` with 3 ether, and `contractBalance()` returns 3 ether.
+2. A calls `donate(1 ether)`: B gains 1 ether and `contractBalance()` returns 2 ether.
+3. Account C calls `donate(1)`: it fails with "Only owner".
+4. A calls `donate(5 ether)`: it fails with "Not enough balance".
+5. A calls `refund(C, 1 ether)`: C gains 1 ether and the contract keeps 1 ether.
+
+I compiled this code with solc 0.8.26 and it gave no errors. The call results are worked out by hand.
+
+</Box>
+
+**Conclusion:** `address` identifies, `address payable` can also be paid. Convert with `payable(a)` and check the result of `call`. <Cite id="solidity-gfg-intro" />

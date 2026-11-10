@@ -1,0 +1,55 @@
+---
+references: [solidity-docs-fallback, solidity-gfg-fallback, solidity-docs-functions, solidity-by-example]
+---
+
+**In simple words:** a fallback function is the "catch-all" function of a contract. It has no name and runs when someone calls the contract with a function that does not exist, or sends ether with no matching function. <Cite id="solidity-docs-fallback" />
+
+**Rules (Solidity 0.8):**
+
+- It is written as `fallback() external payable { ... }` with no `function` keyword and no name.
+- It must be `external`. It is `payable` if it should accept ether.
+- It runs when no other function matches the call data.
+- A separate `receive() external payable` function handles plain ether transfers with empty call data. If `receive` is missing, empty-data ether goes to a payable `fallback`.
+- It has limited gas when called by `send` or `transfer` (2300 gas), so keep it simple. <Cite id="solidity-docs-functions" />
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract FallbackDemo {
+    event Received(address from, uint amount);
+    event FallbackCalled(address from, uint amount, bytes data);
+
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+    }
+
+    fallback() external payable {
+        emit FallbackCalled(msg.sender, msg.value, msg.data);
+    }
+
+    function balance() public view returns (uint) {
+        return address(this).balance;
+    }
+}
+```
+
+**Line by line:**
+
+- `event` lines declare logs that we can see later; `emit` writes one.
+- `receive()` runs when ether is sent with empty data.
+- `fallback()` runs when the data does not match any function, for example a call to a function name that is not in the contract.
+- `msg.sender`, `msg.value` and `msg.data` are the caller, the ether sent and the raw call data.
+- `balance()` returns the ether held by the contract. <Cite id="solidity-gfg-fallback" />
+
+<Box kind="verify">
+
+**Send 1 wei with empty data:** `receive()` runs and the `Received` event is logged. `balance()` returns **1**.
+
+**Call a missing function such as `foo()` (with no ether):** no function matches, so `fallback()` runs and logs `FallbackCalled` with the call data of `foo()`. Without a fallback, this call would revert.
+
+Compiled without errors with solc 0.8.38.
+
+</Box>
+
+**Uses:** accepting ether, forwarding calls (proxy contracts), and logging unexpected calls. **Caution:** a payable fallback can receive ether by mistake, and complex code in it can be a security risk. <Cite id="solidity-by-example" />

@@ -1,0 +1,86 @@
+---
+references: [solidity-docs-visibility, solidity-docs-view-pure, solidity-gfg-visibility, solidity-tp-tutorial]
+---
+
+**In simple words:** **visibility qualifiers** decide who can see or call a variable or function (`public`, `external`, `internal`, `private`). The "activity" qualifiers in the question are read here as the **state-mutability qualifiers** that say what a function may do (`view`, `pure`, `payable`). The program below shows both. <Cite id="solidity-docs-visibility" /> <Cite id="solidity-docs-view-pure" />
+
+| Qualifier | Who can use it |
+|---|---|
+| `public` | Inside the contract, derived contracts and from outside (the compiler makes a getter for variables) |
+| `external` | Only from outside (other contracts or transactions); inside, only as `this.f()` |
+| `internal` | This contract and contracts that inherit from it |
+| `private` | Only this contract, not even children |
+| `view` | Reads state but does not change it |
+| `pure` | Neither reads nor changes state |
+| `payable` | Can receive ether |
+
+**Program:**
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Qualifiers {
+    uint public publicNum = 10;
+    uint internal internalNum = 20;
+    uint private privateNum = 30;
+    uint public total;
+
+    function getPrivate() private view returns (uint) {
+        return privateNum;
+    }
+
+    function getInternal() internal view returns (uint) {
+        return internalNum;
+    }
+
+    function sumAll() public view returns (uint) {
+        return publicNum + getInternal() + getPrivate();
+    }
+
+    function triple(uint x) external pure returns (uint) {
+        return x * 3;
+    }
+
+    function tripleInside(uint x) public view returns (uint) {
+        return this.triple(x);
+    }
+
+    function deposit() public payable {
+        total += msg.value;
+    }
+}
+
+contract Child is Qualifiers {
+    function readParent() public view returns (uint) {
+        return internalNum + getInternal();
+    }
+}
+
+contract Outsider {
+    function check(Qualifiers q) public view returns (uint) {
+        return q.publicNum() + q.triple(4);
+    }
+}
+```
+
+**Line by line:**
+
+- `pragma solidity ^0.8.0;` says the code needs compiler version 0.8.0 or a compatible newer one.
+- `publicNum` is `public`, so Solidity creates a free getter `publicNum()` that anyone can call.
+- `internalNum` can be read in this contract and in `Child`. `privateNum` can be read only in `Qualifiers`.
+- `getPrivate()` and `getInternal()` are helper functions with the same visibility rules. Both are `view` because they read a state variable.
+- `sumAll()` is `public`, so it can call both helpers and add the three numbers.
+- `triple()` is `external`, so other contracts can call it directly. It is `pure` because it uses only its argument.
+- `tripleInside()` shows that inside the contract an external function must be called as `this.triple(x)`.
+- `deposit()` is `payable`, so it accepts ether sent with the call. `msg.value` is the amount in wei, added to `total`.
+- `Child` can use `internalNum` and `getInternal()` but writing `privateNum` there would be a compile error.
+- `Outsider` can only use the public/external parts: `q.publicNum()` and `q.triple(4)`.
+
+<Box kind="verify">
+
+Walk-through: call `sumAll()`. It computes $10 + 20 + 30 = 60$, so it returns 60. Call `Child.readParent()`: $20 + 20 = 40$. Call `Outsider.check(address of Qualifiers)`: `publicNum()` is 10 and `triple(4)` is 12, so $10 + 12 = 22$. Send 5 wei with `deposit()` and `total` becomes 5. The code compiled with solc 0.8.26 without errors or warnings.
+
+</Box>
+
+**Conclusion:** visibility controls who can reach your code, and mutability states what a function may do. Use the narrowest visibility possible for safety. <Cite id="solidity-gfg-visibility" />

@@ -1,0 +1,88 @@
+---
+references: [solidity-docs-visibility, solidity-docs-view-pure, solidity-gfg-visibility, solidity-tp-tutorial]
+---
+
+**In simple words:** **visibility qualifiers** decide karte hain ki variable ya function ko kaun dekh ya call kar sakta hai (`public`, `external`, `internal`, `private`). Question ke "activity" qualifiers ko yahan **state-mutability qualifiers** maana gaya hai, jo batate hain ki function kya kar sakta hai (`view`, `pure`, `payable`). Neeche ka program dono dikhata hai. <Cite id="solidity-docs-visibility" /> <Cite id="solidity-docs-view-pure" />
+
+| Qualifier | Kaun use kar sakta hai |
+|---|---|
+| `public` | Contract ke andar, derived contracts aur bahar se (variables ke liye compiler getter banata hai) |
+| `external` | Sirf bahar se (doosre contracts ya transactions); andar se sirf `this.f()` se |
+| `internal` | Ye contract aur isse inherit karne wale contracts |
+| `private` | Sirf ye contract, children bhi nahi |
+| `view` | State padhta hai lekin badalta nahi |
+| `pure` | Na state padhta hai na badalta hai |
+| `payable` | Ether receive kar sakta hai |
+
+**Program:**
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Qualifiers {
+    uint public publicNum = 10;
+    uint internal internalNum = 20;
+    uint private privateNum = 30;
+    uint public total;
+
+    function getPrivate() private view returns (uint) {
+        return privateNum;
+    }
+
+    function getInternal() internal view returns (uint) {
+        return internalNum;
+    }
+
+    function sumAll() public view returns (uint) {
+        return publicNum + getInternal() + getPrivate();
+    }
+
+    function triple(uint x) external pure returns (uint) {
+        return x * 3;
+    }
+
+    function tripleInside(uint x) public view returns (uint) {
+        return this.triple(x);
+    }
+
+    function deposit() public payable {
+        total += msg.value;
+    }
+}
+
+contract Child is Qualifiers {
+    function readParent() public view returns (uint) {
+        return internalNum + getInternal();
+    }
+}
+
+contract Outsider {
+    function check(Qualifiers q) public view returns (uint) {
+        return q.publicNum() + q.triple(4);
+    }
+}
+```
+
+**Line by line:**
+
+- `pragma solidity ^0.8.0;` kehta hai ki code ko compiler version 0.8.0 ya uska compatible naya version chahiye.
+- `publicNum` `public` hai, isliye Solidity free getter `publicNum()` banata hai jise koi bhi call kar sakta hai.
+- `internalNum` is contract aur `Child` mein padha ja sakta hai. `privateNum` sirf `Qualifiers` mein.
+- `getPrivate()` aur `getInternal()` helper functions hain jin pe same visibility rules lagte hain. Dono `view` hain kyunki state variable padhte hain.
+- `sumAll()` `public` hai, to dono helpers ko call karke teeno numbers jod sakta hai.
+- `triple()` `external` hai, to doosre contracts ise seedha call kar sakte hain. Ye `pure` hai kyunki sirf apna argument use karta hai.
+- `tripleInside()` dikhata hai ki contract ke andar external function ko `this.triple(x)` se call karna padta hai.
+- `deposit()` `payable` hai, to call ke saath bheja gaya ether accept karta hai. `msg.value` wei mein amount hai, jo `total` mein judti hai.
+- `Child` `internalNum` aur `getInternal()` use kar sakta hai, lekin wahan `privateNum` likhna compile error hota.
+- `Outsider` sirf public/external hissa use kar sakta hai: `q.publicNum()` aur `q.triple(4)`.
+
+<Box kind="verify">
+
+Walk-through: `sumAll()` call karo. $10 + 20 + 30 = 60$, to 60 return hota hai. `Child.readParent()`: $20 + 20 = 40$. `Outsider.check(Qualifiers ka address)`: `publicNum()` 10 hai aur `triple(4)` 12, to $10 + 12 = 22$. `deposit()` ke saath 5 wei bhejo to `total` 5 ho jaata hai. Code solc 0.8.26 se bina error ya warning ke compile hua.
+
+</Box>
+
+**Conclusion:** visibility batati hai ki tumhare code tak kaun pahunch sakta hai, aur mutability batati hai ki function kya kar sakta hai. Safety ke liye sabse narrow visibility use karo. <Cite id="solidity-gfg-visibility" />
+
+Exam mein English mein likho: "Visibility qualifiers are public, external, internal and private; mutability qualifiers are view, pure and payable."
