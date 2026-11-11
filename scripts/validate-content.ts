@@ -115,6 +115,25 @@ for (const subject of fs.readdirSync(ROOT)) {
       (t) => t.slug,
     ),
   );
+  // Optional per-topic revision guide: one entry per known topic, with study points and reuse tricks.
+  const revFile = path.join(dir, "revision.json");
+  if (fs.existsSync(revFile)) {
+    for (const r of readJson<
+      { topic?: string; study?: unknown; tricks?: unknown }[]
+    >(revFile)) {
+      if (!topics.has(r.topic ?? ""))
+        fail(revFile, `unknown topic "${r.topic}"`);
+      for (const k of ["study", "tricks"] as const) {
+        const v = r[k];
+        if (
+          !Array.isArray(v) ||
+          v.length === 0 ||
+          v.some((x) => typeof x !== "string" || !x.trim())
+        )
+          fail(revFile, `${r.topic}: ${k} must be a non-empty list of strings`);
+      }
+    }
+  }
   const papers = new Map<string, Set<string>>();
   const pyqDir = path.join(dir, "pyq");
   if (!fs.existsSync(path.join(dir, "topics.json"))) {

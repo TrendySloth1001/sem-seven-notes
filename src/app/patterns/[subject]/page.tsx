@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
+  getRevision,
   getTopics,
   listExamPapers,
   listPapers,
@@ -152,6 +153,35 @@ function ClusterCard({
   );
 }
 
+type TopicQuestion = {
+  key: string;
+  text: string;
+  href: string;
+  mu: number;
+  teacher: boolean;
+};
+
+const SHOWN = 5;
+
+function QuestionRow({ q }: { q: TopicQuestion }) {
+  return (
+    <li className="flex items-start gap-3 text-sm">
+      <span className="flex w-16 shrink-0 flex-col items-start gap-1">
+        {q.mu ? (
+          <Badge variant={q.mu > 1 ? "default" : "outline"}>{q.mu}× MU</Badge>
+        ) : null}
+        {q.teacher ? <Badge variant="secondary">Teacher</Badge> : null}
+      </span>
+      <Link
+        href={q.href}
+        className="min-w-0 flex-1 leading-relaxed outline-none [overflow-wrap:anywhere] hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {q.text}
+      </Link>
+    </li>
+  );
+}
+
 async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
   const { subject } = await params;
   const s = subjects.find((x) => x.slug === subject);
@@ -180,6 +210,29 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
     .sort((a, b) => boosted(b) - boosted(a))
     .slice(0, 10);
   const teacherOnly = matches.filter((m) => !m.cluster);
+  // Every question on a topic, MU repeats and teacher picks first, for the topic-by-topic guide.
+  const revision = new Map(getRevision(subject).map((r) => [r.topic, r]));
+  const topicQuestions = (slug: string): TopicQuestion[] =>
+    [
+      ...clusters
+        .filter((c) => c.topics.includes(slug))
+        .map((c) => ({
+          key: `${c.head.paper.slug}-${c.head.q.id}`,
+          text: plain(c.head.q.text),
+          href: `/pyq/${subject}/${c.head.paper.slug}#${c.head.q.id}`,
+          mu: c.all.length,
+          teacher: teacherOf.has(c),
+        })),
+      ...teacherOnly
+        .filter((m) => m.asked.q.topics.includes(slug))
+        .map(({ asked: a }) => ({
+          key: `${a.paper.slug}-${a.q.id}`,
+          text: plain(a.q.text),
+          href: `/pyq/${subject}/${a.paper.slug}#${a.q.id}`,
+          mu: 0,
+          teacher: true,
+        })),
+    ].sort((a, b) => b.mu + (b.teacher ? 1 : 0) - (a.mu + (a.teacher ? 1 : 0)));
   // Question text is MDX (math and tables), rendered like the paper page; questions cite nothing.
   const ctx: DocContext = {
     subject,
@@ -216,6 +269,7 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
       ? [{ id: "teacher", text: "New from your teachers" }]
       : []),
     ...(due.length ? [{ id: "due", text: "Due back" }] : []),
+    ...(revision.size ? [{ id: "by-topic", text: "Topic by topic" }] : []),
     { id: "importance", text: "Topic importance" },
     { id: "modules", text: "Module weightage" },
     { id: "repeated", text: "All repeated questions" },
@@ -315,6 +369,99 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
                 </li>
               ))}
             </ul>
+          </section>
+        ) : null}
+
+        {revision.size ? (
+          <section aria-labelledby="by-topic" className="mt-12">
+            <h2 id="by-topic" className={h2}>
+              Topic by topic
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              Every question in syllabus order, the most asked first in each
+              topic, with what to learn to answer them and the pieces you can
+              reuse in other answers.
+            </p>
+            <ol className="mt-4 flex flex-col gap-3">
+              {topics.map((t) => {
+                const r = revision.get(t.slug);
+                const qs = topicQuestions(t.slug);
+                if (!r && qs.length === 0) return null;
+                const mu = qs.reduce((n, q) => n + q.mu, 0);
+                const set = qs.filter((q) => q.teacher).length;
+                return (
+                  <li
+                    key={t.slug}
+                    className="rounded-2xl border bg-card p-4 sm:p-5"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                      <h3 className="text-lg font-semibold leading-snug">
+                        <span className="mr-2 font-mono text-sm text-primary">
+                          M{t.module}
+                        </span>
+                        {t.title}
+                      </h3>
+                      <Link
+                        href={`/notes/${subject}/${t.slug}`}
+                        className="text-sm text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Open the note
+                      </Link>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {mu ? `Asked ${mu}× by MU` : "Not asked by MU yet"}
+                      {set ? ` · ${set} in your assignments` : ""}
+                    </p>
+                    {qs.length ? (
+                      <>
+                        <ul className="mt-3 flex flex-col gap-2.5">
+                          {qs.slice(0, SHOWN).map((q) => (
+                            <QuestionRow key={q.key} q={q} />
+                          ))}
+                        </ul>
+                        {qs.length > SHOWN ? (
+                          <details className="mt-2.5">
+                            <summary className="cursor-pointer text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                              {qs.length - SHOWN} more question
+                              {qs.length - SHOWN > 1 ? "s" : ""}
+                            </summary>
+                            <ul className="mt-2.5 flex flex-col gap-2.5">
+                              {qs.slice(SHOWN).map((q) => (
+                                <QuestionRow key={q.key} q={q} />
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {r ? (
+                      <div className="mt-4 grid gap-4 border-t pt-4 md:grid-cols-2">
+                        <div>
+                          <p className="font-mono-label text-muted-foreground">
+                            What to study
+                          </p>
+                          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm leading-relaxed">
+                            {r.study.map((x) => (
+                              <li key={x}>{x}</li>
+                            ))}
+                          </ol>
+                        </div>
+                        <div>
+                          <p className="font-mono-label text-muted-foreground">
+                            Reuse tricks
+                          </p>
+                          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
+                            {r.tricks.map((x) => (
+                              <li key={x}>{x}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
           </section>
         ) : null}
 

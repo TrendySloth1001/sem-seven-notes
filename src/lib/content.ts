@@ -201,6 +201,14 @@ export function getTopics(subject: string): Topic[] {
   return exists(file) ? readJson<Topic[]>(file) : [];
 }
 
+/** What to study for a topic's exam questions, and answer pieces that serve other questions too. */
+export type Revision = { topic: string; study: string[]; tricks: string[] };
+
+export function getRevision(subject: string): Revision[] {
+  const file = path.join(ROOT, subject, "revision.json");
+  return exists(file) ? readJson<Revision[]>(file) : [];
+}
+
 export function getNote(
   subject: string,
   slug: string,
