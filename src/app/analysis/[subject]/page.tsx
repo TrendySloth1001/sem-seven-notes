@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { DoneCheck, DoneProgress } from "@/components/done";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { SubjectTabs } from "@/components/subject-tabs";
 import { Toc, type TocItem } from "@/components/toc";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { analyse, type ThemeStat } from "@/lib/analysis";
 import { getAnalysis, getTopics, listPapers, type Paper } from "@/lib/content";
+import { doneId } from "@/lib/done";
 import { subjects } from "@/lib/syllabus";
 
 export function generateStaticParams() {
@@ -62,10 +64,12 @@ function heat(marks: number) {
 }
 
 function ThemeTable({
+  subject,
   themes,
   sessionCount,
   topicHref,
 }: {
+  subject: string;
   themes: ThemeStat<Paper>[];
   sessionCount: number;
   topicHref: (slug: string) => string;
@@ -75,7 +79,10 @@ function ThemeTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableHead className="w-10 pl-4">#</TableHead>
+            <TableHead className="w-12 pl-3">
+              <span className="sr-only">Learned</span>
+            </TableHead>
+            <TableHead className="w-8 px-1">#</TableHead>
             <TableHead>Theme</TableHead>
             <TableHead>Module</TableHead>
             <TableHead>Type</TableHead>
@@ -86,7 +93,10 @@ function ThemeTable({
         <TableBody>
           {themes.map((t, i) => (
             <TableRow key={t.name}>
-              <TableCell className="pl-4 font-mono text-muted-foreground">
+              <TableCell className="py-1 pl-3">
+                <DoneCheck id={doneId.theme(subject, t.name)} label={t.name} />
+              </TableCell>
+              <TableCell className="px-1 font-mono text-muted-foreground">
                 {i + 1}
               </TableCell>
               <TableCell className="min-w-56 whitespace-normal">
@@ -217,6 +227,18 @@ async function AnalysisContent({ params }: PageProps<"/analysis/[subject]">) {
           </ul>
         </header>
 
+        <div className="mt-8 max-w-xl">
+          <DoneProgress
+            title="Themes learned"
+            rows={TIERS.map((tier) => ({
+              label: `Tier ${tier.tier}`,
+              ids: inSyllabus
+                .filter((t) => t.tier === tier.tier)
+                .map((t) => doneId.theme(subject, t.name)),
+            }))}
+          />
+        </div>
+
         <section aria-labelledby="priority" className="mt-10">
           <h2 id="priority" className={h2}>
             Study priority
@@ -240,6 +262,7 @@ async function AnalysisContent({ params }: PageProps<"/analysis/[subject]">) {
                   {tier.blurb}
                 </p>
                 <ThemeTable
+                  subject={subject}
                   themes={list}
                   sessionCount={N}
                   topicHref={topicHref}
@@ -259,7 +282,12 @@ async function AnalysisContent({ params }: PageProps<"/analysis/[subject]">) {
                 Asked in Computer Engineering papers on parts your branch does
                 not study. Skip them unless you have time.
               </p>
-              <ThemeTable themes={off} sessionCount={N} topicHref={topicHref} />
+              <ThemeTable
+                subject={subject}
+                themes={off}
+                sessionCount={N}
+                topicHref={topicHref}
+              />
             </div>
           ) : null}
         </section>

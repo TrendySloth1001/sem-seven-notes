@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import GithubSlugger from "github-slugger";
 import matter from "gray-matter";
-import type { ThemeDef } from "./analysis.ts";
+import { analyse, type ThemeDef } from "./analysis.ts";
 import type { ClassPages } from "./class-pages.ts";
 import { doneId, type SubjectItems } from "./done.ts";
 
@@ -223,6 +223,18 @@ export function getAnalysis(subject: string): AnalysisFile | null {
   return exists(file) ? readJson<AnalysisFile>(file) : null;
 }
 
+/** The subject's themes ranked for study, without those outside the student's syllabus. */
+export function studyThemes(subject: string) {
+  const file = getAnalysis(subject);
+  if (!file) return [];
+  const topics = getTopics(subject);
+  return analyse(
+    listPapers(subject),
+    file.themes,
+    (slug) => topics.find((t) => t.slug === slug)?.module ?? 0,
+  ).themes.filter((t) => !t.offSyllabus);
+}
+
 /** What to study for a topic's exam questions, and answer pieces that serve other questions too. */
 export type Revision = { topic: string; study: string[]; tricks: string[] };
 
@@ -306,6 +318,7 @@ export function subjectItems(
     questions: listPapers(subject).flatMap((p) =>
       p.questions.map((q) => doneId.question(subject, p.slug, q.id)),
     ),
+    themes: studyThemes(subject).map((t) => doneId.theme(subject, t.name)),
   };
 }
 

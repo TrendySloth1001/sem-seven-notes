@@ -40,10 +40,12 @@ function useDoneSet(): Set<string> {
   }
 }
 
-function toggle(id: string, on: boolean) {
+function toggle(ids: string[], on: boolean) {
   const set = new Set<string>(JSON.parse(read()) as string[]);
-  if (on) set.add(id);
-  else set.delete(id);
+  for (const id of ids) {
+    if (on) set.add(id);
+    else set.delete(id);
+  }
   try {
     localStorage.setItem(KEY, JSON.stringify([...set]));
   } catch {
@@ -57,18 +59,21 @@ export function DoneCheck({
   label,
   showLabel = false,
 }: {
-  id: string;
+  /** Several ids tick together, e.g. every paper's copy of one repeated question. */
+  id: string | string[];
   label: string;
   showLabel?: boolean;
 }) {
-  const done = useDoneSet().has(id);
+  const ids = Array.isArray(id) ? id : [id];
+  const set = useDoneSet();
+  const done = ids.length > 0 && ids.every((x) => set.has(x));
   const htmlId = useId();
   return (
     <span className="inline-flex min-h-8 min-w-8 items-center justify-center gap-2 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">
       <Checkbox
         id={htmlId}
         checked={done}
-        onCheckedChange={(v) => toggle(id, v === true)}
+        onCheckedChange={(v) => toggle(ids, v === true)}
         aria-label={showLabel ? undefined : `Mark done: ${label}`}
         className="size-5"
       />
@@ -91,15 +96,35 @@ export function SubjectProgress({
   items: SubjectItems;
   compact?: boolean;
 }) {
+  return (
+    <DoneProgress
+      title="Your progress"
+      compact={compact}
+      rows={[
+        { label: "Syllabus", ids: items.units },
+        { label: "Notes", ids: items.notes },
+        { label: "Questions", ids: items.questions },
+        { label: "Themes", ids: items.themes },
+      ]}
+    />
+  );
+}
+
+// Progress bars for any groups of tickable ids, with an overall percentage.
+export function DoneProgress({
+  title,
+  rows: all,
+  compact = false,
+}: {
+  title: string;
+  rows: { label: string; ids: string[] }[];
+  compact?: boolean;
+}) {
   const done = useDoneSet();
-  const rows = [
-    { label: "Syllabus", ids: items.units },
-    { label: "Notes", ids: items.notes },
-    { label: "Questions", ids: items.questions },
-  ].filter((r) => r.ids.length > 0);
-  const all = rows.flatMap((r) => r.ids);
-  const total = all.filter((id) => done.has(id)).length;
-  const pct = all.length ? Math.round((total / all.length) * 100) : 0;
+  const rows = all.filter((r) => r.ids.length > 0);
+  const ids = [...new Set(rows.flatMap((r) => r.ids))];
+  const total = ids.filter((id) => done.has(id)).length;
+  const pct = ids.length ? Math.round((total / ids.length) * 100) : 0;
   return (
     <div
       className={
@@ -109,7 +134,7 @@ export function SubjectProgress({
       }
     >
       <p className="flex items-baseline justify-between text-sm">
-        <span className="font-medium">Your progress</span>
+        <span className="font-medium">{title}</span>
         <span className="font-mono text-muted-foreground">{pct}%</span>
       </p>
       {rows.map((r) => {

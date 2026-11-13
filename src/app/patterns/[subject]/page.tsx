@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { PaperChip, plainQuestion, TopicChip } from "@/components/chips";
 import { Doc, type DocContext } from "@/components/doc";
+import { DoneCheck, DoneProgress } from "@/components/done";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { SubjectTabs } from "@/components/subject-tabs";
 import { Toc, type TocItem } from "@/components/toc";
@@ -17,6 +18,7 @@ import {
   listPapers,
   type Paper,
 } from "@/lib/content";
+import { doneId } from "@/lib/done";
 import {
   type Asked,
   type Cluster,
@@ -85,8 +87,16 @@ function ClusterCard({
   return (
     <li className="rounded-2xl border bg-card p-4">
       <div className="flex gap-3">
-        <span className="font-mono text-sm text-muted-foreground">
-          {String(rank).padStart(2, "0")}
+        <span className="flex flex-col items-center gap-1">
+          <span className="font-mono text-sm text-muted-foreground">
+            {String(rank).padStart(2, "0")}
+          </span>
+          <DoneCheck
+            id={[...c.all, ...teacher].map((a) =>
+              doneId.question(subject, a.paper.slug, a.q.id),
+            )}
+            label={plain(c.head.q.text).slice(0, 80)}
+          />
         </span>
         <div className="min-w-0 flex-1">
           <div className="font-medium [&_.doc]:text-base">
@@ -155,6 +165,8 @@ function ClusterCard({
 
 type TopicQuestion = {
   key: string;
+  /** Done ids of every paper's copy of this question. */
+  ids: string[];
   text: string;
   href: string;
   mu: number;
@@ -165,8 +177,9 @@ const SHOWN = 5;
 
 function QuestionRow({ q }: { q: TopicQuestion }) {
   return (
-    <li className="flex items-start gap-3 text-sm">
-      <span className="flex w-16 shrink-0 flex-col items-start gap-1">
+    <li className="flex items-start gap-2 text-sm">
+      <DoneCheck id={q.ids} label={q.text.slice(0, 80)} />
+      <span className="flex w-16 shrink-0 flex-col items-start gap-1 pt-1.5">
         {q.mu ? (
           <Badge variant={q.mu > 1 ? "default" : "outline"}>{q.mu}× MU</Badge>
         ) : null}
@@ -174,7 +187,7 @@ function QuestionRow({ q }: { q: TopicQuestion }) {
       </span>
       <Link
         href={q.href}
-        className="min-w-0 flex-1 leading-relaxed outline-none [overflow-wrap:anywhere] hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        className="min-w-0 flex-1 pt-1 leading-relaxed outline-none [overflow-wrap:anywhere] hover:underline focus-visible:ring-2 focus-visible:ring-ring"
       >
         {q.text}
       </Link>
@@ -218,6 +231,9 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
         .filter((c) => c.topics.includes(slug))
         .map((c) => ({
           key: `${c.head.paper.slug}-${c.head.q.id}`,
+          ids: [...c.all, ...(teacherOf.get(c) ?? [])].map((a) =>
+            doneId.question(subject, a.paper.slug, a.q.id),
+          ),
           text: plain(c.head.q.text),
           href: `/pyq/${subject}/${c.head.paper.slug}#${c.head.q.id}`,
           mu: c.all.length,
@@ -227,6 +243,7 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
         .filter((m) => m.asked.q.topics.includes(slug))
         .map(({ asked: a }) => ({
           key: `${a.paper.slug}-${a.q.id}`,
+          ids: [doneId.question(subject, a.paper.slug, a.q.id)],
           text: plain(a.q.text),
           href: `/pyq/${subject}/${a.paper.slug}#${a.q.id}`,
           mu: 0,
@@ -344,6 +361,10 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
                     <Doc source={a.q.text} ctx={ctx} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <DoneCheck
+                      id={doneId.question(subject, a.paper.slug, a.q.id)}
+                      label={plain(a.q.text).slice(0, 80)}
+                    />
                     <Button
                       asChild
                       size="sm"
@@ -412,6 +433,20 @@ async function PatternsContent({ params }: PageProps<"/patterns/[subject]">) {
                       {mu ? `Asked ${mu}× by MU` : "Not asked by MU yet"}
                       {set ? ` · ${set} in your assignments` : ""}
                     </p>
+                    {qs.length ? (
+                      <div className="mt-3 max-w-md">
+                        <DoneProgress
+                          compact
+                          title="Questions done"
+                          rows={[
+                            {
+                              label: "This topic",
+                              ids: qs.flatMap((q) => q.ids),
+                            },
+                          ]}
+                        />
+                      </div>
+                    ) : null}
                     {qs.length ? (
                       <>
                         <ul className="mt-3 flex flex-col gap-2.5">
