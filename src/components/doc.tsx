@@ -5,7 +5,9 @@ import rehypeKatex from "rehype-katex";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { pagesFor } from "@/lib/class-pages";
 import {
+  getClassPages,
   type ImageRef,
   imageSite,
   type Paper,
@@ -172,8 +174,9 @@ function components(ctx: DocContext) {
     Cite: ({ id, loc }: { id: string; loc?: string }) => {
       const reference = ctx.refs[id];
       if (!reference) throw new Error(`Unknown reference id "${id}"`);
+      const pages = pagesFor(getClassPages(ctx.subject), id, loc);
       return loc ? (
-        <CiteChip reference={reference} loc={loc} />
+        <CiteChip reference={reference} loc={loc} pages={pages} />
       ) : (
         <CiteChip reference={reference} />
       );

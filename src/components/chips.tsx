@@ -14,7 +14,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { ClassPage } from "@/lib/class-pages";
 import type { Paper, PaperQuestion, Reference, Topic } from "@/lib/content";
+import { ClassPageChip } from "./class-page-chip";
 
 // Question text for a preview: markdown and TeX markers removed, as one plain line.
 export function plainQuestion(text: string): string {
@@ -48,10 +50,13 @@ export function CiteChip({
   reference,
   loc,
   list = false,
+  pages = [],
 }: {
   reference: Reference;
   loc?: string;
   list?: boolean;
+  /** Published pictures of the cited class page or slide; the chip then opens them. */
+  pages?: ClassPage[];
 }) {
   const Icon = KIND_ICON[reference.kind];
   const title = `${reference.authors}. ${reference.title}. ${reference.venue}${reference.year ? `, ${reference.year}` : ""}.`;
@@ -62,6 +67,16 @@ export function CiteChip({
       {loc ? ` · ${loc}` : ""}
     </>
   );
+  if (!reference.url && pages.length)
+    return (
+      <ClassPageChip
+        label={`${reference.short}${loc ? ` · ${loc}` : ""}`}
+        source={title}
+        kind={loc?.startsWith("slide") ? "slide" : "page"}
+        pages={pages}
+        className={`${base} bg-secondary text-secondary-foreground ${list ? touch : ""}`}
+      />
+    );
   // Class files are shared only inside the college, so their chip names the file without linking.
   if (!reference.url)
     return (

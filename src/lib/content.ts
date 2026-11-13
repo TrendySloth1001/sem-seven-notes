@@ -5,6 +5,7 @@ import path from "node:path";
 import GithubSlugger from "github-slugger";
 import matter from "gray-matter";
 import type { ThemeDef } from "./analysis.ts";
+import type { ClassPages } from "./class-pages.ts";
 import { doneId, type SubjectItems } from "./done.ts";
 
 const ROOT = path.join(process.cwd(), "content");
@@ -200,6 +201,18 @@ export function imageSite(image: Pick<ImageRef, "sourceUrl">): string {
 export function getTopics(subject: string): Topic[] {
   const file = path.join(ROOT, subject, "topics.json");
   return exists(file) ? readJson<Topic[]>(file) : [];
+}
+
+const classPagesCache = new Map<string, ClassPages>();
+
+/** Pictures of the class pages and slides this subject's content cites (empty without class files). */
+export function getClassPages(subject: string): ClassPages {
+  const hit = classPagesCache.get(subject);
+  if (hit) return hit;
+  const file = path.join(ROOT, subject, "class-pages.json");
+  const pages = exists(file) ? readJson<ClassPages>(file) : {};
+  classPagesCache.set(subject, pages);
+  return pages;
 }
 
 /** A subject's exam themes (every past-paper question grouped by what it asks) and paper-planning notes. */
