@@ -1,0 +1,93 @@
+---
+references: [recommendation-systems-mmds-slides, recommendation-systems-wiki-pearson, recommendation-systems-wiki-cf, recommendation-systems-google-cf, recommendation-systems-av]
+---
+
+**In simple words:** this is **user-user collaborative filtering**. To guess how User 2 would rate Movie 3, we find which other users have a taste like User 2's, and use their ratings of Movie 3. **Pearson's correlation** measures how alike two users are: +1 means they rate in the same pattern, 0 means no link, and -1 means opposite taste. It works on ratings **minus each user's own average**, so an easy marker and a strict marker can still be compared. <Cite id="recommendation-systems-mmds-slides" /> <Cite id="recommendation-systems-wiki-pearson" /> <Cite id="recommendation-systems-google-cf" />
+
+**Formulas.** Let $\bar r_a$ be the average rating of user $a$, and let the sums run over the movies $i$ rated by both users $a$ and $b$:
+
+$$
+\text{sim}(a, b) = \frac{\sum_i (r_{a,i} - \bar r_a)(r_{b,i} - \bar r_b)}{\sqrt{\sum_i (r_{a,i} - \bar r_a)^2}\; \sqrt{\sum_i (r_{b,i} - \bar r_b)^2}}
+$$
+
+$$
+\hat r_{a,p} = \bar r_a + \frac{\sum_b \text{sim}(a, b)\,(r_{b,p} - \bar r_b)}{\sum_b |\text{sim}(a, b)|}
+$$
+
+The second formula starts from the user's own average and adds the neighbours' **deviations** on the movie $p$, weighted by similarity. A user with negative similarity pushes the prediction the opposite way.
+
+```mermaid
+%% caption: Steps of rating prediction with Pearson correlation. Similar users' deviations from their own averages are added to the target user's average.
+flowchart LR
+  A["Utility matrix"] --> B["Average rating of each user"]
+  B --> C["Pearson similarity of User 2 with User 1 and User 3"]
+  C --> D["Their deviations on Movie 3"]
+  D --> E["Weighted by similarity, added to User 2's average"]
+  E --> F["Predicted rating"]
+```
+
+<Sum>
+
+<Given>
+
+| Users | Movie 1 | Movie 2 | Movie 3 | Movie 4 | Movie 5 |
+| --- | --- | --- | --- | --- | --- |
+| User 1 | 2 | 3 | 2 | 1 | 1 |
+| User 2 | 3 | 4 | ? | 4 | 3 |
+| User 3 | 4 | 3 | 4 | 3 | 3 |
+
+</Given>
+
+<Find>
+
+the predicted rating of User 2 for Movie 3.
+
+</Find>
+
+<Steps>
+
+1. **Averages** (of all ratings each user gave). User 1: $(2+3+2+1+1)/5 = 9/5 = 1.8$. User 2: $(3+4+4+3)/4 = 14/4 = 3.5$. User 3: $(4+3+4+3+3)/5 = 17/5 = 3.4$. *Reason: Pearson works on deviations from each user's own average.*
+2. **Common movies.** User 2 has not rated Movie 3, so similarity uses Movies 1, 2, 4 and 5, which both of the other users rated too.
+3. **Deviations** (rating minus own average) on those movies:
+
+   | Movie | User 2 ($-3.5$) | User 1 ($-1.8$) | User 3 ($-3.4$) |
+   |---|---|---|---|
+   | 1 | $-0.5$ | $+0.2$ | $+0.6$ |
+   | 2 | $+0.5$ | $+1.2$ | $-0.4$ |
+   | 4 | $+0.5$ | $-0.8$ | $-0.4$ |
+   | 5 | $-0.5$ | $-0.8$ | $-0.4$ |
+
+4. **Similarity of User 2 and User 1.** Numerator: $(-0.5)(0.2) + (0.5)(1.2) + (0.5)(-0.8) + (-0.5)(-0.8) = -0.1 + 0.6 - 0.4 + 0.4 = 0.5$. Lengths: User 2 $= \sqrt{0.25 \times 4} = 1$; User 1 $= \sqrt{0.04 + 1.44 + 0.64 + 0.64} = \sqrt{2.76} = 1.661$. So $\text{sim}(2,1) = 0.5 / (1 \times 1.661) = 0.301$.
+5. **Similarity of User 2 and User 3.** Numerator: $(-0.5)(0.6) + (0.5)(-0.4) + (0.5)(-0.4) + (-0.5)(-0.4) = -0.3 - 0.2 - 0.2 + 0.2 = -0.5$. Length of User 3 $= \sqrt{0.36 + 0.16 + 0.16 + 0.16} = \sqrt{0.84} = 0.917$. So $\text{sim}(2,3) = -0.5 / (1 \times 0.917) = -0.545$.
+6. **Deviations on Movie 3.** User 1: $2 - 1.8 = +0.2$. User 3: $4 - 3.4 = +0.6$.
+7. **Prediction.**
+
+   $$
+   \hat r = 3.5 + \frac{0.301 \times 0.2 + (-0.545) \times 0.6}{0.301 + 0.545} = 3.5 + \frac{0.0602 - 0.3273}{0.846} = 3.5 - 0.316 = 3.18
+   $$
+
+</Steps>
+
+<Answer>
+
+User 2's predicted rating for Movie 3 $\approx 3.2$ (3.18).
+
+</Answer>
+
+<Box kind="verify">
+
+Check 1: each deviation column adds to zero over the movies a user rated, for User 2: $-0.5 + 0.5 + 0.5 - 0.5 = 0$. Check 2 (sign): User 3 is the opposite of User 2 ($\text{sim} < 0$) and rated Movie 3 above their average (+0.6), so User 2 is pushed below their own average of 3.5; the answer 3.18 is below 3.5, as expected. Check 3: the weights are $0.301/0.846 = 0.356$ and $0.545/0.846 = 0.644$, so $3.5 + 0.356 \times 0.2 - 0.644 \times 0.6 = 3.5 + 0.071 - 0.387 = 3.18$. If the averages are taken over the common movies only (1.75 for User 1 and 3.25 for User 3), the result is 3.09, close to the same. If only the positively similar User 1 is used, the prediction is $3.5 + 0.2 = 3.7$. State which version you use.
+
+</Box>
+
+</Sum>
+
+| Advantages of collaborative filtering | Disadvantages |
+|---|---|
+| Needs no item features | Cold start for new users and movies |
+| Can find surprising items | Sparse rating matrix |
+| Improves as more users join | Hard to scale to millions of users |
+
+<Cite id="recommendation-systems-wiki-cf" /> <Cite id="recommendation-systems-av" />
+
+**Conclusion:** Pearson correlation shows that User 2 is like User 1 (0.30) and unlike User 3 (-0.55); combining their opinions of Movie 3 gives a predicted rating of about 3.2.

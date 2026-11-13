@@ -1,0 +1,68 @@
+---
+references: [stream-counting-mmds-home, stream-counting-wiki-bloom, stream-counting-gfg-bloom, stream-counting-gfg-counting-bloom, stream-counting-cass-bloom, stream-counting-redis-bloom]
+---
+
+**In simple words:** **Bloom filter** ek chhota bit array hai jo bahut kam memory mein batata hai "kya ye item pehle dekha hai?" Ye galat "yes" bol sakta hai (**false positive**) lekin **galat "no" kabhi nahi bolta** (no false negative). <Cite id="stream-counting-mmds-home" loc="§4.3" /> <Cite id="stream-counting-wiki-bloom" />
+
+**Ye kyun chahiye.** Ek arab good addresses wala mail server har mail ke liye disk look-up nahi kar sakta. Bloom filter har address ke liye memory mein kuch bits rakhta hai. "No" pakka hota hai aur aage check nahi chahiye; "probably yes" ko slow exact list se check karte hain. <Cite id="stream-counting-gfg-bloom" />
+
+**Parts aur working**
+
+1. $m$ bits ka bit array, shuru mein sab 0, aur $k$ hash functions, har ek 0 se $m - 1$ tak ek position deta hai.
+2. **Insert** $x$: $k$ positions nikalo aur un bits ko 1 kar do.
+3. **Look up** $y$: wahi positions nikalo. Koi **bhi** bit 0 ho to $y$ definitely absent hai. **Sab** 1 hon to $y$ probably present hai.
+
+<Img id="img-bda-n2-bloom" caption="Har item k bits ko 1 karta hai. Look-up wahi bits check karta hai, aur ek 0 bit se hi pakka ho jaata hai ki item absent hai." />
+
+**Properties.** Bits kabhi clear nahi hote, isliye false negatives nahi hote. Dusre items wahi bits set kar sakte hain, isliye false positives hote hain, aur array bharne par unka rate badhta hai. Items delete ya list nahi kiye ja sakte. <Cite id="stream-counting-mmds-home" loc="§4.3" />
+
+<Sum>
+
+<Given>
+
+$m = 5$ bits (positions 0 se 4), sab 0. $h_1(x) = x \bmod 5$ aur $h_2(x) = (2x + 6) \bmod 5$. 10 aur 7 insert karo.
+
+</Given>
+
+<Find>
+
+dono insert ke baad bit array (aur do aur values test karo).
+
+</Find>
+
+<Steps>
+
+1. **10 insert.** $h_1 = 10 \bmod 5 = 0$. $h_2 = (20 + 6) \bmod 5 = 26 \bmod 5 = 1$. Bits 0 aur 1 set: `11000`.
+2. **7 insert.** $h_1 = 7 \bmod 5 = 2$. $h_2 = (14 + 6) \bmod 5 = 20 \bmod 5 = 0$. Bits 2 aur 0 set (bit 0 pehle se 1 hai): `11100`.
+3. Final array:
+
+   | position | 0 | 1 | 2 | 3 | 4 |
+   |---|---|---|---|---|---|
+   | bit | 1 | 1 | 1 | 0 | 0 |
+
+4. **3 test.** $h_1 = 3$, aur bit 3 0 hai, to 3 **definitely absent** hai.
+5. **12 test.** $h_1 = 12 \bmod 5 = 2$ aur $h_2 = (24 + 6) \bmod 5 = 0$. Bits 2 aur 0 dono 1 hain, to filter "probably present" bolta hai, lekin 12 kabhi insert nahi hua: **false positive**.
+
+</Steps>
+
+<Answer>
+
+bits 0, 1 aur 2 set hain: array `11100` hai. (Test: 3 absent hai, 12 false positive hai.)
+
+</Answer>
+
+<Box kind="verify">
+
+Positions ka union: \{0, 1\} aur \{2, 0\} se \{0, 1, 2\}, to 3 bits 1 hain. Har hash dobara check: $26 = 5 \times 5 + 1$, $20 = 5 \times 4 + 0$. Dono inserted items apna test pass karte hain (10 bits 0 aur 1 use karta hai, 7 bits 2 aur 0), jaisa no-false-negative filter mein hona chahiye. Array chhota hai (5 mein se 3 bits set), to random naya item chance $(3/5)^2 = 0.36$ se pass hota hai, isliye 12 jaisa false positive hairaan nahi karta.
+
+</Box>
+
+</Sum>
+
+**Advantages.** Bahut kam memory, constant-time insert aur look-up, no false negatives, streams par chalta hai. **Disadvantages.** False positives, delete nahi hota (counting Bloom filter counters se ye theek karta hai), items list nahi kar sakte. <Cite id="stream-counting-gfg-counting-bloom" />
+
+**Applications.** Spam aur blacklist check. Cassandra aur HBase har data file ke liye Bloom filter rakhte hain taaki jis file mein key pakka nahi hai use skip kar sakein. Redis ready Bloom filter deta hai. <Cite id="stream-counting-cass-bloom" /> <Cite id="stream-counting-redis-bloom" />
+
+**Conclusion:** Bloom filter kabhi-kabhi galat "yes" ke badle bahut memory bachata hai. Yahan 10 aur 7 insert karne par `11100` milta hai.
+
+Exam mein English mein likho: "A Bloom filter has no false negatives but may give false positives."
