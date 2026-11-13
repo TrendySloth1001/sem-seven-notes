@@ -1,6 +1,17 @@
-import { BookOpen, FileText, ListTree, TrendingUp } from "lucide-react";
+import {
+  BarChart3,
+  BookOpen,
+  FileText,
+  ListTree,
+  TrendingUp,
+} from "lucide-react";
 import Link from "next/link";
-import { getTopics, listPapers, subjectItems } from "@/lib/content";
+import {
+  getAnalysis,
+  getTopics,
+  listPapers,
+  subjectItems,
+} from "@/lib/content";
 import { subjects } from "@/lib/syllabus";
 import { SubjectProgress } from "./done";
 
@@ -20,6 +31,7 @@ const TABS = [
   {
     key: "pyq",
     label: "Past papers",
+    short: "Papers",
     icon: FileText,
     href: (s: string) => `/pyq/${s}`,
   },
@@ -29,9 +41,15 @@ const TABS = [
     icon: TrendingUp,
     href: (s: string) => `/patterns/${s}`,
   },
+  {
+    key: "analysis",
+    label: "Analysis",
+    icon: BarChart3,
+    href: (s: string) => `/analysis/${s}`,
+  },
 ] as const;
 
-// The three views of one subject, so a student can move between them without the sidebar.
+// The views of one subject, so a student can move between them without the sidebar.
 export function SubjectTabs({
   subject,
   active,
@@ -47,6 +65,7 @@ export function SubjectTabs({
     notes: getTopics(subject).length > 0,
     pyq: listPapers(subject).length > 0,
     patterns: listPapers(subject).length > 0,
+    analysis: getAnalysis(subject) !== null,
   };
   const tabs = TABS.filter((t) => has[t.key]);
   const units =
@@ -56,7 +75,7 @@ export function SubjectTabs({
     <>
       <nav aria-label="Subject sections" className="mb-8">
         <ul
-          className={`grid ${tabs.length === 4 ? "grid-cols-4" : tabs.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-full bg-muted p-1 sm:inline-grid sm:auto-cols-max sm:grid-flow-col sm:grid-cols-none`}
+          className={`grid ${tabs.length === 5 ? "grid-cols-5" : tabs.length === 4 ? "grid-cols-4" : tabs.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-full bg-muted p-1 sm:inline-grid sm:auto-cols-max sm:grid-flow-col sm:grid-cols-none`}
         >
           {tabs.map((t) => {
             const on = t.key === active;
@@ -72,7 +91,14 @@ export function SubjectTabs({
                   }`}
                 >
                   <t.icon aria-hidden className="hidden size-4 sm:block" />
-                  {t.label}
+                  {"short" in t ? (
+                    <>
+                      <span className="sm:hidden">{t.short}</span>
+                      <span className="hidden sm:inline">{t.label}</span>
+                    </>
+                  ) : (
+                    t.label
+                  )}
                 </Link>
               </li>
             );

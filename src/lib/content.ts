@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import GithubSlugger from "github-slugger";
 import matter from "gray-matter";
+import type { ThemeDef } from "./analysis.ts";
 import { doneId, type SubjectItems } from "./done.ts";
 
 const ROOT = path.join(process.cwd(), "content");
@@ -199,6 +200,14 @@ export function imageSite(image: Pick<ImageRef, "sourceUrl">): string {
 export function getTopics(subject: string): Topic[] {
   const file = path.join(ROOT, subject, "topics.json");
   return exists(file) ? readJson<Topic[]>(file) : [];
+}
+
+/** A subject's exam themes (every past-paper question grouped by what it asks) and paper-planning notes. */
+export type AnalysisFile = { themes: ThemeDef[]; strategy: string[] };
+
+export function getAnalysis(subject: string): AnalysisFile | null {
+  const file = path.join(ROOT, subject, "analysis.json");
+  return exists(file) ? readJson<AnalysisFile>(file) : null;
 }
 
 /** What to study for a topic's exam questions, and answer pieces that serve other questions too. */

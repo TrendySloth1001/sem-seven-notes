@@ -3,6 +3,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
+import {
+  type APaper,
+  type ThemeDef,
+  themeProblems,
+} from "../src/lib/analysis.ts";
 import { IMAGE_LICENSES, type ImageRef } from "../src/lib/content.ts";
 import { compileError } from "./compile-mdx.ts";
 import { escapeBraces } from "./mdx-braces.ts";
@@ -115,6 +120,30 @@ for (const subject of fs.readdirSync(ROOT)) {
       (t) => t.slug,
     ),
   );
+  // Optional exam analysis: every question in exactly one theme, each theme on a known topic.
+  const anaFile = path.join(dir, "analysis.json");
+  if (fs.existsSync(anaFile)) {
+    const ana = readJson<{ themes?: ThemeDef[]; strategy?: unknown }>(anaFile);
+    const all = fs
+      .readdirSync(path.join(dir, "pyq"))
+      .filter((p) => fs.existsSync(path.join(dir, "pyq", p, "paper.json")))
+      .map((p) => ({
+        ...readJson<APaper>(path.join(dir, "pyq", p, "paper.json")),
+        slug: p,
+      }));
+    for (const t of ana.themes ?? []) {
+      if (!topics.has(t.topic))
+        fail(anaFile, `"${t.name}": unknown topic "${t.topic}"`);
+      if (!["theory", "numerical", "program"].includes(t.type))
+        fail(anaFile, `"${t.name}": type must be theory, numerical or program`);
+    }
+    for (const p of themeProblems(all, ana.themes ?? [])) fail(anaFile, p);
+    if (
+      !Array.isArray(ana.strategy) ||
+      ana.strategy.some((x) => typeof x !== "string")
+    )
+      fail(anaFile, "strategy must be a list of strings");
+  }
   // Optional per-topic revision guide: one entry per known topic, with study points and reuse tricks.
   const revFile = path.join(dir, "revision.json");
   if (fs.existsSync(revFile)) {
