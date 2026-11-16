@@ -1,0 +1,151 @@
+---
+references: [hadoop-ecosystem-mmds, mapreduce-algorithms-wiki-matmul, mapreduce-algorithms-gfg-matmul]
+---
+
+**In one line:** <mark>In one-step matrix multiplication the key is the output cell (i, k): map copies each element to every cell that needs it, tagged with A or B and the common index j, and reduce multiplies matching pairs and adds them</mark>. <Cite id="hadoop-ecosystem-mmds" loc="§2.3.9" /> <Cite id="mapreduce-algorithms-gfg-matmul" />
+
+<Box kind="key">
+
+**Key points to write (matrix-matrix multiplication):**
+
+- <mark>$c_{ik} = \sum_j a_{ij} b_{jk}$: row $i$ of $A$ times column $k$ of $B$</mark>.
+- <mark>Map: each $a_{ij}$ goes to cells $(i, k)$ for every $k$ as $((i,k), (A, j, a_{ij}))$; each $b_{jk}$ goes to cells $(i, k)$ for every $i$ as $((i,k), (B, j, b_{jk}))$</mark>.
+- <mark>Reduce: for key $(i,k)$ pair the A-value and B-value with the same $j$, multiply and add</mark>.
+- The **tag A or B** tells the source, and **$j$** is the common index.
+- **Two-step method** for large sparse matrices: job 1 keyed by $j$ makes all products, job 2 adds them per $(i,k)$.
+- **Check** with the sum of all entries.
+
+</Box>
+
+## Core answer (5 marks: the method that fits every question here)
+
+<Box kind="definition">
+
+For $A$ of size $I \times J$ and $B$ of size $J \times K$, the product $C = AB$ has entries $c_{ik} = \sum_j a_{ij} b_{jk}$. Each output cell needs a whole row of $A$ and a whole column of $B$, and each input number is used by many cells, so map must **copy each input number to every cell that needs it**. <Cite id="mapreduce-algorithms-gfg-matmul" /> <Cite id="mapreduce-algorithms-wiki-matmul" />
+
+</Box>
+
+**Pseudo code (one-step method):** <Cite id="hadoop-ecosystem-mmds" loc="§2.3.10" />
+
+```text
+map(matrix, row, col, value):
+    if matrix == A:                       # value is a[i][j], row=i, col=j
+        for k in 1..K:
+            emit((row, k), ('A', col, value))
+    else:                                 # value is b[j][k], row=j, col=k
+        for i in 1..I:
+            emit((i, col), ('B', row, value))
+
+reduce((i, k), values):
+    a = dict of j -> value for tags 'A'
+    b = dict of j -> value for tags 'B'
+    emit((i, k), sum(a[j] * b[j] for j in a))
+```
+
+```mermaid
+%% caption: One-step matrix multiplication. Every number is copied to all output cells that need it, and each reducer builds one cell of the answer.
+flowchart LR
+  A["Matrix A: a11 a12 a21 a22"] --> MA["Map: copy each a(i,j) to cells (i,1) and (i,2)"]
+  B["Matrix B: b11 b12 b21 b22"] --> MB["Map: copy each b(j,k) to cells (1,k) and (2,k)"]
+  MA --> SH["Shuffle by cell (i,k)"]
+  MB --> SH
+  SH --> R11["Reduce cell (1,1)"]
+  SH --> R12["Reduce cell (1,2)"]
+  SH --> R21["Reduce cell (2,1)"]
+  SH --> R22["Reduce cell (2,2)"]
+  R11 --> C["Output matrix C"]
+  R12 --> C
+  R21 --> C
+  R22 --> C
+```
+
+<Cite id="mapreduce-algorithms-gfg-matmul" loc="diagram" />
+
+**Conclusion:** <mark>the key is the output cell, map copies, reduce multiplies and adds</mark>.
+
+## Extended answer (10 marks): solve the question fully
+
+<Sum>
+
+<Given>
+
+$$
+A = \begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix}, \quad B = \begin{bmatrix} 6 & 7 \\ 8 & 9 \end{bmatrix}
+$$
+
+</Given>
+
+<Find>
+
+$C = AB$ with the one-step MapReduce method.
+
+</Find>
+
+<Steps>
+
+1. **Map for A.** Each $a_{ij}$ goes to both cells of its row $i$ (columns $k = 1, 2$), tagged with $j$:
+
+   | $a_{ij}$ | Map output |
+   |---|---|
+   | $a_{11} = 1$ | ((1,1), (A,1,1)), ((1,2), (A,1,1)) |
+   | $a_{12} = 2$ | ((1,1), (A,2,2)), ((1,2), (A,2,2)) |
+   | $a_{21} = 3$ | ((2,1), (A,1,3)), ((2,2), (A,1,3)) |
+   | $a_{22} = 4$ | ((2,1), (A,2,4)), ((2,2), (A,2,4)) |
+
+2. **Map for B.** Each $b_{jk}$ goes to both cells of its column $k$ (rows $i = 1, 2$), tagged with $j$:
+
+   | $b_{jk}$ | Map output |
+   |---|---|
+   | $b_{11} = 6$ | ((1,1), (B,1,6)), ((2,1), (B,1,6)) |
+   | $b_{12} = 7$ | ((1,2), (B,1,7)), ((2,2), (B,1,7)) |
+   | $b_{21} = 8$ | ((1,1), (B,2,8)), ((2,1), (B,2,8)) |
+   | $b_{22} = 9$ | ((1,2), (B,2,9)), ((2,2), (B,2,9)) |
+
+3. **Shuffle and reduce.** Each cell gets two A-values and two B-values. Match by $j$, multiply and add:
+
+   | Cell | A-values (j: value) | B-values (j: value) | Sum of products | Result |
+   |---|---|---|---|---|
+   | (1,1) | 1: 1, 2: 2 | 1: 6, 2: 8 | $1 \times 6 + 2 \times 8 = 6 + 16$ | 22 |
+   | (1,2) | 1: 1, 2: 2 | 1: 7, 2: 9 | $1 \times 7 + 2 \times 9 = 7 + 18$ | 25 |
+   | (2,1) | 1: 3, 2: 4 | 1: 6, 2: 8 | $3 \times 6 + 4 \times 8 = 18 + 32$ | 50 |
+   | (2,2) | 1: 3, 2: 4 | 1: 7, 2: 9 | $3 \times 7 + 4 \times 9 = 21 + 36$ | 57 |
+
+</Steps>
+
+<Answer>
+
+$$
+C = \begin{bmatrix} 22 & 25 \\ 50 & 57 \end{bmatrix}
+$$
+
+</Answer>
+
+<Box kind="verify">
+
+Sum of all entries: $22 + 25 + 50 + 57 = 154$, and (column sums of $A$) times (row sums of $B$) is $4 \times 13 + 6 \times 17 = 52 + 102 = 154$. The two-step method gives the same: job 1 with $j = 1$ makes the products 6, 7, 18, 21 for cells (1,1), (1,2), (2,1), (2,2), and $j = 2$ makes 16, 18, 32, 36. Job 2 adds per cell: $6 + 16 = 22$, $7 + 18 = 25$, $18 + 32 = 50$, $21 + 36 = 57$.
+
+</Box>
+
+</Sum>
+
+<Img id="img-bda-n1-matrix-multiplication-diagram" caption="Output cell (i, k) needs row i of A and column k of B: here row 1 of A with column 2 of B fills one cell, and row 3 of A with column 3 of B fills another." />
+
+### One-step versus two-step
+
+| Method | Jobs | Map output size | When to prefer |
+|---|---|---|---|
+| One-step | 1 | Each element copied $K$ or $I$ times | Small or medium matrices; the usual exam answer |
+| Two-step | 2 | Each element copied once, but products are written between jobs | Large sparse matrices |
+
+Two-step in short: job 1 uses the common index $j$ as key (map emits $(j, (A, i, a_{ij}))$ and $(j, (B, k, b_{jk}))$, reduce makes every product $a_{ij} b_{jk}$ for cell $(i,k)$); job 2 has an identity map and a reduce that adds the products of each $(i,k)$. <Cite id="hadoop-ecosystem-mmds" loc="§2.3.9" />
+
+## Fit it to each question
+
+- **"Write a map reduce pseudo code to multiply two matrices. Apply map reduce working to perform following matrix multiplication: $\begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix} \times \begin{bmatrix} 6 & 7 \\ 8 & 9 \end{bmatrix}$."** (10 marks) <PYQ id="2023-05-ce/q2b" />: pseudo code, then the solved sum above, exactly.
+- **"Write a Map reduce pseudo code to multiply two matrices. Illustrate with an example showing all the steps."** (10 marks) <PYQ id="2024-05/q3a" />: pseudo code and the same worked example (or any small 2 by 2 pair you can compute); show both map tables, the reduce table and the check.
+
+## Exam tips
+
+- **Pseudo code first**, with the tags 'A' and 'B' and the common index $j$ clearly named.
+- **Say the key is the cell $(i,k)$** and that each element is copied to every cell that needs it (2 copies each for 2 by 2).
+- **Finish with the sum check** (154); it shows the multiplication is right.

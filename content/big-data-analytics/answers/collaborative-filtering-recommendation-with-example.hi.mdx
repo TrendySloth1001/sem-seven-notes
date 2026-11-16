@@ -1,0 +1,157 @@
+---
+references: [recommendation-systems-wiki-cf, recommendation-systems-google-cf, recommendation-systems-mmds-book, web-bda-2-mmds-recsys, recommendation-systems-linden2003, recommendation-systems-gfg-python, recommendation-systems-wiki-pearson, recommendation-systems-gfg-cb, recommendation-systems-av]
+---
+
+**Ek line mein:** <mark>Collaborative filtering user ko items sirf kayi users ki ratings se recommend karta hai: wo similar taste wale users dhoondhta hai aur wahi recommend karta hai jo unhe pasand aaya</mark>. <Cite id="recommendation-systems-wiki-cf" /> <Cite id="recommendation-systems-google-cf" />
+
+<Box kind="key">
+
+**Har collaborative filtering question mein ye points likho:**
+
+- <mark>Jo log pehle agree karte the wo aage bhi agree karenge</mark>; items ke baare mein kuch jaanne ki zaroorat nahi.
+- Data: <mark>utility matrix</mark>, users x items, cells mein ratings, zyadatar khaali (sparse).
+- <mark>User-user CF: similar users dhoondho (cosine ya Pearson), rating ka prediction unki ratings ka similarity-weighted average.</mark>
+- <mark>Item-item CF: jo items milte-julte rate hue hon; Amazon use karta hai.</mark>
+- Prediction: $r_{xi} = \dfrac{\sum_y s_{xy} r_{yi}}{\sum_y s_{xy}}$, neighbours $y$ pe.
+- Limits: <mark>cold start (naye users aur items), sparsity, scalability</mark>.
+- Content-based se farq: <mark>collaborative doosre users ki ratings use karta hai; content-based item properties</mark>.
+
+</Box>
+
+## Core answer (5 marks, yahan ke har question ke liye)
+
+<Box kind="definition">
+
+**Collaborative filtering (CF)** recommends items to a user based on what **other, similar users** liked. It does not need to know anything about the items, only who rated what. The idea: "people who agreed in the past will agree in the future". <Cite id="recommendation-systems-wiki-cf" /> <Cite id="recommendation-systems-google-cf" />
+
+</Box>
+
+**Kyun chahiye:** Flipkart ya Amazon jaisi shop lakhon products bechti hai, aur koi customer sab browse nahi kar sakta. Sahi kuch products recommend karne se sales aur satisfaction badhte hain. <Cite id="recommendation-systems-mmds-book" loc="§9.1" />
+
+**Data:** **utility matrix**: rows users, columns items, cells ratings. Zyadatar cells khaali hote hain kyunki user kuch hi items rate karta hai.
+
+**Steps (user-user CF):** <Cite id="web-bda-2-mmds-recsys" loc="slides 22-27" />
+
+1. Ratings, purchases aur clicks se utility matrix banao.
+2. Target user ki baaki sab users se **similarity** nikalo (cosine, ya har user ka average ghatake Pearson correlation).
+3. Sabse similar users (**neighbours**) chuno.
+4. Missing rating ko neighbours ki us item pe ratings ke similarity-weighted average se **predict** karo.
+5. Sabse high predicted ratings wale items **recommend** karo.
+
+**Item-item CF** wahi kaam similar items ke saath karta hai ("customers who bought this also bought that"): milte-julte rate hue items dhoondho aur user ki apni unki ratings ka average lo. <Cite id="recommendation-systems-linden2003" />
+
+```mermaid
+%% caption: User-user collaborative filtering. Similar users dhoondho, unhone jo pasand kiya wo target user ko recommend karo.
+flowchart LR
+  U["Utility matrix: users x items"] --> S["Find users similar to the target user"]
+  S --> N["Pick the nearest neighbours"]
+  N --> L["Their ratings of items the user has not tried"]
+  L --> R["Recommend the highest predicted items"]
+```
+
+<Cite id="recommendation-systems-google-cf" loc="diagram" />
+
+**Conclusion:** <mark>collaborative filtering crowd ki ratings se predict karta hai ki user ko kya pasand aayega, aur e-commerce aur movie sites ise products suggest karne ke liye use karti hain</mark>.
+
+## Extended answer (10 marks): ye add karo
+
+### 1. E-commerce example (Flipkart ya Amazon)
+
+(1 se 5 stars, `?` matlab rate nahi kiya)
+
+| User | Phone | Earbuds | Power bank | Laptop bag |
+|---|---|---|---|---|
+| Asha | 5 | 4 | 5 | ? |
+| Ravi | 5 | 5 | 4 | 5 |
+| Meena | 1 | 2 | 1 | 2 |
+
+Asha lagbhag Ravi jaisi rating deti hai (5, 4, 5 vs 5, 5, 4) aur Meena se bahut alag. To Ravi Asha ka neighbour hai. Ravi ne laptop bag ko 5 diya, isliye site Asha ke liye high rating predict karti hai aur use laptop bag dikhati hai. Meena ki raay ko kam weight milta hai. <Cite id="recommendation-systems-gfg-python" />
+
+<Img id="img-bda-n3-recsys-taxonomy" caption="Collaborative filtering recommender systems ki ek branch hai; ye neighbourhood-based (user-user aur item-item) aur model-based mein baantti hai." />
+
+### 2. Worked example: movie recommendation
+
+<Sum>
+
+<Given>
+
+Ratings (1 se 5); "?" matlab rate nahi kiya.
+
+| | M1 | M2 | M3 | M4 |
+|---|---|---|---|---|
+| U1 | 5 | 3 | ? | 4 |
+| U2 | 4 | 2 | 5 | 4 |
+| U3 | 1 | 5 | 2 | 1 |
+
+</Given>
+
+<Find>
+
+U1 ki M3 ke liye predicted rating, un movies pe cosine similarity se jo dono users ne rate ki hain.
+
+</Find>
+
+<Steps>
+
+1. U1 ke U2 aur U3 ke saath **common movies** M1, M2, M4 hain. U1 = (5, 3, 4), U2 = (4, 2, 4), U3 = (1, 5, 1).
+2. **cos(U1, U2).** Dot product $= 20 + 6 + 16 = 42$. Lengths: $\sqrt{50} = 7.071$ aur $\sqrt{36} = 6$. To $42 / (7.071 \times 6) = 0.990$.
+3. **cos(U1, U3).** Dot product $= 5 + 15 + 4 = 24$. U3 ki length $= \sqrt{27} = 5.196$. To $24 / (7.071 \times 5.196) = 0.653$.
+4. Unki M3 ratings (U2 ne 5, U3 ne 2) ka **weighted average**: $(0.990 \times 5 + 0.653 \times 2) / (0.990 + 0.653) = 6.256 / 1.643 = 3.81$.
+
+</Steps>
+
+<Answer>
+
+U1 ke liye M3 ki predicted rating $\approx 3.81$, isliye M3 ek theek recommendation hai (beech ki rating 3 se upar).
+
+</Answer>
+
+<Box kind="verify">
+
+Weights U2 ke liye 0.602 aur U3 ke liye 0.398 hain, isliye $0.602 \times 5 + 0.398 \times 2 = 3.01 + 0.80 = 3.81$, wahi value. Ye 2 aur 5 ke beech aur 5 ke paas hai, kyunki U2, U1 se zyada similar hai.
+
+</Box>
+
+</Sum>
+
+Raw-rating cosine ye ignore karta hai ki kuch users high rate karte hain aur kuch low; **Pearson correlation** (ratings minus har user ka average) isse theek karta hai. <Cite id="recommendation-systems-wiki-pearson" />
+
+### 3. Content-based filtering se farq
+
+| Point | Content-based | Collaborative filtering |
+|---|---|---|
+| Kya use karta hai | Item ki **properties** aur user ki apni history | Sirf **kayi users ki ratings** |
+| Idea | Aapko jo pasand aaya uske jaise items | Milte-julte rating pattern wale users ya items |
+| Item features chahiye | Haan | Nahi |
+| Doosre users chahiye | Nahi | Haan, bahut |
+| Naya item | Features pata hon to turant recommend ho sakta hai | Jab tak koi rate na kare nahi |
+| Naya user | Nahi (profile nahi) | Nahi (history nahi) |
+| Variety | Kam, over-specialise | Zyada, surprise kar sakta hai |
+| Example | Pandora song attributes match karta hai | Amazon "customers who bought this also bought" |
+
+<Cite id="recommendation-systems-gfg-cb" /> <Cite id="recommendation-systems-av" />
+
+### 4. Advantages aur limitations
+
+| Advantages | Limitations |
+|---|---|
+| Item details nahi chahiye | **Cold start:** naye users aur items ki ratings nahi |
+| Surprising, naye interests dhoondhta hai | **Sparsity:** har user ki kam ratings |
+| Kisi bhi tarah ke item ke liye chalta hai | Bahut data chahiye; bade matrices pe slow |
+
+Real systems aksar dono methods milaate hain (**hybrid**).
+
+## Har question mein kaise fit karein
+
+- **"Define collaborative filtering. Using an example of an e-commerce site like flipkart or amazon describe how it can be used to provide recommendation to users."** (10 marks) <PYQ id="2023-05-ce/q6b" />: core answer + section 1 (Asha, Ravi, Meena table) + section 4.
+- **"Explain Collaborative filtering system. How is it different from content based system?"** (10 marks) <PYQ id="2024-05/q5a" />: core answer (chhota) + section 2 (ek worked prediction) + section 3 ki poori comparison table.
+- **"Describe collaborative filtering in recommendation system."** (10 marks) <PYQ id="2024-05-ce/q6b" />: core answer jisme user-user aur item-item dono types, flowchart, ek worked example, limitations.
+- **"Explain Movie recommendation using Collaborative-based filtering."** (10 marks) <PYQ id="2024-12/q6b" />: core answer jisme items movies hain + section 2 ka poora worked example + cold-start aur sparsity limits.
+
+## Exam tips
+
+- **Hamesha draw karo:** utility matrix (users x items, "?" ke saath) aur flowchart.
+- Similarity weights ke saath **prediction formula** likho, aur batao kaunsi similarity use ki (cosine ya Pearson).
+- Limits ke naam likhna mat bhoolo: **cold start aur sparsity**.
+
+Exam mein English mein likho.
