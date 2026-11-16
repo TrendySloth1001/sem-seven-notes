@@ -9,6 +9,7 @@ import {
   themeProblems,
 } from "../src/lib/analysis.ts";
 import { IMAGE_LICENSES, type ImageRef } from "../src/lib/content.ts";
+import { slugify } from "../src/lib/slug.ts";
 import { compileError } from "./compile-mdx.ts";
 import { escapeBraces } from "./mdx-braces.ts";
 
@@ -200,7 +201,21 @@ for (const subject of fs.readdirSync(ROOT)) {
         .filter((f) => f.endsWith(".mdx"))
         .map((f) => path.join(pyqDir, p, f)),
     ),
+    ...(fs.existsSync(path.join(dir, "answers"))
+      ? fs
+          .readdirSync(path.join(dir, "answers"))
+          .map((f) => path.join(dir, "answers", f))
+      : []),
   ].filter((f) => f.endsWith(".mdx"));
+  // Master answers are named after a theme in analysis.json.
+  const themeSlugs = new Set(
+    fs.existsSync(path.join(dir, "analysis.json"))
+      ? (
+          readJson<{ themes: ThemeDef[] }>(path.join(dir, "analysis.json"))
+            .themes ?? []
+        ).map((t) => slugify(t.name))
+      : [],
+  );
 
   for (const file of files) {
     // Hinglish copies (<name>.hi.mdx) must sit next to the English file they translate.
@@ -239,6 +254,9 @@ for (const subject of fs.readdirSync(ROOT)) {
       if (!(m[1] ?? "").startsWith("%% caption:"))
         fail(file, "a mermaid block must start with %% caption: ...");
     }
+    const answer = /answers[\\/]([^\\/.]+)(?:\.hi)?\.mdx$/.exec(file);
+    if (answer && !themeSlugs.has(answer[1] ?? ""))
+      fail(file, "master answer does not match a theme in analysis.json");
     if (isSolution) {
       const [, p, q] =
         /pyq[\\/]([^\\/]+)[\\/]([^\\/.]+)(?:\.hi)?\.mdx$/.exec(file) ?? [];

@@ -16,8 +16,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { analyse, type ThemeStat } from "@/lib/analysis";
-import { getAnalysis, getTopics, listPapers, type Paper } from "@/lib/content";
+import {
+  getAnalysis,
+  getMasterAnswer,
+  getTopics,
+  listPapers,
+  type Paper,
+} from "@/lib/content";
 import { doneId } from "@/lib/done";
+import { slugify } from "@/lib/slug";
 import { subjects } from "@/lib/syllabus";
 
 export function generateStaticParams() {
@@ -72,7 +79,7 @@ function ThemeTable({
   subject: string;
   themes: ThemeStat<Paper>[];
   sessionCount: number;
-  topicHref: (slug: string) => string;
+  topicHref: (t: ThemeStat<Paper>) => string;
 }) {
   return (
     <div className={frame}>
@@ -101,7 +108,7 @@ function ThemeTable({
               </TableCell>
               <TableCell className="min-w-56 whitespace-normal">
                 <Link
-                  href={topicHref(t.topic)}
+                  href={topicHref(t)}
                   className="font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {t.name}
@@ -157,7 +164,11 @@ async function AnalysisContent({ params }: PageProps<"/analysis/[subject]">) {
     topics.find((t) => t.slug === slug)?.module ?? 0;
   const a = analyse(listPapers(subject), file.themes, moduleOf);
   const N = a.sessionCount;
-  const topicHref = (slug: string) => `/notes/${subject}/${slug}`;
+  // A theme opens its master answer when one is written, else the topic note.
+  const topicHref = (t: ThemeStat<Paper>) =>
+    getMasterAnswer(subject, slugify(t.name))
+      ? `/analysis/${subject}/${slugify(t.name)}`
+      : `/notes/${subject}/${t.topic}`;
   const inSyllabus = a.themes.filter((t) => !t.offSyllabus);
   const off = a.themes.filter((t) => t.offSyllabus);
   const mapped = inSyllabus.filter((t) => t.tier < 3);

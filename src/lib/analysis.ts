@@ -19,7 +19,11 @@ export type APaper = {
   questions: AQ[];
 };
 
-export type Hit<P extends APaper = APaper> = { paper: P; q: AQ; tag: string };
+export type Hit<P extends APaper = APaper> = {
+  paper: P;
+  q: P["questions"][number];
+  tag: string;
+};
 
 export type ThemeStat<P extends APaper = APaper> = ThemeDef & {
   module: number;

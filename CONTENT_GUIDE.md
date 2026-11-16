@@ -156,3 +156,10 @@ NLP follows its class files the same way, under the same rules as the Deep Learn
 - Cite only `class-nlp-*` ids from `references/class.json`, with `loc="p. 4"` or `loc="slide 12"`.
 - Figures go to `public/class/natural-language-processing/` with records in `images/class-<topic>.json` (ids `class-<topic>-...`). Use `"author": "NLP faculty"` for the handwritten notes and `"Apurva Jadhav"` for the typed answers and slides; `source` names the file and page, like `"Module 2 handwritten notes, p. 5"` or `"Module 6 slides, slide 10"`.
 - The class files have few printed diagrams, so crop clear panels from the handwritten pages and redraw the rest as mermaid. Every note and every 10-mark answer still needs diagrams.
+
+## Master answers (exam themes)
+
+Each theme in `content/<subject>/analysis.json` can have one master answer at `content/<subject>/answers/<theme slug>.mdx` (plus `.hi.mdx`): a core answer valid for every question in the theme, an extended part for 10 marks, highlighted key points (`<mark>`), mostly diagrams, and a "Fit it to each question" list. The model is `content/deep-learning/answers/gradient-descent-and-its-types-batch-sgd-mini-batch-momentum.mdx`.
+
+- Sources are the notes **and** reputable web sources. For Deep Learning and NLP this overrides "class files only": keep the teacher's definitions word for word and cite the class files first, then add web material where it makes the answer clearer, cited with a checked URL.
+- New web references go in a per-batch file `references/web-<batch>.json`; no new image files, reuse `<Img>` ids or draw mermaid.

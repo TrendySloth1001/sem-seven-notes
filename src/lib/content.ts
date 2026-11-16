@@ -235,6 +235,16 @@ export function studyThemes(subject: string) {
   ).themes.filter((t) => !t.offSyllabus);
 }
 
+/** One exam-ready answer for every question in a theme: content/<subject>/answers/<theme slug>.mdx. */
+export function getMasterAnswer(
+  subject: string,
+  slug: string,
+  lang: Lang = "en",
+): Doc | null {
+  const file = path.join(ROOT, subject, "answers", langFile(slug, lang));
+  return exists(file) ? readDoc(file, lang) : null;
+}
+
 /** What to study for a topic's exam questions, and answer pieces that serve other questions too. */
 export type Revision = { topic: string; study: string[]; tricks: string[] };
 
