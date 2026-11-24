@@ -153,6 +153,76 @@ export function analyse<P extends APaper>(
   return { papers, assignments, sessionCount, themes, moduleMarks };
 }
 
+export type SheetTheme<P extends APaper = APaper> = ThemeDef & {
+  module: number;
+  hits: Hit<P>[];
+  /** Distinct sheets (assignments and question banks) that set it. */
+  sheets: string[];
+  marks: number;
+  tier: 1 | 2 | 3;
+};
+
+/** Tier 1: set on two or more sheets. Tier 2: one sheet but 10+ marks. Tier 3: the rest. */
+export function sheetTier(sheets: number, marks: number): 1 | 2 | 3 {
+  if (sheets >= 2) return 1;
+  return marks >= 10 ? 2 : 3;
+}
+
+/** The same themes, counted only from the teachers' assignments and question banks. */
+export function analyseSheets<P extends APaper>(
+  all: P[],
+  defs: ThemeDef[],
+  moduleOf: (topic: string) => number,
+) {
+  const sheets = all
+    .filter((p) => p.assignment)
+    .sort((a, b) => a.slug.localeCompare(b.slug))
+    .map((paper, i) => ({ paper, tag: `A${i + 1}` }));
+  const tagged = new Map(sheets.map((x) => [x.paper.slug, x]));
+  const themes = defs.flatMap((d) => {
+    const hits = d.questions.flatMap((ref) => {
+      const [slug = "", id] = ref.split("/");
+      const t = tagged.get(slug);
+      const q = t?.paper.questions.find((x) => x.id === id);
+      return t && q ? [{ paper: t.paper, q, tag: t.tag }] : [];
+    });
+    if (!hits.length) return [];
+    const used = [...new Set(hits.map((h) => h.tag))].sort();
+    const marks = hits.reduce((n, h) => n + h.q.marks, 0);
+    return [
+      {
+        ...d,
+        module: moduleOf(d.topic),
+        hits,
+        sheets: used,
+        marks,
+        tier: sheetTier(used.length, marks),
+      },
+    ];
+  });
+  themes.sort(
+    (a, b) =>
+      a.tier - b.tier ||
+      b.sheets.length - a.sheets.length ||
+      b.marks - a.marks ||
+      a.name.localeCompare(b.name),
+  );
+  const modules = [...new Set(themes.map((t) => t.module))].sort(
+    (a, b) => a - b,
+  );
+  const moduleMarks = modules.map((module) => {
+    const perSheet = sheets.map(({ paper }) =>
+      themes
+        .filter((t) => t.module === module)
+        .flatMap((t) => t.hits)
+        .filter((h) => h.paper.slug === paper.slug)
+        .reduce((n, h) => n + h.q.marks, 0),
+    );
+    return { module, perSheet, total: perSheet.reduce((n, x) => n + x, 0) };
+  });
+  return { sheets, themes, moduleMarks };
+}
+
 /** Problems with a subject's theme file: unknown ids, ids used twice, questions left out. */
 export function themeProblems(all: APaper[], defs: ThemeDef[]): string[] {
   const known = new Set(

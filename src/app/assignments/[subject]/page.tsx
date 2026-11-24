@@ -66,7 +66,14 @@ async function AssignmentContent({
           <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
             {themes.length} concepts cover every assignment question. Each
             answer fits any way the question can be asked: learn the core for 5
-            marks, add the extended part for 10. Most likely first.
+            marks, add the extended part for 10. Most likely first. See the{" "}
+            <Link
+              href={`/assignments/${subject}/analysis`}
+              className="text-primary underline-offset-2 hover:underline"
+            >
+              assignment analysis
+            </Link>{" "}
+            for tiers and marks.
           </p>
         </header>
         {themes.map(({ t, slug, en, hi }, i) => (

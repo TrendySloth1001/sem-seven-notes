@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type APaper, analyse, themeProblems, tierOf } from "./analysis.ts";
+import {
+  type APaper,
+  analyse,
+  analyseSheets,
+  sheetTier,
+  themeProblems,
+  tierOf,
+} from "./analysis.ts";
 
 const papers: APaper[] = [
   {
@@ -94,4 +101,48 @@ test("themeProblems finds unknown, doubled and missing questions", () => {
   assert.ok(p.some((x) => x.includes("unknown question 2024-05/q9")));
   assert.ok(p.some((x) => x.includes("in both")));
   assert.ok(p.some((x) => x.includes("2024-12/q2a is in no theme")));
+});
+
+test("sheet analysis counts only assignments and ranks repeats first", () => {
+  const sheets: APaper[] = [
+    ...papers,
+    {
+      slug: "assignment-2",
+      session: "Assignment 2",
+      date: null,
+      assignment: true,
+      questions: [{ id: "q1", label: "1", marks: 5 }],
+    },
+  ];
+  const defs = [
+    {
+      name: "Once",
+      topic: "t",
+      type: "theory" as const,
+      questions: ["assignment-2/q1", "2024-12/q1a"],
+    },
+    {
+      name: "Twice",
+      topic: "t",
+      type: "theory" as const,
+      questions: ["assignment-1/q1", "assignment-2/q1"]
+        .slice(0, 1)
+        .concat(["2024-05/q2a"]),
+    },
+    {
+      name: "Exam only",
+      topic: "t",
+      type: "theory" as const,
+      questions: ["2024-12/q2a"],
+    },
+  ];
+  const a = analyseSheets(sheets, defs, () => 1);
+  assert.deepEqual(
+    a.themes.map((t) => t.name),
+    ["Twice", "Once"],
+  );
+  assert.equal(a.themes[0]?.marks, 10);
+  assert.equal(sheetTier(2, 5), 1);
+  assert.equal(sheetTier(1, 10), 2);
+  assert.equal(sheetTier(1, 5), 3);
 });
