@@ -12,6 +12,8 @@ keyIdeas:
   - "Quorum go-ethereum ka fork hai permissioned networks ke liye, pehle J.P. Morgan ne banaya. Isme private transactions hain (shared chain pe payload sirf ek hash hota hai; asli data encrypted message se named parties ko jaata hai), public aur private state alag, permissioned nodes, aur mining ke bajaye Raft ya Istanbul BFT. GoQuorum code 2026 mein archive ho gaya."
   - "Corda vs Quorum ek line mein: Corda har fact sirf parties ke saath share karta hai aur notary use karta hai; Quorum har node pe ek Ethereum-style chain rakhta hai aur private data chhupata hai. Corda JVM contracts aur no blocks use karta hai; Quorum Solidity aur blocks."
 references:
+  - class-bt-m4
+  - class-bt-m6
   - corda-ripple-quorum-corda-intro-wp
   - corda-ripple-quorum-corda-tech-wp
   - corda-ripple-quorum-corda-github
@@ -83,6 +85,46 @@ Analogy: Bitcoin town square ka notice board hai jahan sab har notice padhte hai
 7. **Network map.** Nodes ki signed directory (addresses, protocol version, identity certificates). Ye node data distribute karti hai par use badalne ke liye trusted nahi hai. <Cite id="corda-ripple-quorum-corda-tech-wp" loc="The network map" />
 8. **Vault.** Node ka apna database un states ka jo uske liye matter karti hain, wallet ki tarah. Isme keys bhi hoti hain aur ye batata hai ki kaunsi states spend karni hain aur kab change output add karna hai. <Cite id="corda-ripple-quorum-corda-tech-wp" loc="The vault" />
 9. **Notary.** Wo service jo double spend rokti hai aur conflicting transactions ka order tay karti hai (neeche samjhaya hai).
+
+### Class slides mein Corda
+
+Slides Corda ko aise define karti hain: permissioned distributed ledger technology (DLT) platform, businesses aur regulated financial institutions ke liye, enterprise software firm R3 ne banaya. Ye traditional public blockchains se alag hai kyunki strict data privacy aur verified legal identities pe zor deta hai. <Cite id="class-bt-m4" loc="slide 86" /> Public platforms open, trustless networks ke liye bane the jahan participants anonymous hote hain, har node har transaction process karta hai aur consensus data ko sabko broadcast karke milta hai; Corda un legal entities ke liye hai jo ek-dusre pe poora bharosa nahi karti par shared facts pe agree karna chahti hain. <Cite id="class-bt-m4" loc="slide 87" />
+
+**Corda teen dimensions mein alag hai.** <Cite id="class-bt-m4" loc="slides 88-89" />
+
+1. **Privacy:** transaction data sirf directly involved parties ko milta hai, aur unhe jinhe legitimate need hai, jaise regulatory observer.
+2. **Scalability:** jab har node ko har transaction validate karna padta hai, throughput sabse slow participant se bandh jaata hai. Corda transactions sirf counterparties ke beech chalte hain, isliye institutions badhne par network slow nahi hota.
+3. **Enterprise compliance:** har participant ke paas verified identity hoti hai; smart contracts ke saath human-readable legal prose ka explicit link hota hai; regulatory observer nodes supervisors ko workflow roke bina oversight dete hain.
+
+**Chaar layers.** Slides architecture ko aise baantti hain: immutable states ki data layer, business rules define karne wali contract layer, parties ke beech workflows automate karne wali flow layer, aur Notary service ki consensus layer jo double spending rokti hai. <Cite id="class-bt-m4" loc="slides 90-91" />
+
+**Paanch core components** (heading likho, phir points): <Cite id="class-bt-m4" loc="slides 92-100" />
+
+| Component | Slides ke points |
+|---|---|
+| Nodes | Har participant ek node chalata hai, jo business applications host karta hai, institution ka data manage karta hai aur counterparties se saari communication karta hai. Har node ek ya zyada CorDapps host karta hai (business logic wali distributed applications). Har node ek vault rakhta hai, apne states ka private local database, current (unconsumed) aur historical (consumed) dono. Nodes ek-dusre se sirf flows ke through baat karte hain. |
+| Notary Service | Corda ka consensus mechanism. Iska ek hi kaam uniqueness hai: confirm karna ki transaction jo input states consume kar raha hai wo pehle consume nahi hui. Agar koi spent nahi hui to notary sign karke unhe consumed record karta hai; warna transaction reject. Isse contents ki global visibility ke bina double spending rukti hai. Notary clusters (mutually untrusting nodes ka group jo fault-tolerant consensus use karta hai) single point of failure hata dete hain. |
+| States | Basic data object: do ya zyada parties ke beech shared fact ka digital record. States immutable hain: fact badalne par purani state consume hoti hai aur nayi bani jaati hai, isse tamper-proof audit trail milta hai. Lifecycle: issued (bina inputs wala transaction), transferred ya evolved (current state consume, updated state produce), consumed (bina successor wala transaction, yaani agreement khatam). |
+| Contracts | Contract batata hai kaunse state transitions allowed hain; har state ek contract ko refer karti hai aur us state wale har transaction ko contract ke rules satisfy karne padte hain. Kotlin ya Java mein likhe jaate hain aur sandbox mein chalte hain jo deterministic execution force karta hai (same transaction, same result). |
+| Flows | Orchestration layer: scripts jinse nodes transactions build, negotiate aur finalize karte hain. Asset transfer mein initiating flow transaction banata hai, recipient ka signature leta hai, notary ko submit karta hai aur dono vaults mein record finalize karta hai, bina kisi central controller ke. |
+
+**Network architecture.** (1) Peer-to-peer messaging: nodes secure TLS pe directly baat karte hain aur doosre nodes ko transaction ka pata nahi hota. (2) Network Map Service: nodes ki directory jisme addresses, identity certificates aur services hain, locally cache hoti hai. (3) Identity management: har node ke paas trusted Certificate Authority ka X.509 certificate hota hai, jo transactions se known legal entity ke roop mein judta hai. (4) Permissioned network aur governance: node tabhi join karta hai jab network operator approve kare; operator CorDapps, identity standards, notary services aur rules manage karta hai. <Cite id="class-bt-m4" loc="slides 101-102" />
+
+**Transaction flow chhe steps mein.** <Cite id="class-bt-m4" loc="slides 103-105" />
+
+```mermaid
+%% caption: Class slides ke Corda transaction ke chhe steps. Contract check notary check se pehle aata hai, aur notary ka signature transaction ko final bana deta hai.
+flowchart LR
+  A["1 Proposal: initiating node inputs, outputs aur command banata hai"] --> B["2 Counterparty verify karke sign karta hai aur wapas bhejta hai"]
+  B --> C["3 Contract validation: verify function har rule check karta hai"]
+  C --> D["4 Notary check karta hai inputs unspent hain aur sign karta hai"]
+  D --> E["5 Finalization: fully signed transaction sab parties ko jaata hai"]
+  E --> F["6 Har vault update hota hai, har state apne transaction ko point karti hai"]
+```
+
+**Architecture diagram (slides 106 se 108).** Corda Business Network: nodes, Notary Service (uniqueness validate, double spending roke), Network Map Service aur Identity Service (parties verify kare), secure peer-to-peer messaging se jude. Node ke andar: CorDapps (flows jaise trade agreement ya cash issuance flow, aur contracts), service layer (flow hospital, identity manager, client access ke liye RPC server, key management aur ledger query jaisi node services) aur storage (SQL database pe unconsumed states ka vault, aur history ke liye transaction store). External applications API ya RPC se aur ERP ya banking API jaise external systems API integration se jude hote hain. <Cite id="class-bt-m4" loc="slides 106-108" />
+
+**Corda use karne wali industries:** financial services (syndicated loans, bonds, securities settlement), trade finance (letters of credit, shipping documents), insurance (insurers aur reinsurers ke beech claims), healthcare (identity-based access ke saath patient data) aur supply chain (provenance aur ownership transfers, commercial confidentiality ke saath). <Cite id="class-bt-m4" loc="slides 109-110" />
 
 ### Corda architecture
 
@@ -169,7 +211,7 @@ Dono "inputs consume karo, outputs banao" (UTXO) idea use karte hain. <Cite id="
 
 **Use cases** jo Corda ke apne papers mein hain: cash aur payments, delivery-versus-payment trades aur future-dated obligations. <Cite id="corda-ripple-quorum-corda-intro-wp" loc="Summary of the Corda Model" />
 
-<PYQ id="2022-12-ce/q6a" /> <PYQ id="2023-05-ce/q6c" /> <PYQ id="2024-12-ce/q6d" />
+
 
 <Box kind="exam">
 
@@ -256,6 +298,20 @@ flowchart LR
 
 <Img id="img-bt-n3-ripple-autobridging" caption="Autobridging do XRP order books ko jodkar USD/EUR book banata hai aur use direct book se milata hai, isliye XRP bridge ka kaam karta hai." />
 
+### Class slides mein Ripple
+
+Slides Ripple ko aise define karti hain: ek financial technology company jo fast, secure, low-cost cross-border payments ke liye global payment aur settlement network deti hai, jo uske payment protocol aur XRP cryptocurrency se bana hai. <Cite id="class-bt-m4" loc="slide 72" /> Wo ye point saaf karti hain ki Ripple company aur payment ecosystem hai; XRP Ledger (XRPL) decentralized blockchain hai aur XRP uska native asset, yaani "Ripple itself is not the XRP Ledger". <Cite id="class-bt-m4" loc="slide 73" /> XRP currencies ke beech cross-border payments ke liye ya bridge currency ke roop mein use hota hai. Aim cross-border payment ko traditional banking se zyada efficient aur scalable banana hai. <Cite id="class-bt-m4" loc="slide 74" />
+
+**Features of Ripple** (teacher ke saat): fast transaction processing (seconds); fast settlement time (lagbhag instant, real-time cross-border payments); cost efficiency (low fees); high throughput (hazaron transactions per second); secure transactions (strong cryptography); fraud prevention (consensus algorithm aur design double spending rokte hain); open-source protocol. <Cite id="class-bt-m4" loc="slides 75-76" />
+
+**Ripple kaise use karein** (chaar steps): XRP acquire karo (exchange chuno, account banao, funds deposit karo, khareedo); XRP ko digital wallet mein store karo; XRP send aur receive karo (recipient ka address aur amount daalo, confirm karo; receive karne ke liye apna address do); XRP ko payments ya transfers ke liye use karo (kuch merchants accept karte hain). Slides kehti hain RippleNet duniya bhar ke financial institutions aur payment providers ko jodta hai. <Cite id="class-bt-m4" loc="slides 77-79" />
+
+**Ripple ka working** (teen steps): XRP network transactions confirm karne ke liye consensus protocol use karta hai; validators proposed transactions ko ledger ke latest version se compare karke dekhte hain ki valid hain ya nahi; kaafi validators accept karein to transaction verify ho jaata hai. <Cite id="class-bt-m4" loc="slide 80" /> Slide "the majority" likhti hai, lekin asli rule ye hai ki validator ki trusted list ke lagbhag 80 percent agree karein, jaisa upar consensus section mein samjhaya hai.
+
+**Uses of Ripple** (paanch): cross-border payments (XRP bridge currency, real time, bina pre-funding); remittances; e-commerce; smart contracts aur decentralized applications (escrow, digital wallets; XRPL pe iska matlab escrow jaise limited built-in features hain, Ethereum jaise general smart contracts nahi); banks ke liye liquidity management. <Cite id="class-bt-m4" loc="slides 82-83" />
+
+**Limitations of Ripple:** centralization (kam nodes network ka zyada control rakhte hain, isse security aur decentralization ki chinta); regulatory uncertainty (XRP ke security hone pe debate, kuch countries ne ban ya restrict kiya); doosre blockchain solutions aur traditional institutions se competition; scalability (bade scale ke liye transactions per second limited). Slides inhe 1, 2, 4 aur 5 number deti hain; point 3 nahi hai. <Cite id="class-bt-m4" loc="slides 84-85" />
+
 ### Ripple ke advantages aur disadvantages
 
 | Advantages | Disadvantages aur criticisms |
@@ -267,7 +323,7 @@ flowchart LR
 
 Aakhri cell ka legal point: July 2023 mein ek US court ne kaha ki XRP token khud security nahi hai, par use bechne ka tareeka security ho sakta hai. <Cite id="corda-ripple-quorum-wiki-xrpl" loc="History" /> "1,500 transactions per second" jaise speed aur cost figures Ripple ke apne pages se hain, isliye unhe company ke claims samjho. <Cite id="corda-ripple-quorum-ripple-liquidity" />
 
-<PYQ id="2023-05-ce/q6a" /> <PYQ id="2024-05-ce/q6b" /> <PYQ id="2025-05-ce/q6c" />
+
 
 <Box kind="exam">
 
@@ -353,6 +409,20 @@ Private transaction ki pehchaan signature value `v` ka 37 ya 38 hona hai, Ethere
 - **Raft.** Ek leader (jise minter kehte hain) bina proof of work ke blocks banata hai. Leader majority vote se chuna jaata hai; naya block chain head tabhi banta hai jab nodes ki majority use accept kare. Ye crash faults tolerate karta hai, jhooth bolne wale nodes nahi. <Cite id="corda-ripple-quorum-quorum-wp" loc="Section 3.1" /> <Cite id="bft-paxos-raft-raft-paper" />
 - **Istanbul BFT (IBFT).** PBFT ke style ka teen-phase protocol (pre-prepare, prepare, commit). Ye validators ke ek-tihai tak faulty hone ko tolerate karta hai, aur blocks final hote hain, forks nahi. <Cite id="corda-ripple-quorum-quorum-wp" loc="Section 3.2" /> <Cite id="bft-paxos-raft-pbft-paper" /> Block period aur round timeout settings hain: defaults 1 second aur 10,000 ms hain. <Cite id="corda-ripple-quorum-quorum-ibft" />
 
+### Class slides mein Quorum
+
+**Quorum kya hai?** Enterprise blockchain platform jo shuru mein J.P. Morgan ne banaya, Ethereum pe based, un businesses ke liye jinhe privacy, permissioned access aur secure transactions chahiye; organization control karti hai ki kaun join kare. <Cite id="class-bt-m6" loc="slide 29" />
+
+**Features:** permissioned network; privacy (private transactions sirf intended participants ke saath share); smart contracts; enterprise transactions ke liye high performance; Ethereum compatibility; permissioned networks ke liye suitable consensus mechanisms. <Cite id="class-bt-m6" loc="slide 30" />
+
+**Quorum kaise kaam karta hai?** (1) Organization permissioned network banati hai. (2) Banks ya companies jaise authorized members join karte hain. (3) Participant transaction shuru karta hai ya smart contract chalata hai. (4) Private ho to details sirf intended participants ko jaati hain. (5) Network configured consensus mechanism se validate karta hai. (6) Validated transaction blockchain pe record hota hai. <Cite id="class-bt-m6" loc="slide 31" />
+
+**Applications:** banking (authorized banks ke beech secure transactions), supply chain, finance (settlements aur agreements), healthcare (authorized organizations ke beech sensitive data), business agreements (companies ke beech smart contracts). <Cite id="class-bt-m6" loc="slide 32" />
+
+**Advantages:** business transactions ke liye privacy; access sirf authorized participants tak; smart contracts; Ethereum compatibility; participating organizations ke beech better transparency; enterprise applications ke liye suitable. <Cite id="class-bt-m6" loc="slide 33" />
+
+Module 6 kehta hai Corda aur Ripple Module 4 mein cover ho chuke hain, isliye unke notes upar ke hi sections hain. <Cite id="class-bt-m6" loc="slide 28" /> Platform case study (slide 34) open ended hai.
+
 ### Quorum ke advantages aur disadvantages
 
 | Advantages | Disadvantages |
@@ -366,7 +436,7 @@ Private transaction ki pehchaan signature value `v` ka 37 ya 38 hona hai, Ethere
 
 **GeeksforGeeks ke listed projects aur uses:** Alastria (Spanish consortium), VAKT (post-trade processing), Kimlic (KYC), Komgo (trade finance), vaccination records aur supply-chain tracking. <Cite id="corda-ripple-quorum-gfg-quorum" loc="Project-based on Quorum" />
 
-<PYQ id="2022-12-ce/q6c" /> <PYQ id="2024-12-ce/q6a" />
+
 
 <Box kind="exam">
 

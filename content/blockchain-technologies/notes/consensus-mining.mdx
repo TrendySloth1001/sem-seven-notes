@@ -42,6 +42,7 @@ references:
   - consensus-mining-gfg-crypto-consensus
   - consensus-mining-gfg-conflicts
   - consensus-mining-tp-pow
+  - class-bt-m2
 ---
 
 This note covers syllabus <Syl m="2" />, section 2.1: the Byzantine Generals Problem, the consensus algorithms (PoW, PoS, PoET, PoA, LPoS, pBFT, Proof of Burn), the life of a miner, mining difficulty, and mining pools with their methods. The Bitcoin-specific parts (keys, addresses, scripts, transactions) are in the Bitcoin note, and Paxos and Raft are in the fault-tolerant consensus note.
@@ -94,6 +95,22 @@ flowchart TD
 <Img id="img-bt-n1-byzantine" caption="Left: all generals attack together. Right: two generals hold back, so the attack is not coordinated; that lack of agreement is the Byzantine problem." />
 
 Key results (Lamport, Shostak and Pease, 1982): with unsigned messages the loyal generals can agree only if the total number of generals is **more than three times** the number of traitors, that is $n \ge 3f + 1$ for $f$ traitors; with signed messages that cannot be forged the problem becomes easier in theory (it can be solved for any number of traitors if messages arrive on time), but practical protocols such as pBFT, which must cope with delayed messages, still need $n \ge 3f + 1$. <Cite id="consensus-mining-wiki-byzantine" /> <Cite id="consensus-mining-wiki-bft" />
+
+### Types of faults in distributed consensus (class view)
+
+A distributed consensus makes nodes of a distributed system agree on data or on a proposal. The class groups the problems into three faults. <Cite id="class-bt-m2" loc="slide 2-4" />
+
+| Fault | Meaning | Causes and effects |
+|---|---|---|
+| **Crash fault** | A node suddenly stops working, disconnects or goes offline. Only a passive failure: the node goes silent and sends no fake data. <Cite id="class-bt-m2" loc="slide 5" /> | Downtime (the node may recover later), network interruption, a message lost or delayed, the network split into two parts (for example China and US clusters). These are unavoidable risks of unreliable hardware. <Cite id="class-bt-m2" loc="slide 5-6" /> |
+| **Omission fault** | A node fails to send or receive a message although it is still working: "the node is alive, but some messages are missing". Types: send omission (A never sends "Attack") and receive omission (A sends, B does not receive). <Cite id="class-bt-m2" loc="slide 7-8" /> | Causes: network failure, packet loss, congestion, temporary communication problems, interface problems. It is partial and messages may be lost, dropped or delayed. Some nodes get the information and some do not, which gives an inconsistent state, delayed consensus and, at worst, wrong decisions, so agreement becomes harder. <Cite id="class-bt-m2" loc="slide 9-11" /> |
+| **Byzantine fault** | A node behaves badly: sends false information, or stops working while still claiming to be fine. It is alive, sends wrong or misleading messages, may send different messages to different nodes, and behaves unpredictably (A tells B "Attack" and C "Retreat"). <Cite id="class-bt-m2" loc="slide 12-13" /> | Causes: malicious attacks (hackers), software bugs, data corruption, insider faults. <Cite id="class-bt-m2" loc="slide 13" /> |
+
+**Byzantine Generals Problem in the class story.** Generals and their armies surround a palace; success needs enough of them to attack at exactly the same time. Some generals may be traitors giving misleading signals, they can only talk by messenger and cannot check a message's authenticity. With 3 generals, where loyal general 1 wants to attack and loyal general 2 wants to retreat, the traitor general 3 sends each a decision opposite to their own, so they end up swapping decisions. PBFT can tolerate malicious activity by less than 1/3 of the nodes. <Cite id="class-bt-m2" loc="slide 14-15" /> <Cite id="class-bt-m2" loc="slide 19" />
+
+**Mapping to blockchain.** In a blockchain, many independent nodes keep a shared record, for example "A sends 10 coins to B", broadcast to all nodes. Some nodes are honest, some faulty, some malicious, some send incorrect or conflicting information, so nodes may receive different versions of the truth. The question is how all nodes can agree on the same correct history even when some participants are unreliable, which is the Byzantine Generals Problem. <Cite id="class-bt-m2" loc="slide 21-22" />
+
+**Byzantine Fault Tolerance (BFT)** is the property of a distributed system that keeps it working correctly even if some nodes are malicious or faulty and messages are delayed, altered or inconsistent; honest nodes still reach a correct agreement. With N nodes, the maximum faulty nodes allowed is (N - 1) / 3, so the system reaches consensus while more than two-thirds of the nodes are honest. Blockchains implement it with Proof of Work, Proof of Stake and Practical Byzantine Fault Tolerance (PBFT). <Cite id="class-bt-m2" loc="slide 23-25" />
 
 Bitcoin's proof of work does not give the classic guarantee. It makes disagreement so expensive that nobody can keep it up, which is why Wikipedia notes that blockchains use "resource-intensive mechanisms that make disagreements impractical to maintain". <Cite id="consensus-mining-wiki-bft" />
 
@@ -210,6 +227,24 @@ In bits, 5 hex zeros are 20 zero bits, and $2^{20} = 1{,}048{,}576$. Same number
 
 <Img id="img-bt-n1-antminer" caption="An ASIC miner (Antminer S9): a machine built only for hashing, with a big cooling fan and its own power supply." />
 
+### Class view of proof of work
+
+Proof of Work is one of the earliest and most widely known consensus mechanisms; it lets decentralized networks validate transactions and agree without a central authority. The idea was first developed to limit spam and abusive network activity. Litecoin and Bitcoin use it; Ethereum used it but has shifted to Proof of Stake. Principle: **a solution should be difficult to find but easy to verify.** <Cite id="class-bt-m2" loc="slide 27-28" />
+
+**Why PoW is used:** (1) validating transactions, (2) preventing fraudulent modification of data, (3) letting untrusted participants agree, (4) securing the chain against malicious attacks, (5) controlling the creation of new blocks. <Cite id="class-bt-m2" loc="slide 29" />
+
+**Working (5 steps).** (1) **Transaction collection**: pending transactions are grouped into a candidate block by miners. (2) **Block verification**: miners check that the transactions are legitimate; invalid transfers, duplicate spending and malformed transactions are rejected. (3) **Solving the puzzle**: miners test different inputs until a hash meets the network condition. (4) **Block broadcasting**: the block is broadcast, other nodes quickly verify it and, if accepted, it joins the ledger. (5) **Reward distribution**: new coins plus the transaction fees in the block. <Cite id="class-bt-m2" loc="slide 30-33" />
+
+**Bitcoin's PoW (Hashcash based).** Given block data A, find x so that the hash of A + x is smaller than the target. A lower target means higher difficulty, because fewer hash outputs qualify. Miners change a number called the nonce again and again until the output is valid; the winner broadcasts the block and gets the reward, and difficulty is adjusted after a fixed number of blocks to keep the block schedule. <Cite id="class-bt-m2" loc="slide 34-35" /> About every four years the block reward is halved, which limits new coin creation and makes Bitcoin's supply fixed; over time fees matter more. <Cite id="class-bt-m2" loc="slide 36" />
+
+| PoW advantages | PoW disadvantages |
+|---|---|
+| High security (huge computing power needed; Bitcoin has not been hacked at the core level) <Cite id="class-bt-m2" loc="slide 37" /> | High energy consumption, not environmentally friendly <Cite id="class-bt-m2" loc="slide 39" /> |
+| Decentralization: no central authority, anyone with computing power can mine <Cite id="class-bt-m2" loc="slide 37" /> | Expensive hardware (ASICs) that not everyone can afford <Cite id="class-bt-m2" loc="slide 39" /> |
+| Proven and reliable: the first consensus mechanism, tested for years <Cite id="class-bt-m2" loc="slide 38" /> | Risk of centralization: large mining companies dominate <Cite id="class-bt-m2" loc="slide 40" /> |
+| Incentives: miners earn coins and fees <Cite id="class-bt-m2" loc="slide 38" /> | Slow (about 10 minutes per block in Bitcoin) and high fees when busy <Cite id="class-bt-m2" loc="slide 40-41" /> |
+| | 51% attack risk: more than half the mining power could manipulate transactions and double spend; very difficult but theoretically possible <Cite id="class-bt-m2" loc="slide 41" /> |
+
 ## The life of a miner and the mining process
 
 <Box kind="definition">
@@ -245,7 +280,13 @@ flowchart TD
 
 <Cite id="consensus-mining-antonopoulos-mining" loc="diagram" />
 
-<PYQ id="2023-12/q2b" /> <PYQ id="2023-12-ce/q6a" />
+<PYQ id="2023-12/q2b" />
+
+### Class view: life of a miner
+
+A miner validates transactions and adds new blocks, which keeps the network secure, transparent and decentralized. Three tasks: **transaction verification** (valid, no double spending, correct signatures), **block creation** (collect verified transactions into a block) and **consensus participation** (compete to add the block). <Cite id="class-bt-m2" loc="slide 77-78" />
+
+Life cycle: (1) receive transactions from the mempool (temporary storage); (2) verify them (signatures, enough balance, reject fraud); (3) create a block whose header has the previous block hash, timestamp and Merkle root; (4) solve the puzzle, finding a nonce so that Hash(Block Header) < Target Value, which needs high computing power; (5) broadcast the block, other nodes verify it; (6) if valid, the block is added and the miner's work becomes part of the permanent ledger. <Cite id="class-bt-m2" loc="slide 79-81" /> Rewards: the block reward (newly created coins) and transaction fees. <Cite id="class-bt-m2" loc="slide 82" /> Challenges: high energy use, thousands of competing miners, costly hardware (ASICs, GPUs) and rising difficulty. <Cite id="class-bt-m2" loc="slide 83" /> Importance: security, decentralization, preventing fraud and double spending, keeping the network running. Analogy: miners are bank auditors plus puzzle solvers, and the fastest correct solver gets the reward. <Cite id="class-bt-m2" loc="slide 84" />
 
 ### Consensus in Bitcoin (Nakamoto consensus)
 
@@ -408,9 +449,21 @@ Write in the exam: "Mining difficulty is a measure of how hard it is to find a b
 
 </Box>
 
-<PYQ id="2022-12-ce/q3a" /> <PYQ id="2024-05-ce/q3b" /> <PYQ id="2024-12/q1c" />
+ <PYQ id="2024-12/q1c" />
 
 **Bitcoin and Ethereum on this point.** Bitcoin still uses proof of work and the 2,016-block retarget. Ethereum used proof of work (Ethash) with a target of a new block about every 13.3 seconds, but switched off mining on 15 September 2022 (the Merge) and now uses proof of stake, so there is no mining difficulty on Ethereum today. <Cite id="consensus-mining-eth-pow" /> <Cite id="consensus-mining-eth-merge" /> The full Bitcoin versus Ethereum comparison is in the Ethereum note.
+
+### Class view: mining difficulty
+
+Mining difficulty measures how hard it is to solve the puzzle and mine a new block; the algorithm controls it automatically, so that blocks come at a steady rate (in Bitcoin an average of 10 minutes). More miners joining means higher difficulty; fewer means lower. <Cite id="class-bt-m2" loc="slide 85-86" /> (The slide says it adjusts "in real time"; in Bitcoin it is adjusted once every 2016 blocks, as the same slides say later.)
+
+**Factors:** (1) network hash rate; (2) mining hardware, since more efficient machines raise the hash rate; (3) block time, since blocks mined faster than the target rate raise difficulty; (4) mining algorithm, since each chain has its own rule (Bitcoin every 2016 blocks, others adjust dynamically); (5) cryptocurrency price, since a higher price attracts more miners. <Cite id="class-bt-m2" loc="slide 88-91" />
+
+**How it is calculated (Bitcoin).** (1) Check the speed every 2016 blocks, about 2 weeks, the adjustment period. (2) Expected time is 2016 x 10 minutes = 14 days; compare with the actual time. (3) If mining took less than 14 days, difficulty rises; if more than 14 days, it falls. (4) More miners give faster blocks and higher difficulty. (5) Mining Difficulty = difficulty_1_target / current_target. (6) The target is the number the hash must not exceed (Hash is at most Target): a smaller target is harder. Goal: constant block time and a secure, stable network. <Cite id="class-bt-m2" loc="slide 92-95" />
+
+| Pros | Cons |
+|---|---|
+| Secured network (hard to attack), stable block generation at regular intervals, sustainability (stops coins being created too fast, which causes inflation, or too slow) <Cite id="class-bt-m2" loc="slide 96" /> | Lower mining profitability as success chances fall; slower issue of new coins, which can raise the price if demand holds <Cite id="class-bt-m2" loc="slide 97" /> |
 
 ## Forks and orphaned blocks
 
@@ -441,7 +494,7 @@ Write in the exam: "An orphaned block is a valid block that is not part of the m
 
 </Box>
 
-<PYQ id="2024-05-ce/q1c" /> <PYQ id="2025-05-ce/q1a" />
+
 
 ## Double spending and how proof of work solves it
 
@@ -467,7 +520,7 @@ flowchart TD
 
 <Cite id="consensus-mining-btcwiki-majority" loc="diagram" />
 
-<PYQ id="2022-12-ce/q2b" /> <PYQ id="2024-12-ce/q5a" />
+
 
 ## Mining pools and their methods
 
@@ -591,7 +644,15 @@ $0.00045 \times 0.98 = 0.000441$, which equals the pool figure, so the pool pays
 
 </Sum>
 
-<PYQ id="2023-12-ce/q1c" /> <PYQ id="2024-05-ce/q6d" /> <PYQ id="2025-05-ce/q1e" />
+
+
+### Class view: mining pool payout methods
+
+Mining pools raise the odds of earning by uniting miners; mining alone can take years to pay off because of the cost of buying, running and cooling machines. The pool server gives each device a small piece of the puzzle, miners send **shares** as proof of work, the network pays the pool when any member finds the block, and the pool splits the reward by share of work. <Cite id="class-bt-m2" loc="slide 98-100" /> Three methods: <Cite id="class-bt-m2" loc="slide 101" />
+
+- **PPS (Pay-Per-Share):** a fixed amount for each valid share, paid at once, whether or not the pool finds a block. <Cite id="class-bt-m2" loc="slide 102" />
+- **PPLNS (Pay-Per-Last-N-Shares):** when the pool finds a block, the reward is split in proportion over the last N shares; only miners active in that window get paid. <Cite id="class-bt-m2" loc="slide 103" />
+- **FPPS (Full-Pay-Per-Share):** an advanced PPS that pays for both the block reward and the transaction fees, at a fixed rate, with the pool absorbing the risk. <Cite id="class-bt-m2" loc="slide 104" />
 
 ## Proof of stake (PoS) and its variants
 
@@ -724,6 +785,35 @@ With $f = 3$: $3f + 1 = 10 = n$, so the rule holds exactly. With 4 faulty nodes,
 
 </Sum>
 
+## Class view of PoS, PoET, PoA, PoB, LPoS and pBFT
+
+The class lists seven consensus algorithms in this order: Proof of Work, Proof of Stake, Proof of Elapsed Time, Proof of Authority, Proof of Burn (the slide's "(PoW)" label is a typo), Leased Proof of Stake and Practical Byzantine Fault Tolerance. <Cite id="class-bt-m2" loc="slide 26" />
+
+```mermaid
+%% caption: Class steps of pBFT. The client asks, the primary proposes, the replicas confirm to each other, and a block is accepted once enough confirmations arrive.
+flowchart LR
+  A["1. Request: client sends a request"] --> B["2. Pre-prepare: primary (leader) proposes a block"]
+  B --> C["3. Prepare: replicas verify and send confirmations to each other"]
+  C --> D["4. Commit: enough confirmations, block accepted"]
+  D --> E["5. Reply: result goes back to the client"]
+```
+
+<Cite id="class-bt-m2" loc="slide 74" />
+
+**Proof of Stake.** A method to select who adds the next block: instead of heavy computation, users lock (stake) coins and become validators. The system picks one validator by amount of stake, random selection and other factors such as coin holding time; the chosen one verifies transactions, adds the block and earns rewards. PoS was introduced because PoW uses too much energy and costly hardware. <Cite id="class-bt-m2" loc="slide 42-43" /> Two selection ways: **coin-age based** (the longer a candidate has waited, the higher its chance) and **randomized block selection** (the best mix of lowest hash value and highest stake). <Cite id="class-bt-m2" loc="slide 44" />
+
+Workflow: (1) transactions go to a pool; (2) candidates raise a stake, combined with coin-age or randomization to choose the validator; (3) the validator verifies the transactions and publishes the block while the stake stays locked and the reward is withheld so others can approve; (4) if the block is approved the validator gets the stake back and the reward (a coin-age reset to 0 puts it at low priority next time); (5) if not verified, the validator loses its stake and is marked "bad", and the process restarts. <Cite id="class-bt-m2" loc="slide 45-46" /> **Advantages:** energy efficient (no puzzle and no race); decentralization (rewards are proportional to stake, so joining a pool gives no extra edge); security (an attacker needs 51% of the stakes, which is expensive). <Cite id="class-bt-m2" loc="slide 47" /> **Weaknesses:** large-stake validators gain more selections and more rewards, which can centralize the network; PoS is still new, with research ongoing; the "nothing at stake" problem, where supporting several chains in a fork costs a validator nothing, so consensus may never be reached. <Cite id="class-bt-m2" loc="slide 48-49" />
+
+**Proof of Elapsed Time (PoET).** Introduced by Intel, mainly used in permissioned platforms such as Hyperledger Sawtooth, using trusted execution environments such as Intel SGX. Nodes wait for a randomly generated time and the node whose wait ends first creates the next block; no heavy computation. <Cite id="class-bt-m2" loc="slide 50-51" /> Steps: (1) nodes join, each with Intel SGX; (2) SGX generates a random wait time that is secure, unmodifiable and fair; (3) all nodes wait, with no mining; (4) the node whose timer ends first wins; (5) it creates and broadcasts the block; (6) other nodes verify the waiting time and the proper use of SGX; (7) if valid the block is added, otherwise the process repeats. <Cite id="class-bt-m2" loc="slide 52-54" /> Advantages: low energy, no costly hardware, simple, scalable. Disadvantages: depends on Intel SGX, not fully decentralized, needs trust in the hardware maker. <Cite id="class-bt-m2" loc="slide 55-56" />
+
+**Proof of Authority (PoA).** Only authorized and verified nodes (validators) create and validate blocks, based on identity; mainly for private or permissioned chains. Instead of computing power (PoW) or stake (PoS) it uses **identity and reputation**. <Cite id="class-bt-m2" loc="slide 57-58" /> Steps: a few trusted validators are chosen and their identities verified; they take turns creating blocks and validating transactions; other validators check the block and add it if valid; the process repeats. Features: very fast, efficient, limited validators, suited to private networks. <Cite id="class-bt-m2" loc="slide 59-60" /> Advantages: low energy, no expensive hardware, faster than PoW and PoS, easy to manage. Disadvantages: less decentralized, needs trust in validators, risk of centralization, not suited to fully public systems. <Cite id="class-bt-m2" loc="slide 61" />
+
+**Proof of Burn (PoB).** Participants burn (destroy) coins by sending them to an irrecoverable address to earn the right to validate and create blocks; the burn replaces energy (PoW) and holding coins (PoS), and more coins burned gives a higher chance. <Cite id="class-bt-m2" loc="slide 62-63" /> Steps: burn coins to a burn address; the system records the amount and gives virtual mining power; higher burn power gives more chances to validate and create blocks; the selected validators get block rewards and fees. <Cite id="class-bt-m2" loc="slide 64-65" /> Advantages: energy efficient, encourages long-term participation, reduces inflation (less coin supply), eco-friendlier than PoW. Disadvantages: permanent loss of coins, risky (no guaranteed reward), can favour wealthy users, less commonly used. <Cite id="class-bt-m2" loc="slide 66" />
+
+**Leased Proof of Stake (LPoS).** An improved PoS in which users lease (lend) coins to other nodes to help them validate blocks, so even small holders can take part; the validator's stake and chance of creating blocks go up, the coins stay in the user's wallet, and the validator shares the rewards with those who leased. <Cite id="class-bt-m2" loc="slide 67-70" /> Advantages: anyone can take part, no need to run a node, energy efficient, passive rewards. Disadvantages: depends on validator honesty, popular validators gain power (centralization), shares of reward may vary. <Cite id="class-bt-m2" loc="slide 71" />
+
+**Practical Byzantine Fault Tolerance (pBFT).** A consensus algorithm that lets a network agree even when some nodes are dishonest or fail; based on the Byzantine Generals Problem, a system of n nodes tolerates up to (n - 1) / 3 faulty nodes. <Cite id="class-bt-m2" loc="slide 72-73" /> Steps are in the diagram above. Features: high security against faulty nodes, fast finality (no waiting for several confirmations), best for permissioned networks; used in enterprise and private blockchains, with Hyperledger Fabric as the example platform. <Cite id="class-bt-m2" loc="slide 74-75" /> Advantages: tolerates malicious or faulty nodes, fast finality, energy efficient, reliable. Disadvantages: many messages (communication overhead), not scalable to very large networks, works best with limited nodes. <Cite id="class-bt-m2" loc="slide 76" />
+
 ## Comparing the consensus algorithms
 
 **Comparison of PoW, PoS, PoB, PoET and PoA (write this table in the exam).**
@@ -753,7 +843,7 @@ Sources for the table: <Cite id="consensus-mining-gfg-crypto-consensus" /> <Cite
 
 <Cite id="consensus-mining-eth-merge" /> <Cite id="consensus-mining-eth-pos" />
 
-<PYQ id="2024-05-ce/q2b" /> <PYQ id="2025-05-ce/q4a" /> <PYQ id="2024-12-ce/q1c" /> <PYQ id="2025-05/q2a" />
+ <PYQ id="2025-05/q2a" />
 
 **Which to choose?** Open public network with no trust: PoW or PoS. Known members in a business network: PoA, PoET or pBFT. Where energy cost matters: PoS, PoA or pBFT. Fast final confirmation without forks: pBFT.
 

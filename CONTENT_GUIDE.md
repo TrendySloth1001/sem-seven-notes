@@ -157,6 +157,14 @@ NLP follows its class files the same way, under the same rules as the Deep Learn
 - Figures go to `public/class/natural-language-processing/` with records in `images/class-<topic>.json` (ids `class-<topic>-...`). Use `"author": "NLP faculty"` for the handwritten notes and `"Apurva Jadhav"` for the typed answers and slides; `source` names the file and page, like `"Module 2 handwritten notes, p. 5"` or `"Module 6 slides, slide 10"`.
 - The class files have few printed diagrams, so crop clear panels from the handwritten pages and redraw the rest as mermaid. Every note and every 10-mark answer still needs diagrams.
 
+## Blockchain Technologies: teacher material
+
+BT follows its class files, under the same rules as the Deep Learning section above, with these differences. The files sit in `classroom/BT/` (git-ignored): `BT_Module_1.pdf` to `BT_Module_6.pdf` (Module 3 has Parts A and B) as slides, two class assignments and two question banks. Only own-branch papers (2023-12, 2024-12, 2025-05) and these four teacher sheets count; Computer Engineering (`-ce`) papers are not used.
+
+- The four teacher sheets are pseudo-papers `pyq/assignment-1` (Assignment 1), `assignment-2` (Assignment 2), `assignment-3` (Question Bank, Modules 1 to 3) and `assignment-4` (Question Bank for IA-II).
+- Cite `class-bt-*` ids from `references/class.json` first, with `loc="slide 12"` (the PDF page number), then web sources from `references/web-*.json`.
+- Class slides have few clean figures, so redraw diagrams as mermaid and use openly licensed Wikimedia images (see "Diagrams from the internet").
+
 ## Master answers (exam themes)
 
 Each theme in `content/<subject>/analysis.json` can have one master answer at `content/<subject>/answers/<theme slug>.mdx` (plus `.hi.mdx`): a core answer valid for every question in the theme, an extended part for 10 marks, highlighted key points (`<mark>`), mostly diagrams, and a "Fit it to each question" list. The model is `content/deep-learning/answers/gradient-descent-and-its-types-batch-sgd-mini-batch-momentum.mdx`.

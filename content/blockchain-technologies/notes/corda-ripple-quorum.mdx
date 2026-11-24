@@ -12,6 +12,8 @@ keyIdeas:
   - "Quorum is a fork of go-ethereum for permissioned networks, first built by J.P. Morgan. It adds private transactions (the payload is only a hash on the shared chain; the real data goes by encrypted message to the named parties), a split public and private state, permissioned nodes and Raft or Istanbul BFT instead of mining. The GoQuorum code was archived in 2026."
   - "Corda versus Quorum in one line: Corda shares each fact only with the parties and uses a notary; Quorum keeps one Ethereum-style chain on every node and hides the private data. Corda uses JVM contracts and no blocks; Quorum uses Solidity and blocks."
 references:
+  - class-bt-m4
+  - class-bt-m6
   - corda-ripple-quorum-corda-intro-wp
   - corda-ripple-quorum-corda-tech-wp
   - corda-ripple-quorum-corda-github
@@ -83,6 +85,46 @@ Analogy: Bitcoin is a notice board in the town square where everyone reads every
 7. **Network map.** A signed directory of nodes (addresses, protocol version, identity certificates). It distributes node data but is not trusted to alter it. <Cite id="corda-ripple-quorum-corda-tech-wp" loc="The network map" />
 8. **Vault.** The node's own database of the states that matter to it, like a wallet. It also holds keys and helps pick which states to spend and when to add a change output. <Cite id="corda-ripple-quorum-corda-tech-wp" loc="The vault" />
 9. **Notary.** The service that stops double spends and fixes the order of conflicting transactions (explained below).
+
+### Corda in the class slides
+
+The slides define Corda as a permissioned distributed ledger technology (DLT) platform designed for businesses and regulated financial institutions, developed by the enterprise software firm R3. It differs from traditional public blockchains by stressing strict data privacy and verified legal identities. <Cite id="class-bt-m4" loc="slide 86" /> Public platforms were built for open, trustless networks where participants are anonymous, every node processes every transaction and consensus comes from broadcasting data to everyone; Corda is built for mutually distrusting legal entities that still need to agree on shared facts. <Cite id="class-bt-m4" loc="slide 87" />
+
+**Corda differs in three dimensions.** <Cite id="class-bt-m4" loc="slides 88-89" />
+
+1. **Privacy:** transaction data is shared only with the parties directly involved, and others with a legitimate need to know, such as a regulatory observer.
+2. **Scalability:** when every node must validate every transaction, throughput is held back by the slowest participant. Corda transactions flow only between counterparties, so the network does not slow down as more institutions join.
+3. **Enterprise compliance:** every participant holds a verified identity; smart contracts carry explicit links to human-readable legal prose; regulatory observer nodes let supervisors keep oversight without disturbing the workflow.
+
+**Four layers.** The slides structure the architecture into: a data layer of immutable states, a contract layer that defines business rules, a flow layer that automates workflows between parties, and a consensus layer run by a Notary service that prevents double spending. <Cite id="class-bt-m4" loc="slides 90-91" />
+
+**Five core components** (write the heading, then the points): <Cite id="class-bt-m4" loc="slides 92-100" />
+
+| Component | Points from the slides |
+|---|---|
+| Nodes | Every participant runs a node, which hosts the business applications, manages the institution's data and handles all communication with counterparties. Each node hosts one or more CorDapps (the distributed applications holding the business logic). Each node keeps a vault, a private local database of all states it is party to, both current (unconsumed) and historical (consumed). Nodes talk to each other only through flows. |
+| Notary Service | Corda's consensus mechanism. Its only job is uniqueness: confirm that the input states a transaction consumes were not already consumed. If none were spent, the notary signs and records them as consumed; otherwise the transaction is rejected. So double spending is prevented without global visibility of contents. Notary clusters (groups of mutually untrusting nodes using fault-tolerant consensus) remove the single point of failure. |
+| States | The basic data object: a digital record of a shared fact between two or more parties. States are immutable: when the fact changes the old state is consumed and a new one is created, giving a tamper-proof audit trail. Lifecycle: issued (a transaction with no inputs), transferred or evolved (consume the current state, produce an updated one), consumed (a transaction with no successor, so the agreement ends). |
+| Contracts | A contract governs which state transitions are allowed; every state references a contract and every transaction involving it must satisfy the contract's rules. Written in Kotlin or Java and run in a sandbox that forces deterministic execution (same transaction, same result). |
+| Flows | The orchestration layer: scripts by which nodes build, negotiate and finalize transactions. In an asset transfer the initiating flow builds the transaction, collects the recipient's signature, submits it to the notary and finalizes the record in both vaults, with no central controller. |
+
+**Network architecture.** (1) Peer-to-peer messaging: nodes talk directly over secure TLS and others are not aware of the transaction. (2) Network Map Service: a directory of nodes with addresses, identity certificates and services, cached locally. (3) Identity management: each node has an X.509 certificate from a trusted Certificate Authority, linked to its transactions as a known legal entity. (4) Permissioned network and governance: a node joins only with the network operator's approval; the operator manages CorDapps, identity standards, notary services and rules. <Cite id="class-bt-m4" loc="slides 101-102" />
+
+**Transaction flow in six steps.** <Cite id="class-bt-m4" loc="slides 103-105" />
+
+```mermaid
+%% caption: The six steps of a Corda transaction in the class slides. The contract check comes before the notary check, and the notary signature makes the transaction final.
+flowchart LR
+  A["1 Proposal: initiating node builds inputs, outputs and a command"] --> B["2 Counterparty verifies, signs and returns it"]
+  B --> C["3 Contract validation: verify function checks every rule"]
+  C --> D["4 Notary checks inputs are unspent and signs"]
+  D --> E["5 Finalization: fully signed transaction goes to all parties"]
+  E --> F["6 Every vault updates, each state points to its transaction"]
+```
+
+**The architecture diagram (slides 106 to 108).** Corda Business Network: nodes, the Notary Service (validates uniqueness, prevents double spending), the Network Map Service and the Identity Service (verifies parties), joined by secure peer-to-peer messaging. Inside a node: CorDapps (flows such as a trade agreement or cash issuance flow, and contracts), a service layer (flow hospital, identity manager, RPC server for client access, node services such as key management and ledger query) and storage (the vault for unconsumed states on a SQL database, and a transaction store for history). External applications connect by API or RPC and external systems such as ERP or banking APIs by API integration. <Cite id="class-bt-m4" loc="slides 106-108" />
+
+**Industries using Corda:** financial services (syndicated loans, bonds, securities settlement), trade finance (letters of credit, shipping documents), insurance (claims shared between insurers and reinsurers), healthcare (patient data with identity-based access) and supply chain (provenance and ownership transfers with commercial confidentiality). <Cite id="class-bt-m4" loc="slides 109-110" />
 
 ### Corda architecture
 
@@ -169,7 +211,7 @@ Both use the same "consume inputs, create outputs" idea (UTXO). <Cite id="corda-
 
 **Use cases** named in Corda's own papers include cash and payments, delivery-versus-payment trades and future-dated obligations. <Cite id="corda-ripple-quorum-corda-intro-wp" loc="Summary of the Corda Model" />
 
-<PYQ id="2022-12-ce/q6a" /> <PYQ id="2023-05-ce/q6c" /> <PYQ id="2024-12-ce/q6d" />
+
 
 <Box kind="exam">
 
@@ -256,6 +298,20 @@ flowchart LR
 
 <Img id="img-bt-n3-ripple-autobridging" caption="Autobridging joins two XRP order books into a USD/EUR one and merges it with the direct book, so XRP works as the bridge." />
 
+### Ripple in the class slides
+
+The slides define Ripple as a financial technology company that provides a global payment and settlement network for fast, secure, low-cost cross-border payments, made of its payment protocol and the XRP cryptocurrency. <Cite id="class-bt-m4" loc="slide 72" /> They make the point that Ripple is the company and payment ecosystem; the XRP Ledger (XRPL) is the decentralized blockchain and XRP its native asset, so "Ripple itself is not the XRP Ledger". <Cite id="class-bt-m4" loc="slide 73" /> XRP can be used for cross-border payments between currencies or as a bridge currency. The aim is to make cross-border payment more efficient and scalable than traditional banking. <Cite id="class-bt-m4" loc="slide 74" />
+
+**Features of Ripple** (teacher's seven): fast transaction processing (seconds); fast settlement time (almost instant, real-time cross-border payments); cost efficiency (low fees); high throughput (thousands of transactions per second); secure transactions (strong cryptography); fraud prevention (the consensus algorithm and design prevent double spending); open-source protocol. <Cite id="class-bt-m4" loc="slides 75-76" />
+
+**How to use Ripple** (four steps): acquire XRP (choose an exchange, create an account, deposit funds, buy); store XRP in a digital wallet; send and receive XRP (enter the recipient's address and amount, confirm; share your address to receive); use XRP for payments or transfers (some merchants accept it). The slides say RippleNet connects financial institutions and payment providers worldwide. <Cite id="class-bt-m4" loc="slides 77-79" />
+
+**Working of Ripple** (three steps): the XRP network uses a consensus protocol to confirm transactions; validators compare the proposed transactions with the latest version of the ledger to see if they are valid; the transaction is verified when enough validators accept it. <Cite id="class-bt-m4" loc="slide 80" /> The slide says "the majority", but the real rule is that about 80 percent of a validator's trusted list must agree, as explained in the consensus section above.
+
+**Uses of Ripple** (five): cross-border payments (XRP as bridge currency, real time, no pre-funding); remittances; e-commerce; smart contracts and decentralized applications (escrow, digital wallets; on XRPL this means limited built-in features such as escrow, not general smart contracts like Ethereum's); liquidity management for banks. <Cite id="class-bt-m4" loc="slides 82-83" />
+
+**Limitations of Ripple:** centralization (a small number of nodes control most of the network, raising security and decentralization concerns); regulatory uncertainty (XRP's status as a security was debated, and some countries banned or restricted it); competition from other blockchain solutions and traditional institutions; scalability (a limited number of transactions per second for large-scale use). The slides number these 1, 2, 4 and 5; there is no point 3. <Cite id="class-bt-m4" loc="slides 84-85" />
+
 ### Advantages and disadvantages of Ripple
 
 | Advantages | Disadvantages and criticisms |
@@ -267,7 +323,7 @@ flowchart LR
 
 The legal point in the last cell: in July 2023 a US court said XRP as a token is not itself a security, but the way it is sold could be. <Cite id="corda-ripple-quorum-wiki-xrpl" loc="History" /> Speed and cost figures such as "1,500 transactions per second" come from Ripple's own pages, so treat them as the company's claims. <Cite id="corda-ripple-quorum-ripple-liquidity" />
 
-<PYQ id="2023-05-ce/q6a" /> <PYQ id="2024-05-ce/q6b" /> <PYQ id="2025-05-ce/q6c" />
+
 
 <Box kind="exam">
 
@@ -353,6 +409,20 @@ A private transaction is marked by the signature value `v` being 37 or 38, inste
 - **Raft.** One leader (called the minter) makes blocks without proof of work. A leader is chosen by majority vote; a new block becomes the chain head only after a majority of nodes accept it. It tolerates crash faults, not lying nodes. <Cite id="corda-ripple-quorum-quorum-wp" loc="Section 3.1" /> <Cite id="bft-paxos-raft-raft-paper" />
 - **Istanbul BFT (IBFT).** A three-phase protocol (pre-prepare, prepare, commit) in the style of PBFT. It tolerates up to one-third of validators being faulty, and blocks are final, with no forks. <Cite id="corda-ripple-quorum-quorum-wp" loc="Section 3.2" /> <Cite id="bft-paxos-raft-pbft-paper" /> Block period and round timeout are settings: the defaults are 1 second and 10,000 ms. <Cite id="corda-ripple-quorum-quorum-ibft" />
 
+### Quorum in the class slides
+
+**What is Quorum?** An enterprise blockchain platform developed initially by J.P. Morgan, based on Ethereum, for businesses that need privacy, permissioned access and secure transactions; an organization controls who can join. <Cite id="class-bt-m6" loc="slide 29" />
+
+**Features:** permissioned network; privacy (private transactions shared only with the intended participants); smart contracts; high performance for enterprise transactions; Ethereum compatibility; consensus mechanisms suited to permissioned networks. <Cite id="class-bt-m6" loc="slide 30" />
+
+**How does Quorum work?** (1) An organization creates a permissioned network. (2) Authorized members such as banks or companies join. (3) A participant starts a transaction or runs a smart contract. (4) If it is private, the details go only to the intended participants. (5) The network validates it with its configured consensus mechanism. (6) The validated transaction is recorded on the blockchain. <Cite id="class-bt-m6" loc="slide 31" />
+
+**Applications:** banking (secure transactions between authorized banks), supply chain, finance (settlements and agreements), healthcare (sensitive data among authorized organizations), business agreements (smart contracts between companies). <Cite id="class-bt-m6" loc="slide 32" />
+
+**Advantages:** privacy for business transactions; access limited to authorized participants; smart contracts; Ethereum compatibility; better transparency among participating organizations; suitable for enterprise applications. <Cite id="class-bt-m6" loc="slide 33" />
+
+Module 6 says Corda and Ripple were covered in Module 4, so their notes are the same sections above. <Cite id="class-bt-m6" loc="slide 28" /> The platform case study (slide 34) is open ended.
+
 ### Advantages and disadvantages of Quorum
 
 | Advantages | Disadvantages |
@@ -366,7 +436,7 @@ A private transaction is marked by the signature value `v` being 37 or 38, inste
 
 **Projects and uses listed by GeeksforGeeks:** Alastria (a Spanish consortium), VAKT (post-trade processing), Kimlic (KYC), Komgo (trade finance), vaccination records and supply-chain tracking. <Cite id="corda-ripple-quorum-gfg-quorum" loc="Project-based on Quorum" />
 
-<PYQ id="2022-12-ce/q6c" /> <PYQ id="2024-12-ce/q6a" />
+
 
 <Box kind="exam">
 
